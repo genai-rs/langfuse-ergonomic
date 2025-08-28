@@ -22,6 +22,10 @@ fi
 echo "📥 Downloading OpenAPI specification..."
 curl -o "$OPENAPI_FILE" "$OPENAPI_URL"
 
+# Backup our custom Cargo.toml before generation
+echo "📝 Backing up custom Cargo.toml..."
+cp "$BASE_CLIENT_DIR/Cargo.toml" "$BASE_CLIENT_DIR/Cargo.toml.custom" 2>/dev/null || true
+
 # Generate the client
 echo "🏗️ Generating Rust client..."
 openapi-generator-cli generate \
@@ -42,10 +46,10 @@ rm -f "$BASE_CLIENT_DIR/.gitignore"
 rm -f "$BASE_CLIENT_DIR/git_push.sh"
 rm -rf "$BASE_CLIENT_DIR/.openapi-generator"
 
-# Preserve our custom Cargo.toml
-echo "📝 Preserving custom Cargo.toml..."
-if [ -f "$BASE_CLIENT_DIR/Cargo.toml.bak" ]; then
-    mv "$BASE_CLIENT_DIR/Cargo.toml.bak" "$BASE_CLIENT_DIR/Cargo.toml"
+# Restore our custom Cargo.toml
+echo "📝 Restoring custom Cargo.toml..."
+if [ -f "$BASE_CLIENT_DIR/Cargo.toml.custom" ]; then
+    mv "$BASE_CLIENT_DIR/Cargo.toml.custom" "$BASE_CLIENT_DIR/Cargo.toml"
 fi
 
 echo "✅ Client generation complete!"
