@@ -34,3 +34,11 @@ dotenv = { workspace = true }
 default = ["rustls"]
 rustls = ["reqwest/rustls-tls"]
 native-tls = ["reqwest/native-tls"]
+
+[lints.clippy]
+# Allow all clippy warnings for generated code
+all = "allow"
+pedantic = "allow"
+restriction = "allow"
+nursery = "allow"
+cargo = "allow"
