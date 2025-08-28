@@ -2,17 +2,13 @@
 
 use langfuse_ergonomic::LangfuseClient;
 use serde_json::json;
-use std::env;
 use chrono::Utc;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
     
-    let client = LangfuseClient::new()
-        .public_key(env::var("LANGFUSE_PUBLIC_KEY")?)
-        .secret_key(env::var("LANGFUSE_SECRET_KEY")?)
-        .call();
+    let client = LangfuseClient::from_env()?;
     
     // Create a trace for the entire chain
     let trace = client.trace()
