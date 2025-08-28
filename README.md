@@ -52,11 +52,14 @@ use serde_json::json;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Create client
-    let client = LangfuseClient::new()
+    // Create client from environment variables
+    let client = LangfuseClient::from_env()?;
+    
+    // Or create with explicit credentials
+    let client = LangfuseClient::builder()
         .public_key("pk-lf-...")
         .secret_key("sk-lf-...")
-        .call();
+        .build();
     
     // Create a trace
     let trace = client.trace()

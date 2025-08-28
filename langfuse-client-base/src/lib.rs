@@ -1,8 +1,8 @@
 //! Auto-generated Langfuse API client
-//! 
+//!
 //! This module contains the base client generated from the Langfuse OpenAPI specification.
 //! It is intended to be used as a foundation for the more ergonomic API in `langfuse-ergonomic`.
-//! 
+//!
 //! To regenerate this client, run `scripts/generate-openapi-client.sh`
 
 // This file will be replaced by the OpenAPI generator
@@ -15,13 +15,13 @@ use thiserror::Error;
 pub enum ApiError {
     #[error("Request failed: {0}")]
     RequestError(#[from] reqwest::Error),
-    
+
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
-    
+
     #[error("Authentication failed")]
     AuthenticationError,
-    
+
     #[error("API error: {status} - {message}")]
     ApiResponseError { status: u16, message: String },
 }
@@ -73,6 +73,7 @@ pub struct TraceResponse {
 }
 
 pub struct DefaultApi {
+    #[allow(dead_code)]
     configuration: Configuration,
 }
 
@@ -80,9 +81,13 @@ impl DefaultApi {
     pub fn new(configuration: Configuration) -> Self {
         Self { configuration }
     }
-    
-    pub async fn create_trace(&self, _request: CreateTraceRequest) -> Result<TraceResponse, ApiError> {
+
+    pub async fn create_trace(
+        &self,
+        _request: CreateTraceRequest,
+    ) -> Result<TraceResponse, ApiError> {
         // Placeholder implementation
+        // The configuration field will be used here when OpenAPI generator replaces this
         todo!("This will be replaced by OpenAPI generator")
     }
 }

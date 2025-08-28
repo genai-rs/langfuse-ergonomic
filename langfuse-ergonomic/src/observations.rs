@@ -16,8 +16,10 @@ pub enum ObservationType {
 
 /// Builder for creating observations (spans and generations)
 pub struct ObservationBuilder<'a> {
+    #[allow(dead_code)]
     client: &'a LangfuseClient,
     id: Option<String>,
+    #[allow(dead_code)]
     trace_id: String,
     parent_observation_id: Option<String>,
     observation_type: ObservationType,
@@ -39,7 +41,7 @@ pub struct ObservationBuilder<'a> {
 
 impl LangfuseClient {
     /// Start building a span observation
-    pub fn span(&self, trace_id: impl Into<String>) -> ObservationBuilder {
+    pub fn span(&self, trace_id: impl Into<String>) -> ObservationBuilder<'_> {
         ObservationBuilder {
             client: self,
             id: None,
@@ -61,9 +63,9 @@ impl LangfuseClient {
             total_tokens: None,
         }
     }
-    
+
     /// Start building a generation observation
-    pub fn generation(&self, trace_id: impl Into<String>) -> ObservationBuilder {
+    pub fn generation(&self, trace_id: impl Into<String>) -> ObservationBuilder<'_> {
         ObservationBuilder {
             client: self,
             id: None,
@@ -85,9 +87,9 @@ impl LangfuseClient {
             total_tokens: None,
         }
     }
-    
+
     /// Start building an event observation
-    pub fn event(&self, trace_id: impl Into<String>) -> ObservationBuilder {
+    pub fn event(&self, trace_id: impl Into<String>) -> ObservationBuilder<'_> {
         ObservationBuilder {
             client: self,
             id: None,
@@ -117,63 +119,63 @@ impl<'a> ObservationBuilder<'a> {
         self.id = Some(id.into());
         self
     }
-    
+
     /// Set the parent observation ID for nested observations
     pub fn parent_observation_id(mut self, parent_id: impl Into<String>) -> Self {
         self.parent_observation_id = Some(parent_id.into());
         self
     }
-    
+
     /// Set the observation name
     pub fn name(mut self, name: impl Into<String>) -> Self {
         self.name = Some(name.into());
         self
     }
-    
+
     /// Set the input data
     pub fn input(mut self, input: Value) -> Self {
         self.input = Some(input);
         self
     }
-    
+
     /// Set the output data
     pub fn output(mut self, output: Value) -> Self {
         self.output = Some(output);
         self
     }
-    
+
     /// Set metadata
     pub fn metadata(mut self, metadata: Value) -> Self {
         self.metadata = Some(metadata);
         self
     }
-    
+
     /// Set the log level (e.g., "INFO", "WARNING", "ERROR")
     pub fn level(mut self, level: impl Into<String>) -> Self {
         self.level = Some(level.into());
         self
     }
-    
+
     /// Set a status message
     pub fn status_message(mut self, message: impl Into<String>) -> Self {
         self.status_message = Some(message.into());
         self
     }
-    
+
     /// Set the start time
     pub fn start_time(mut self, start_time: DateTime<Utc>) -> Self {
         self.start_time = Some(start_time);
         self
     }
-    
+
     /// Set the end time
     pub fn end_time(mut self, end_time: DateTime<Utc>) -> Self {
         self.end_time = Some(end_time);
         self
     }
-    
+
     // Generation-specific methods
-    
+
     /// Set the model name (for generations)
     pub fn model(mut self, model: impl Into<String>) -> Self {
         if self.observation_type == ObservationType::Generation {
@@ -181,7 +183,7 @@ impl<'a> ObservationBuilder<'a> {
         }
         self
     }
-    
+
     /// Set model parameters (for generations)
     pub fn model_parameters(mut self, params: Value) -> Self {
         if self.observation_type == ObservationType::Generation {
@@ -189,7 +191,7 @@ impl<'a> ObservationBuilder<'a> {
         }
         self
     }
-    
+
     /// Set token counts (for generations)
     pub fn tokens(mut self, prompt: i32, completion: i32) -> Self {
         if self.observation_type == ObservationType::Generation {
@@ -199,7 +201,7 @@ impl<'a> ObservationBuilder<'a> {
         }
         self
     }
-    
+
     /// Execute the observation creation
     pub async fn send(self) -> Result<()> {
         // TODO: Implement actual API call when base client is generated
