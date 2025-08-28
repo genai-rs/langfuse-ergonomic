@@ -2,7 +2,6 @@
 
 use langfuse_ergonomic::LangfuseClient;
 use serde_json::json;
-use std::env;
 use tracing::{info, Level};
 use tracing_subscriber;
 
@@ -16,20 +15,8 @@ async fn main() -> anyhow::Result<()> {
     // Load environment variables
     dotenv::dotenv().ok();
     
-    // Get credentials from environment
-    let public_key = env::var("LANGFUSE_PUBLIC_KEY")
-        .expect("LANGFUSE_PUBLIC_KEY environment variable not set");
-    let secret_key = env::var("LANGFUSE_SECRET_KEY")
-        .expect("LANGFUSE_SECRET_KEY environment variable not set");
-    let base_url = env::var("LANGFUSE_BASE_URL")
-        .unwrap_or_else(|_| "https://cloud.langfuse.com".to_string());
-    
-    // Create client using builder pattern
-    let client = LangfuseClient::new()
-        .public_key(public_key)
-        .secret_key(secret_key)
-        .base_url(base_url)
-        .call();
+    // Create client from environment variables
+    let client = LangfuseClient::from_env()?;
     
     info!("Created Langfuse client");
     
