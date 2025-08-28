@@ -116,20 +116,43 @@ git clone https://github.com/timvw/langfuse-rs.git
 cd langfuse-rs
 ```
 
-2. Generate the base client from OpenAPI:
+2. Initialize the development environment:
 ```bash
-./scripts/generate-openapi-client.sh
+just init  # Sets up git hooks and checks dependencies
 ```
 
-3. Build the project:
+3. Generate the base client from OpenAPI:
+```bash
+just generate  # or ./scripts/generate-openapi-client.sh
+```
+
+4. Build the project:
 ```bash
 cargo build
 ```
 
-4. Run tests:
+5. Run tests:
 ```bash
 cargo test
 ```
+
+### Development Workflow
+
+Before committing code, ensure it passes all checks:
+
+```bash
+just pre-commit  # Runs fmt, clippy, build, and tests
+```
+
+Or run individual checks:
+```bash
+just fmt        # Format code
+just lint       # Run clippy
+just test       # Run tests
+just check      # Run all checks
+```
+
+Git hooks are automatically configured to run these checks before each commit.
 
 ### Environment Variables
 

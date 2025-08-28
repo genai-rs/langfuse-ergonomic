@@ -1,0 +1,38 @@
+#!/bin/bash
+# Git pre-commit hook to run formatting and linting checks
+
+set -e
+
+echo "🔍 Running pre-commit checks..."
+
+# Run cargo fmt
+echo "📝 Checking code formatting..."
+cargo fmt --all -- --check || {
+    echo "❌ Code needs formatting. Running 'cargo fmt --all'..."
+    cargo fmt --all
+    echo "✅ Code formatted. Please review and stage the changes."
+    exit 1
+}
+
+# Run clippy
+echo "🔎 Running clippy..."
+cargo clippy --all -- -D warnings || {
+    echo "❌ Clippy found issues. Please fix them before committing."
+    exit 1
+}
+
+# Build the project
+echo "🔨 Building project..."
+cargo build --all || {
+    echo "❌ Build failed. Please fix errors before committing."
+    exit 1
+}
+
+# Run tests
+echo "🧪 Running tests..."
+cargo test --all || {
+    echo "❌ Tests failed. Please fix them before committing."
+    exit 1
+}
+
+echo "✅ All pre-commit checks passed!"

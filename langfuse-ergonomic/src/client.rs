@@ -43,29 +43,31 @@ impl LangfuseClient {
             api,
         }
     }
-    
+
     /// Create a new Langfuse client from environment variables
-    /// 
+    ///
     /// Reads from:
     /// - `LANGFUSE_PUBLIC_KEY`: Required public key
     /// - `LANGFUSE_SECRET_KEY`: Required secret key  
     /// - `LANGFUSE_BASE_URL`: Optional base URL (defaults to https://cloud.langfuse.com)
     pub fn from_env() -> Result<Self> {
         use std::env;
-        
-        let public_key = env::var("LANGFUSE_PUBLIC_KEY")
-            .map_err(|_| crate::error::Error::Configuration(
-                "LANGFUSE_PUBLIC_KEY environment variable not set".to_string()
-            ))?;
-            
-        let secret_key = env::var("LANGFUSE_SECRET_KEY")
-            .map_err(|_| crate::error::Error::Configuration(
-                "LANGFUSE_SECRET_KEY environment variable not set".to_string()
-            ))?;
-            
+
+        let public_key = env::var("LANGFUSE_PUBLIC_KEY").map_err(|_| {
+            crate::error::Error::Configuration(
+                "LANGFUSE_PUBLIC_KEY environment variable not set".to_string(),
+            )
+        })?;
+
+        let secret_key = env::var("LANGFUSE_SECRET_KEY").map_err(|_| {
+            crate::error::Error::Configuration(
+                "LANGFUSE_SECRET_KEY environment variable not set".to_string(),
+            )
+        })?;
+
         let base_url = env::var("LANGFUSE_BASE_URL")
             .unwrap_or_else(|_| "https://cloud.langfuse.com".to_string());
-            
+
         Ok(Self::builder()
             .public_key(public_key)
             .secret_key(secret_key)
