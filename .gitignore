@@ -1,0 +1,28 @@
+# Rust
+target/
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# Environment
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# OpenAPI generation artifacts
+scripts/openapi.yml
+langfuse-client-base/.openapi-generator/
+
+# Test coverage
+tarpaulin-report.html
+cobertura.xml
