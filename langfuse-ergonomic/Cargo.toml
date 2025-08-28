@@ -31,6 +31,10 @@ tracing-subscriber = { workspace = true }
 dotenv = { workspace = true }
 pretty_assertions = { workspace = true }
 
+[[example]]
+name = "test_trace"
+path = "examples/test_trace.rs"
+
 [features]
 default = ["rustls"]
 rustls = ["langfuse-client-base/rustls"]
