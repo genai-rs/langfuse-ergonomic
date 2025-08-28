@@ -49,9 +49,8 @@ jobs:
       - name: Check formatting (ergonomic crate only)
         # Check formatting only for our hand-written code
         # Generated code formatting is handled in the openapi-test job
-        run: |
-          cd langfuse-ergonomic && cargo fmt -- --check
-          cd ../examples && cargo fmt -- --check 2>/dev/null || true
+        working-directory: langfuse-ergonomic
+        run: cargo fmt -- --check
         
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
