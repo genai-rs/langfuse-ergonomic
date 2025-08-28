@@ -1,0 +1,31 @@
+[package]
+name = "langfuse-ergonomic"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Ergonomic Rust client for Langfuse with builder patterns"
+
+[dependencies]
+langfuse-client-base = { path = "../langfuse-client-base" }
+bon = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+url = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true }
+dotenv = { workspace = true }
+pretty_assertions = { workspace = true }
+
+[features]
+default = ["rustls"]
+rustls = ["langfuse-client-base/rustls"]
+native-tls = ["langfuse-client-base/native-tls"]
