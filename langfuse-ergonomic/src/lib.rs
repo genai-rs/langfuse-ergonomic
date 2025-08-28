@@ -5,12 +5,11 @@
 
 pub mod client;
 pub mod error;
-pub mod observations;
-pub mod scores;
+// TODO: Re-enable these modules once updated to use generated API
+// pub mod observations;
+// pub mod scores;
 pub mod traces;
 
 pub use client::LangfuseClient;
 pub use error::{Error, Result};
-
-// Re-export commonly used types from the base client
-pub use langfuse_client_base::{ApiError, TraceResponse};
+pub use traces::TraceResponse;

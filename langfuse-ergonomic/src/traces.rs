@@ -6,7 +6,6 @@ use uuid::Uuid;
 
 use crate::client::LangfuseClient;
 use crate::error::Result;
-use langfuse_client_base::{CreateTraceRequest, TraceResponse};
 
 /// Builder for creating traces
 pub struct TraceBuilder<'a> {
@@ -20,6 +19,14 @@ pub struct TraceBuilder<'a> {
     user_id: Option<String>,
     session_id: Option<String>,
     timestamp: Option<DateTime<Utc>>,
+    release: Option<String>,
+    version: Option<String>,
+    public: Option<bool>,
+}
+
+/// Response from trace creation
+pub struct TraceResponse {
+    pub id: String,
 }
 
 impl LangfuseClient {
@@ -36,6 +43,9 @@ impl LangfuseClient {
             user_id: None,
             session_id: None,
             timestamp: None,
+            release: None,
+            version: None,
+            public: None,
         }
     }
 }
@@ -105,29 +115,74 @@ impl<'a> TraceBuilder<'a> {
         self
     }
 
+    /// Set the release
+    pub fn release(mut self, release: impl Into<String>) -> Self {
+        self.release = Some(release.into());
+        self
+    }
+
+    /// Set the version
+    pub fn version(mut self, version: impl Into<String>) -> Self {
+        self.version = Some(version.into());
+        self
+    }
+
+    /// Make trace publicly accessible
+    pub fn public(mut self, public: bool) -> Self {
+        self.public = Some(public);
+        self
+    }
+
     /// Execute the trace creation
     pub async fn send(self) -> Result<TraceResponse> {
-        let request = CreateTraceRequest {
-            id: self.id.or_else(|| Some(Uuid::new_v4().to_string())),
-            name: self.name,
-            input: self.input,
-            output: self.output,
-            metadata: self.metadata,
+        use langfuse_client_base::apis::ingestion_api;
+        use langfuse_client_base::models::{
+            IngestionBatchRequest, IngestionEvent, IngestionEventOneOf, TraceBody,
+        };
+
+        let trace_id = self.id.unwrap_or_else(|| Uuid::new_v4().to_string());
+        let timestamp = self
+            .timestamp
+            .unwrap_or_else(Utc::now)
+            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+
+        let trace_body = TraceBody {
+            id: Some(Some(trace_id.clone())),
+            timestamp: Some(Some(timestamp.clone())),
+            name: self.name.map(Some),
+            user_id: self.user_id.map(Some),
+            input: self.input.map(Some),
+            output: self.output.map(Some),
+            session_id: self.session_id.map(Some),
+            release: self.release.map(Some),
+            version: self.version.map(Some),
+            metadata: self.metadata.map(Some),
             tags: if self.tags.is_empty() {
                 None
             } else {
-                Some(self.tags)
+                Some(Some(self.tags))
             },
-            user_id: self.user_id,
-            session_id: self.session_id,
-            timestamp: self.timestamp.or_else(|| Some(Utc::now())),
+            environment: None,
+            public: self.public.map(Some),
         };
 
-        self.client
-            .api()
-            .create_trace(request)
+        let event = IngestionEventOneOf {
+            body: Box::new(trace_body),
+            id: Uuid::new_v4().to_string(),
+            timestamp: timestamp.clone(),
+            metadata: None,
+            r#type: langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
+        };
+
+        let batch_request = IngestionBatchRequest {
+            batch: vec![IngestionEvent::IngestionEventOneOf(Box::new(event))],
+            metadata: None,
+        };
+
+        ingestion_api::ingestion_batch(&self.client.configuration(), batch_request)
             .await
-            .map_err(Into::into)
+            .map(|_| TraceResponse { id: trace_id })
+            .map_err(|e| crate::error::Error::Api(format!("Failed to create trace: {}", e)))
     }
 }
 

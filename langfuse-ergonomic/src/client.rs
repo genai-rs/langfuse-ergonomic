@@ -2,7 +2,7 @@
 
 use crate::error::Result;
 use bon::bon;
-use langfuse_client_base::{Configuration, DefaultApi};
+use langfuse_client_base::apis::configuration::Configuration;
 
 /// Main client for interacting with the Langfuse API
 pub struct LangfuseClient {
@@ -12,7 +12,7 @@ pub struct LangfuseClient {
     secret_key: String,
     #[allow(dead_code)]
     base_url: String,
-    api: DefaultApi,
+    configuration: Configuration,
 }
 
 #[bon]
@@ -27,20 +27,21 @@ impl LangfuseClient {
         let public_key = public_key.into();
         let secret_key = secret_key.into();
 
-        let config = Configuration {
+        let configuration = Configuration {
             base_path: base_url.clone(),
             basic_auth: Some((public_key.clone(), Some(secret_key.clone()))),
             api_key: None,
+            oauth_access_token: None,
+            bearer_access_token: None,
             client: reqwest::Client::new(),
+            user_agent: Some("langfuse-rs/0.1.0".to_string()),
         };
-
-        let api = DefaultApi::new(config);
 
         Self {
             public_key,
             secret_key,
             base_url,
-            api,
+            configuration,
         }
     }
 
@@ -75,9 +76,9 @@ impl LangfuseClient {
             .build())
     }
 
-    /// Get the underlying API client
-    pub fn api(&self) -> &DefaultApi {
-        &self.api
+    /// Get the underlying API configuration
+    pub fn configuration(&self) -> &Configuration {
+        &self.configuration
     }
 
     /// Validate that the client credentials are valid
