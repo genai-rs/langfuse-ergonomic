@@ -73,6 +73,12 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
