@@ -5,16 +5,17 @@ use serde_json::json;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load environment variables
     dotenv::dotenv().ok();
-    
+
     // Create client from environment variables
     println!("Creating Langfuse client from environment...");
     let client = LangfuseClient::from_env()?;
-    
+
     println!("✅ Client created successfully");
-    
+
     // Create a simple trace
     println!("Creating trace...");
-    let trace_response = client.trace()
+    let trace_response = client
+        .trace()
         .name("test-trace-from-rust")
         .input(json!({
             "prompt": "What is the capital of France?",
@@ -34,11 +35,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }))
         .send()
         .await?;
-    
+
     println!("✅ Trace created successfully!");
     println!("   Trace ID: {}", trace_response.id);
     println!("\n🎉 Check your Langfuse dashboard at https://cloud.langfuse.com");
     println!("   You should see a trace named 'test-trace-from-rust'");
-    
+
     Ok(())
 }
