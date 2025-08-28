@@ -35,6 +35,18 @@ pretty_assertions = { workspace = true }
 name = "test_trace"
 path = "examples/test_trace.rs"
 
+[[example]]
+name = "basic_trace"
+path = "examples/basic_trace.rs"
+
+[[example]]
+name = "trace_with_metadata"
+path = "examples/trace_with_metadata.rs"
+
+[[example]]
+name = "multiple_traces"
+path = "examples/multiple_traces.rs"
+
 [features]
 default = ["rustls"]
 rustls = ["langfuse-client-base/rustls"]
