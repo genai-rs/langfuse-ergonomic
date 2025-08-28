@@ -274,6 +274,27 @@ The `langfuse-ergonomic` crate wraps the generated client with intuitive builder
 - Compile-time validation
 - Method chaining for fluent interfaces
 
+## Publishing & Releases
+
+This project uses [release-plz](https://release-plz.ieni.dev/) to automate releases and publishing to crates.io.
+
+### Automated Releases
+
+When changes are merged to `main`, release-plz will:
+1. Create a PR with version bumps and changelog updates
+2. After merging the release PR, automatically:
+   - Create GitHub releases with changelogs
+   - Publish crates to crates.io
+   - Tag the release
+
+### Manual Publishing
+
+To publish manually:
+```bash
+cargo publish -p langfuse-client-base
+cargo publish -p langfuse-ergonomic
+```
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.

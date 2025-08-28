@@ -5,9 +5,15 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 description = "Ergonomic Rust client for Langfuse with builder patterns"
+repository.workspace = true
+homepage = "https://github.com/timvw/langfuse-rs"
+documentation = "https://docs.rs/langfuse-ergonomic"
+readme = "../README.md"
+keywords = ["langfuse", "observability", "llm", "tracing", "monitoring"]
+categories = ["api-bindings", "web-programming::http-client", "development-tools::debugging"]
 
 [dependencies]
-langfuse-client-base = { path = "../langfuse-client-base" }
+langfuse-client-base = { path = "../langfuse-client-base", version = "0.1.0" }
 bon = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
