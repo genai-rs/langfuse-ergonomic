@@ -8,6 +8,8 @@ init:
     cargo --version
     @echo "Checking for openapi-generator-cli..."
     @which openapi-generator-cli > /dev/null || npm install -g @openapitools/openapi-generator-cli
+    @echo "Setting up git hooks..."
+    ./scripts/setup-hooks.sh
     @echo "✅ Development environment ready!"
 
 # Generate OpenAPI client
@@ -37,6 +39,19 @@ fmt-check:
 # Run all checks (format, lint, test)
 check: fmt-check lint test
     cargo check --all
+
+# Run pre-commit checks (format, clippy, build, test)
+pre-commit:
+    @echo "🔍 Running pre-commit checks..."
+    @echo "📝 Formatting code..."
+    cargo fmt --all
+    @echo "🔎 Running clippy..."
+    cargo clippy --all -- -D warnings
+    @echo "🔨 Building..."
+    cargo build --all
+    @echo "🧪 Running tests..."
+    cargo test --all
+    @echo "✅ All pre-commit checks passed!"
 
 # Run a specific example
 run-example name:
