@@ -5,6 +5,12 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 description = "Auto-generated Langfuse API client from OpenAPI specification"
+repository.workspace = true
+homepage = "https://github.com/timvw/langfuse-rs"
+documentation = "https://docs.rs/langfuse-client-base"
+readme = "../README.md"
+keywords = ["langfuse", "openapi", "client", "api", "llm"]
+categories = ["api-bindings", "web-programming::http-client"]
 
 [dependencies]
 serde = { workspace = true }
