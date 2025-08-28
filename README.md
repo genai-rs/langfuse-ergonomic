@@ -173,16 +173,28 @@ LANGFUSE_BASE_URL=https://cloud.langfuse.com  # Optional
 ### Running Examples
 
 ```bash
-# Basic usage example
-cargo run --example basic_usage
+cd langfuse-ergonomic
 
-# Multi-step LLM chain example
-cargo run --example llm_chain
+# Basic trace creation
+cargo run --example basic_trace
+
+# Trace with full metadata
+cargo run --example trace_with_metadata  
+
+# Multiple traces in a session
+cargo run --example multiple_traces
+
+# Simple test trace
+cargo run --example test_trace
 ```
 
 ## API Overview
 
-### Creating Traces
+### Currently Implemented
+
+#### Creating Traces
+
+The library currently supports creating traces with the Langfuse ingestion API:
 
 ```rust
 let trace = client.trace()
@@ -197,68 +209,27 @@ let trace = client.trace()
     .await?;
 ```
 
-### Creating Observations
+### Planned Features
 
-#### Spans
-```rust
-client.span(&trace_id)
-    .name("data-processing")
-    .parent_observation_id(&parent_span_id)  // Optional nesting
-    .input(json!({"data": "..."}))
-    .output(json!({"processed": "..."}))
-    .level("INFO")
-    .send()
-    .await?;
-```
+The following features are planned for future releases:
 
-#### Generations (LLM calls)
-```rust
-client.generation(&trace_id)
-    .name("llm-completion")
-    .model("gpt-4")
-    .model_parameters(json!({"temperature": 0.7}))
-    .input(json!({"prompt": "..."}))
-    .output(json!({"completion": "..."}))
-    .tokens(100, 50)  // prompt tokens, completion tokens
-    .send()
-    .await?;
-```
+#### Observations (Spans, Generations, Events)
+- Creating spans for nested operations
+- Recording LLM generation calls with token usage
+- Logging events within traces
 
-#### Events
-```rust
-client.event(&trace_id)
-    .name("cache-hit")
-    .level("INFO")
-    .metadata(json!({"cache_key": "..."}))
-    .send()
-    .await?;
-```
+#### Scoring System
+- Numeric scores for quality metrics
+- Binary scores for success/failure
+- Rating scores (e.g., 1-5 stars)
+- Categorical scores for classification
 
-### Adding Scores
-
-```rust
-// Numeric score
-client.score(&trace_id, "quality")
-    .value(0.95)
-    .comment("High quality response")
-    .send()
-    .await?;
-
-// Binary score
-client.binary_score(&trace_id, "success", true)
-    .send()
-    .await?;
-
-// Rating score (e.g., 4 out of 5 stars)
-client.rating_score(&trace_id, "user_rating", 4, 5)
-    .send()
-    .await?;
-
-// Categorical score
-client.categorical_score(&trace_id, "sentiment", "positive")
-    .send()
-    .await?;
-```
+#### Additional Functionality
+- Fetching existing traces
+- Updating traces and observations
+- Batch operations for improved performance
+- Dataset management
+- Prompt management
 
 ## Architecture
 
