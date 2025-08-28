@@ -46,8 +46,12 @@ jobs:
           path: target
           key: ${{ runner.os }}-cargo-build-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
           
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      - name: Check formatting (ergonomic crate only)
+        # Check formatting only for our hand-written code
+        # Generated code formatting is handled in the openapi-test job
+        run: |
+          cd langfuse-ergonomic && cargo fmt -- --check
+          cd ../examples && cargo fmt -- --check 2>/dev/null || true
         
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
@@ -62,38 +66,41 @@ jobs:
         run: cargo doc --no-deps --all-features
 
   # Test that the generated OpenAPI client compiles
-  # This job only runs on Ubuntu to save CI time
-  # TODO: Re-enable once OpenAPI generation is working in CI
-  # Currently disabled as it requires proper Java setup and the placeholder implementation works
-  # openapi-test:
-  #   name: OpenAPI Generation Test
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
-  #       
-  #     - name: Install Rust
-  #       uses: dtolnay/rust-toolchain@stable
-  #       
-  #     - name: Setup Java
-  #       uses: actions/setup-java@v4
-  #       with:
-  #         distribution: 'temurin'
-  #         java-version: '17'
-  #         
-  #     - name: Setup Node.js
-  #       uses: actions/setup-node@v4
-  #       with:
-  #         node-version: '18'
-  #         
-  #     - name: Install OpenAPI Generator
-  #       run: npm install -g @openapitools/openapi-generator-cli
-  #       
-  #     - name: Generate OpenAPI client
-  #       run: ./scripts/generate-openapi-client.sh
-  #       
-  #     - name: Build with generated client
-  #       run: cargo build --all
+  # This job only runs on Ubuntu to save CI time  
+  openapi-test:
+    name: OpenAPI Generation Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+        
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      - name: Install OpenAPI Generator
+        run: npm install -g @openapitools/openapi-generator-cli
+        
+      - name: Generate OpenAPI client
+        run: ./scripts/generate-openapi-client.sh
+        
+      - name: Verify formatting after generation
+        run: cargo fmt --all -- --check
+        
+      - name: Build with generated client
+        run: cargo build --all
         
   # Code coverage
   coverage:

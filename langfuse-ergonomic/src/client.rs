@@ -50,7 +50,7 @@ impl LangfuseClient {
     /// Reads from:
     /// - `LANGFUSE_PUBLIC_KEY`: Required public key
     /// - `LANGFUSE_SECRET_KEY`: Required secret key  
-    /// - `LANGFUSE_BASE_URL`: Optional base URL (defaults to https://cloud.langfuse.com)
+    /// - `LANGFUSE_BASE_URL`: Optional base URL (defaults to <https://cloud.langfuse.com>)
     pub fn from_env() -> Result<Self> {
         use std::env;
 

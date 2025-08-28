@@ -52,7 +52,12 @@ if [ -f "$BASE_CLIENT_DIR/Cargo.toml.custom" ]; then
     mv "$BASE_CLIENT_DIR/Cargo.toml.custom" "$BASE_CLIENT_DIR/Cargo.toml"
 fi
 
+# Format the generated code
+echo "🎨 Formatting generated code..."
+cd "$PROJECT_ROOT"
+cargo fmt --all
+
 echo "✅ Client generation complete!"
 echo ""
 echo "Note: The generated client is in $BASE_CLIENT_DIR"
-echo "      You may need to manually adjust some generated code for better ergonomics."
+echo "      The code has been automatically formatted with cargo fmt."
