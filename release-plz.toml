@@ -1,0 +1,31 @@
+# Configuration for release-plz
+# https://release-plz.ieni.dev/docs/config
+
+[workspace]
+# Enable changelog generation
+changelog_update = true
+
+# Customize git commits
+git_release_enable = true
+git_tag_enable = true
+
+# Commit message for version bumps
+version_commit_message = "chore: release version {{version}}"
+
+# PR settings
+pr_labels = ["release"]
+pr_draft = false
+
+# Package-specific configuration
+[[package]]
+name = "langfuse-client-base"
+# This is auto-generated, so we might want to handle it specially
+changelog_update = false
+publish = true
+
+[[package]]
+name = "langfuse-ergonomic"  
+changelog_update = true
+publish = true
+# Ensure base client is published first
+publish_allow_dirty = false
