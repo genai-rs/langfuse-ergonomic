@@ -5,7 +5,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("API error: {0}")]
-    Api(#[from] langfuse_client_base::ApiError),
+    Api(String),
 
     #[error("Configuration error: {0}")]
     Configuration(String),
