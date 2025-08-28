@@ -179,7 +179,7 @@ impl<'a> TraceBuilder<'a> {
             metadata: None,
         };
 
-        ingestion_api::ingestion_batch(&self.client.configuration(), batch_request)
+        ingestion_api::ingestion_batch(self.client.configuration(), batch_request)
             .await
             .map(|_| TraceResponse { id: trace_id })
             .map_err(|e| crate::error::Error::Api(format!("Failed to create trace: {}", e)))
