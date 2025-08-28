@@ -1,5 +1,11 @@
 # langfuse-rs
 
+[![CI](https://github.com/timvw/langfuse-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/timvw/langfuse-rs/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/timvw/langfuse-rs/graph/badge.svg?token=CODECOV_TOKEN)](https://codecov.io/gh/timvw/langfuse-rs)
+[![Crates.io](https://img.shields.io/crates/v/langfuse-ergonomic.svg)](https://crates.io/crates/langfuse-ergonomic)
+[![Documentation](https://docs.rs/langfuse-ergonomic/badge.svg)](https://docs.rs/langfuse-ergonomic)
+[![License](https://img.shields.io/crates/l/langfuse-ergonomic.svg)](LICENSE-MIT)
+
 A Rust client library for [Langfuse](https://langfuse.com) with both auto-generated API bindings and an ergonomic interface powered by the [Bon](https://bon-rs.com) builder pattern library.
 
 This client provides full access to the [Langfuse Public API](https://langfuse.com/docs/api-and-data-platform/features/public-api), enabling you to integrate observability and monitoring into your Rust-based LLM applications.
