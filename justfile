@@ -82,3 +82,14 @@ publish-dry:
 # Watch for changes and run checks
 watch:
     cargo watch -x check -x test
+
+# Generate code coverage report
+coverage:
+    @echo "🔍 Generating code coverage..."
+    cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out html --out xml --exclude-files "*/tests/*" --exclude-files "*/examples/*"
+    @echo "📊 Coverage report generated: tarpaulin-report.html"
+    @echo "📊 Coverage XML generated: cobertura.xml"
+
+# Generate coverage and open in browser
+coverage-html: coverage
+    @open tarpaulin-report.html || xdg-open tarpaulin-report.html 2>/dev/null || echo "Please open tarpaulin-report.html manually"
