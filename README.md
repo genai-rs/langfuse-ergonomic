@@ -2,6 +2,8 @@
 
 A Rust client library for [Langfuse](https://langfuse.com) with both auto-generated API bindings and an ergonomic interface powered by the [Bon](https://bon-rs.com) builder pattern library.
 
+This client provides full access to the [Langfuse Public API](https://langfuse.com/docs/api-and-data-platform/features/public-api), enabling you to integrate observability and monitoring into your Rust-based LLM applications.
+
 ## Project Structure
 
 This project consists of two crates:
@@ -17,6 +19,17 @@ This project consists of two crates:
 - ✅ Comprehensive error handling
 - ✅ Support for traces, observations (spans/generations), and scores
 - ✅ Flexible authentication (API keys, basic auth)
+
+### Supported API Operations
+
+This client provides access to all Langfuse Public API endpoints:
+
+- **Traces**: Create and manage traces for LLM interactions
+- **Observations**: Track spans, generations, and events within traces
+- **Scores**: Evaluate trace quality with numeric, categorical, or binary scores
+- **Sessions**: Group related traces into sessions
+- **Prompts**: Manage and version prompts (when available)
+- **Projects**: Access project configurations and settings
 
 ## Quick Start
 
@@ -59,6 +72,31 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 ```
+
+## Langfuse API
+
+### Authentication
+
+The Langfuse Public API uses Basic Authentication with project-specific API keys:
+- **Public Key**: Used as the username
+- **Secret Key**: Used as the password
+
+You can obtain these keys from your [Langfuse project settings](https://cloud.langfuse.com).
+
+### API Endpoints
+
+The client connects to Langfuse Cloud by default (`https://cloud.langfuse.com`), but you can configure it for different regions or self-hosted instances:
+
+- **US Cloud**: `https://us.cloud.langfuse.com`
+- **EU Cloud**: `https://cloud.langfuse.com` (default)
+- **Self-hosted**: Your custom Langfuse instance URL
+
+### Resources
+
+- [Langfuse Public API Documentation](https://langfuse.com/docs/api-and-data-platform/features/public-api)
+- [API Reference](https://api.reference.langfuse.com)
+- [OpenAPI Specification](https://cloud.langfuse.com/generated/api/openapi.yml)
+- [Postman Collection](https://cloud.langfuse.com/generated/postman/collection.json)
 
 ## Setup & Development
 
