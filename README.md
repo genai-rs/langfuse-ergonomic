@@ -75,25 +75,48 @@ let client = LangfuseClient::builder()
 Check the `examples/` directory for more usage examples:
 
 ```bash
+# Trace examples
 cargo run --example basic_trace
 cargo run --example trace_with_metadata
 cargo run --example multiple_traces
+
+# Observations (spans, generations, events)
+cargo run --example observations
+
+# Scoring and evaluation
+cargo run --example scores
 ```
 
 ## API Coverage
 
 ### Currently Implemented ✅
-- Trace creation with full metadata support
-- Session tracking
-- User identification
-- Tags and metadata
-- Custom timestamps
+
+#### Traces
+- Full trace creation with metadata support
+- Session and user tracking
+- Tags and custom timestamps
+- Input/output data capture
+
+#### Observations
+- **Spans** - Track execution steps and nested operations
+- **Generations** - Monitor LLM calls with token usage
+- **Events** - Log important milestones and errors
+- Nested observations with parent-child relationships
+- Log levels (DEBUG, INFO, WARNING, ERROR)
+
+#### Scoring
+- **Numeric scores** - Evaluate with decimal values (0.0-1.0)
+- **Categorical scores** - Text-based classifications
+- **Binary scores** - Success/failure tracking
+- **Rating scores** - Star ratings and scales
+- Trace-level and observation-level scoring
+- Score metadata and comments
 
 ### Coming Soon 🚧
-- Observations (spans, generations, events)
-- Scoring system
 - Dataset management
 - Prompt management
+- Batch operations
+- Fetching existing traces
 
 ## License
 
