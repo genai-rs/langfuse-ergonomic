@@ -1,8 +1,10 @@
 //! Main client for interacting with the Langfuse API
 
+use crate::batcher::{Batcher, BatcherConfig};
 use crate::error::Result;
 use bon::bon;
 use langfuse_client_base::apis::configuration::Configuration;
+use std::sync::Arc;
 use std::time::Duration;
 
 /// SDK version for User-Agent header
@@ -17,13 +19,10 @@ const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Main client for interacting with the Langfuse API
 pub struct LangfuseClient {
-    #[allow(dead_code)]
-    public_key: String,
-    #[allow(dead_code)]
-    secret_key: String,
-    #[allow(dead_code)]
-    base_url: String,
-    configuration: Configuration,
+    pub(crate) public_key: String,
+    pub(crate) secret_key: String,
+    pub(crate) base_url: String,
+    pub(crate) configuration: Configuration,
 }
 
 #[bon]
@@ -119,5 +118,56 @@ impl LangfuseClient {
         // This would make a simple API call to validate credentials
         // For now, we'll just return Ok(true)
         Ok(true)
+    }
+    
+    /// Create a batcher for efficient batch ingestion
+    /// 
+    /// The batcher automatically handles:
+    /// - Batching events up to size/count limits
+    /// - Automatic flushing on intervals
+    /// - 207 Multi-Status response parsing
+    /// - Retrying only failed events
+    /// - Exponential backoff for retryable errors
+    /// 
+    /// # Example
+    /// ```no_run
+    /// # use langfuse_ergonomic::{LangfuseClient, BatcherConfig};
+    /// # use std::sync::Arc;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = Arc::new(LangfuseClient::from_env()?);
+    /// let batcher = client.create_batcher(None);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn create_batcher(
+        self: Arc<Self>,
+        config: Option<BatcherConfig>,
+    ) -> Batcher {
+        // Clone the Arc to avoid moving self
+        let client = LangfuseClient {
+            public_key: self.public_key.clone(),
+            secret_key: self.secret_key.clone(),
+            base_url: self.base_url.clone(),
+            configuration: Configuration {
+                base_path: self.configuration.base_path.clone(),
+                basic_auth: self.configuration.basic_auth.clone(),
+                api_key: self.configuration.api_key.clone(),
+                oauth_access_token: self.configuration.oauth_access_token.clone(),
+                bearer_access_token: self.configuration.bearer_access_token.clone(),
+                client: self.configuration.client.clone(),
+                user_agent: self.configuration.user_agent.clone(),
+            },
+        };
+        
+        let config = config.unwrap_or_default();
+        
+        Batcher::builder()
+            .client(client)
+            .max_events(config.max_events)
+            .max_bytes(config.max_bytes)
+            .flush_interval(config.flush_interval)
+            .max_retries(config.max_retries)
+            .fail_fast(config.fail_fast)
+            .build()
     }
 }
