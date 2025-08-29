@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.2.0...v0.2.1) - 2025-08-29
+
+### Added
+
+- enforce linear history with rebase-only merge strategy ([#12](https://github.com/genai-rs/langfuse-ergonomic/pull/12))
+
+### Fixed
+
+- add PR body and release body templates to release-plz config ([#11](https://github.com/genai-rs/langfuse-ergonomic/pull/11))
+- update branch protection rules to include beta rust checks ([#10](https://github.com/genai-rs/langfuse-ergonomic/pull/10))
+
+### Other
+
+- add repository settings configuration and branch management docs
+
 ## [0.2.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.1.1...v0.2.0) - 2025-08-29
 
 ### Added
