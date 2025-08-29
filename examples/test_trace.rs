@@ -25,7 +25,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "response": "The capital of France is Paris.",
             "tokens_used": 10
         }))
-        .tags(["test", "rust-client", "example"])
+        .tags(vec![
+            "test".to_string(),
+            "rust-client".to_string(),
+            "example".to_string(),
+        ])
         .user_id("test-user-123")
         .session_id("test-session-456")
         .metadata(json!({
@@ -33,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "sdk": "langfuse-rs",
             "version": "0.1.0"
         }))
-        .send()
+        .call()
         .await?;
 
     println!("✅ Trace created successfully!");
