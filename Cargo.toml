@@ -22,7 +22,7 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-feature
 thiserror = "1.0"
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1.10", features = ["v4", "serde"] }
+uuid = { version = "1.10", features = ["v4", "v5", "serde"] }
 url = "2.5"
 tokio = { version = "1.40", features = ["macros", "rt-multi-thread"] }
 tracing = "0.1"
@@ -76,6 +76,10 @@ path = "examples/batch_ingestion.rs"
 [[example]]
 name = "self_hosted"  
 path = "examples/self_hosted.rs"
+
+[[example]]
+name = "trace_urls_byo_ids"
+path = "examples/trace_urls_byo_ids.rs"
 
 
 [features]
