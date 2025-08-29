@@ -4,7 +4,7 @@ use serde_json::json;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load environment variables
-    dotenv::dotenv().ok();
+    dotenvy::dotenv().ok();
 
     // Create client from environment variables
     println!("Creating Langfuse client from environment...");
