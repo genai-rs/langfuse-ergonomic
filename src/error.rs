@@ -177,3 +177,177 @@ impl IngestionResponse {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn test_error_is_retryable() {
+        // Rate limit errors should be retryable
+        let rate_limit_error = Error::RateLimit {
+            retry_after: Some(Duration::from_secs(5)),
+            request_id: None,
+        };
+        assert!(rate_limit_error.is_retryable());
+
+        // Server errors should be retryable
+        let server_error = Error::Server {
+            status: 500,
+            message: "Internal server error".to_string(),
+            request_id: None,
+        };
+        assert!(server_error.is_retryable());
+
+        // Auth errors should not be retryable
+        let auth_error = Error::Auth {
+            message: "Invalid credentials".to_string(),
+            request_id: None,
+        };
+        assert!(!auth_error.is_retryable());
+
+        // Client errors should not be retryable
+        let client_error = Error::Client {
+            status: 400,
+            message: "Bad request".to_string(),
+            request_id: None,
+        };
+        assert!(!client_error.is_retryable());
+
+        // Validation errors should not be retryable
+        let validation_error = Error::Validation("Invalid input".to_string());
+        assert!(!validation_error.is_retryable());
+    }
+
+    #[test]
+    fn test_error_retry_after() {
+        // Rate limit error with retry_after
+        let rate_limit_error = Error::RateLimit {
+            retry_after: Some(Duration::from_secs(10)),
+            request_id: None,
+        };
+        assert_eq!(
+            rate_limit_error.retry_after(),
+            Some(Duration::from_secs(10))
+        );
+
+        // Server error should have default retry delay
+        let server_error = Error::Server {
+            status: 503,
+            message: "Service unavailable".to_string(),
+            request_id: None,
+        };
+        assert_eq!(server_error.retry_after(), Some(Duration::from_secs(5)));
+
+        // Auth error should have no retry delay
+        let auth_error = Error::Auth {
+            message: "Unauthorized".to_string(),
+            request_id: None,
+        };
+        assert_eq!(auth_error.retry_after(), None);
+    }
+
+    #[test]
+    fn test_ingestion_response_success() {
+        let response = IngestionResponse {
+            success_ids: vec!["id1".to_string(), "id2".to_string()],
+            failures: vec![],
+            success_count: 2,
+            failure_count: 0,
+        };
+
+        assert!(response.is_success());
+        assert!(!response.is_partial_failure());
+        assert!(response.to_error().is_none());
+    }
+
+    #[test]
+    fn test_ingestion_response_partial_failure() {
+        let response = IngestionResponse {
+            success_ids: vec!["id1".to_string()],
+            failures: vec![EventError {
+                event_id: "id2".to_string(),
+                message: "Validation failed".to_string(),
+                code: Some("VALIDATION_ERROR".to_string()),
+                retryable: false,
+            }],
+            success_count: 1,
+            failure_count: 1,
+        };
+
+        assert!(!response.is_success());
+        assert!(response.is_partial_failure());
+
+        let error = response.to_error().unwrap();
+        match error {
+            Error::PartialFailure {
+                success_count,
+                failure_count,
+                ..
+            } => {
+                assert_eq!(success_count, 1);
+                assert_eq!(failure_count, 1);
+            }
+            _ => panic!("Expected PartialFailure error"),
+        }
+    }
+
+    #[test]
+    fn test_ingestion_response_total_failure() {
+        let response = IngestionResponse {
+            success_ids: vec![],
+            failures: vec![
+                EventError {
+                    event_id: "id1".to_string(),
+                    message: "Auth failed".to_string(),
+                    code: Some("AUTH_ERROR".to_string()),
+                    retryable: false,
+                },
+                EventError {
+                    event_id: "id2".to_string(),
+                    message: "Rate limited".to_string(),
+                    code: Some("RATE_LIMIT".to_string()),
+                    retryable: true,
+                },
+            ],
+            success_count: 0,
+            failure_count: 2,
+        };
+
+        assert!(!response.is_success());
+        assert!(!response.is_partial_failure()); // No successes
+        assert!(response.to_error().is_some());
+    }
+
+    #[test]
+    fn test_event_error_display() {
+        let error = EventError {
+            event_id: "test-id".to_string(),
+            message: "Something went wrong".to_string(),
+            code: Some("TEST_ERROR".to_string()),
+            retryable: true,
+        };
+
+        let display = format!("{}", error);
+        assert!(display.contains("test-id"));
+        assert!(display.contains("Something went wrong"));
+        assert!(display.contains("TEST_ERROR"));
+        assert!(display.contains("retryable"));
+    }
+
+    #[test]
+    fn test_event_error_display_minimal() {
+        let error = EventError {
+            event_id: "minimal-id".to_string(),
+            message: "Minimal error".to_string(),
+            code: None,
+            retryable: false,
+        };
+
+        let display = format!("{}", error);
+        assert!(display.contains("minimal-id"));
+        assert!(display.contains("Minimal error"));
+        assert!(!display.contains("retryable"));
+    }
+}

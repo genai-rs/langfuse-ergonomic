@@ -29,8 +29,9 @@ tracing = "0.1"
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-dotenv = "0.15"
+dotenvy = "0.15"
 pretty_assertions = "1.4"
+mockito = "1.4"
 
 [[example]]
 name = "test_trace"
