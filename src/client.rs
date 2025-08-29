@@ -1,6 +1,7 @@
 //! Main client for interacting with the Langfuse API
 
 use crate::error::Result;
+use crate::security::SecretString;
 use bon::bon;
 use langfuse_client_base::apis::configuration::Configuration;
 use std::time::Duration;
@@ -16,11 +17,12 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Main client for interacting with the Langfuse API
+#[derive(Debug)]
 pub struct LangfuseClient {
     #[allow(dead_code)]
-    public_key: String,
+    public_key: SecretString,
     #[allow(dead_code)]
-    secret_key: String,
+    secret_key: SecretString,
     #[allow(dead_code)]
     base_url: String,
     configuration: Configuration,
@@ -38,8 +40,8 @@ impl LangfuseClient {
         connect_timeout: Option<Duration>,
         user_agent: Option<String>,
     ) -> Self {
-        let public_key = public_key.into();
-        let secret_key = secret_key.into();
+        let public_key_str = public_key.into();
+        let secret_key_str = secret_key.into();
 
         // Build HTTP client with sensible defaults
         let client_builder = reqwest::Client::builder()
@@ -62,7 +64,7 @@ impl LangfuseClient {
 
         let configuration = Configuration {
             base_path: base_url.clone(),
-            basic_auth: Some((public_key.clone(), Some(secret_key.clone()))),
+            basic_auth: Some((public_key_str.clone(), Some(secret_key_str.clone()))),
             api_key: None,
             oauth_access_token: None,
             bearer_access_token: None,
@@ -71,8 +73,8 @@ impl LangfuseClient {
         };
 
         Self {
-            public_key,
-            secret_key,
+            public_key: SecretString::new(public_key_str),
+            secret_key: SecretString::new(secret_key_str),
             base_url,
             configuration,
         }

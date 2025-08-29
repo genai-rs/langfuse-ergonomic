@@ -26,6 +26,7 @@ uuid = { version = "1.10", features = ["v4", "serde"] }
 url = "2.5"
 tokio = { version = "1.40", features = ["macros", "rt-multi-thread"] }
 tracing = "0.1"
+regex = "1.10"
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -76,6 +77,10 @@ path = "examples/batch_ingestion.rs"
 [[example]]
 name = "self_hosted"  
 path = "examples/self_hosted.rs"
+
+[[example]]
+name = "security_redaction"
+path = "examples/security_redaction.rs"
 
 
 [features]

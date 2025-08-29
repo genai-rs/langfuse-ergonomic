@@ -10,9 +10,11 @@ pub mod error;
 pub mod observations;
 pub mod prompts;
 pub mod scores;
+pub mod security;
 pub mod traces;
 
 pub use batcher::{BatchEvent, Batcher, BatcherConfig};
 pub use client::LangfuseClient;
 pub use error::{Error, EventError, IngestionResponse, Result};
+pub use security::{Redactable, Redactor, SecretString};
 pub use traces::TraceResponse;
