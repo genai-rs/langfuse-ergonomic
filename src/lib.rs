@@ -15,4 +15,4 @@ pub mod traces;
 pub use batcher::{BatchEvent, Batcher, BatcherConfig};
 pub use client::LangfuseClient;
 pub use error::{Error, EventError, IngestionResponse, Result};
-pub use traces::TraceResponse;
+pub use traces::{IdGenerator, TraceResponse};
