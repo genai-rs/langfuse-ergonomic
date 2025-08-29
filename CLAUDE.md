@@ -9,6 +9,21 @@ This is the **langfuse-ergonomic** repository - an ergonomic wrapper for the Lan
 - **Depends on**: [langfuse-client-base](https://github.com/genai-rs/langfuse-client-base) - the auto-generated OpenAPI client
 - **Purpose**: Provides a user-friendly API using the Bon builder pattern library
 
+## Recent Migration (2025-08-29)
+
+This repository was migrated from the monorepo at timvw/langfuse-rs to a standalone repository in the genai-rs organization. Key changes:
+
+1. **Standalone Repository**: Converted from workspace member to standalone package
+2. **Dependencies**: Now depends on published langfuse-client-base crate from crates.io (v0.1)
+3. **Simplified Configuration**: Removed workspace configuration from release-plz.toml
+4. **Structure**: All code moved from subdirectory to repository root
+5. **CI/CD**: Retained full test matrix as this contains manually written code
+
+### Migration Notes
+- Repository is still technically a fork but has full permissions via organization settings
+- Observations and scores modules are temporarily disabled (commented out in lib.rs) pending API updates
+- Only traces module is currently active and tested
+
 ## Development Workflow
 
 ### Git Workflow
