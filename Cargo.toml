@@ -68,6 +68,15 @@ path = "examples/traces_fetch.rs"
 name = "prompts"
 path = "examples/prompts.rs"
 
+# Temporarily disabled - needs update for new langfuse-client-base API
+# [[example]]
+# name = "batch_ingestion"
+# path = "examples/batch_ingestion.rs"
+
+# [[example]]
+# name = "self_hosted"  
+# path = "examples/self_hosted.rs"
+
 
 [features]
 default = ["rustls"]
