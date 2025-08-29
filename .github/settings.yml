@@ -51,8 +51,11 @@ branches:
         contexts:
           - "Security Audit"
           - "Test Suite (macos-latest, stable)"
+          - "Test Suite (macos-latest, beta)"
           - "Test Suite (ubuntu-latest, stable)"
+          - "Test Suite (ubuntu-latest, beta)"
           - "Test Suite (windows-latest, stable)"
+          - "Test Suite (windows-latest, beta)"
       
       # Enforces
       enforce_admins: false
