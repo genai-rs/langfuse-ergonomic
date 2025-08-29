@@ -1,6 +1,7 @@
 # Configuration for release-plz
 # https://release-plz.ieni.dev/docs/config
 
+[workspace]
 # Enable changelog generation
 changelog_update = true
 
@@ -11,7 +12,6 @@ git_tag_enable = true
 # PR settings
 pr_labels = ["release"]
 pr_draft = false
-pr_name = "chore: release version {{version}}"
 
 # Publishing
 publish = true
