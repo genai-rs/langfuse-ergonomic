@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.1.1...v0.2.0) - 2025-08-29
+
+### Added
+
+- Add production-ready features for batch processing ([#8](https://github.com/genai-rs/langfuse-ergonomic/pull/8))
+
+### Other
+
+- migrate to Bon builder pattern ([#6](https://github.com/genai-rs/langfuse-ergonomic/pull/6))
+
 ## [0.1.1](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.1.0...v0.1.1) - 2025-08-29
 
 ### Added
