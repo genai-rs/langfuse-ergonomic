@@ -154,7 +154,7 @@ impl LangfuseClient {
         use langfuse_client_base::models::TraceDeleteMultipleRequest;
 
         let request = TraceDeleteMultipleRequest {
-            trace_ids: trace_ids, // Remove the Some() wrapper
+            trace_ids, // Remove the Some() wrapper
         };
 
         trace_api::trace_delete_multiple(self.configuration(), request)
