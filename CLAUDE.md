@@ -48,6 +48,14 @@ This repository was migrated from the monorepo at timvw/langfuse-rs to a standal
   gh pr create --title "feat: your feature" --body "Description of changes"
   ```
 - If `gh pr create` fails, use the web URL provided by git push to create the PR manually
+- **Branches are automatically deleted after merge** (configured in repository settings)
+
+### Branch Management
+- The repository is configured to automatically delete branches after PR merge
+- Branch protection rules are enforced on `main`:
+  - Required status checks must pass (CI tests, security audit)
+  - Branches must be up to date before merging
+- Repository settings are documented in `.github/settings.yml`
 
 ### Pre-commit Checks
 - **ALWAYS run pre-commit checks before committing**:
