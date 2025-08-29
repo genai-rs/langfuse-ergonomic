@@ -6,7 +6,7 @@ use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenv::dotenv().ok();
+    dotenvy::dotenv().ok();
     tracing_subscriber::fmt::init();
 
     // Example 1: Connect to self-hosted instance with custom configuration
