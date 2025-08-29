@@ -48,6 +48,14 @@ path = "examples/trace_with_metadata.rs"
 name = "multiple_traces"
 path = "examples/multiple_traces.rs"
 
+[[example]]
+name = "observations"
+path = "examples/observations.rs"
+
+[[example]]
+name = "scores"
+path = "examples/scores.rs"
+
 [features]
 default = ["rustls"]
 rustls = ["langfuse-client-base/rustls"]
