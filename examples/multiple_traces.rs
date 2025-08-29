@@ -30,8 +30,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "response": "I don't have access to real-time weather data. You might want to check a weather service.",
             "suggested_action": "redirect_to_weather_service"
         }))
-        .tags(["chat", "weather-query"])
-        .send()
+        .tags(vec!["chat".to_string(), "weather-query".to_string()])
+        .call()
         .await?;
 
     println!("  Message 1: {}", trace1.id);
@@ -49,12 +49,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "response": "Of course! I'd be happy to help with programming. What language or topic?",
             "context_switch": true
         }))
-        .tags(["chat", "programming-query"])
+        .tags(vec!["chat".to_string(), "programming-query".to_string()])
         .metadata(json!({
             "previous_trace": trace1.id,
             "topic_change": true
         }))
-        .send()
+        .call()
         .await?;
 
     println!("  Message 2: {}", trace2.id);
@@ -74,12 +74,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "code_example": "let contents = std::fs::read_to_string(\"file.txt\")?;",
             "helpful": true
         }))
-        .tags(["chat", "programming-query", "rust", "file-io"])
+        .tags(vec![
+            "chat".to_string(),
+            "programming-query".to_string(),
+            "rust".to_string(),
+            "file-io".to_string(),
+        ])
         .metadata(json!({
             "conversation_depth": 3,
             "topic": "rust_file_operations"
         }))
-        .send()
+        .call()
         .await?;
 
     println!("  Message 3: {}", trace3.id);

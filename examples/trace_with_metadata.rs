@@ -25,7 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }))
         .user_id("user-42")
         .session_id("session-2024-001")
-        .tags(["quantum", "education", "explanation"])
+        .tags(vec!["quantum".to_string(), "education".to_string(), "explanation".to_string()])
         .metadata(json!({
             "client_version": "0.1.0",
             "environment": "production",
@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .release("v1.2.3")
         .version("2024.01.15")
         .public(false)
-        .send()
+        .call()
         .await?;
 
     println!("✅ Created trace with full metadata");

@@ -4,13 +4,13 @@
 //! powered by the `bon` crate.
 
 pub mod client;
+pub mod datasets;
 pub mod error;
 pub mod observations;
+pub mod prompts;
 pub mod scores;
 pub mod traces;
 
 pub use client::LangfuseClient;
 pub use error::{Error, Result};
-pub use observations::{ObservationBuilder, ObservationType};
-pub use scores::ScoreBuilder;
 pub use traces::TraceResponse;

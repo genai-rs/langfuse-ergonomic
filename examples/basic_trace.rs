@@ -13,7 +13,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ Connected to Langfuse");
 
     // Create a minimal trace
-    let trace = client.trace().name("minimal-trace").send().await?;
+    let trace = client.trace().name("minimal-trace").call().await?;
 
     println!("Created minimal trace: {}", trace.id);
 
@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "answer": 4,
             "confidence": 1.0
         }))
-        .send()
+        .call()
         .await?;
 
     println!("Created trace with I/O: {}", trace_with_io.id);

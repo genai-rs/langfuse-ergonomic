@@ -46,6 +46,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     
     println!("Created trace: {}", trace.id);
+
+    // Fetch and list traces
+    let fetched_trace = client.get_trace(&trace.id).await?;
+    let traces = client.list_traces()
+        .limit(10)
+        .user_id("user-123")
+        .call()
+        .await?;
+
+    // Create a dataset
+    let dataset = client.create_dataset()
+        .name("my-dataset")
+        .description("Example dataset")
+        .call()
+        .await?;
+    
     Ok(())
 }
 ```
@@ -80,19 +96,31 @@ cargo run --example basic_trace
 cargo run --example trace_with_metadata
 cargo run --example multiple_traces
 
+# Trace fetching and management
+cargo run --example traces_fetch
+
 # Observations (spans, generations, events)
 cargo run --example observations
 
 # Scoring and evaluation
 cargo run --example scores
+
+# Dataset management
+cargo run --example datasets
+
+# Prompt management
+cargo run --example prompts
 ```
 
 ## API Coverage
 
-### Currently Implemented ✅
+### Implemented Features ✅
 
 #### Traces
-- Full trace creation with metadata support
+- **Creation** - Full trace creation with metadata support
+- **Fetching** - Get individual traces by ID
+- **Listing** - List traces with filtering and pagination
+- **Management** - Delete single or multiple traces
 - Session and user tracking
 - Tags and custom timestamps
 - Input/output data capture
@@ -112,11 +140,16 @@ cargo run --example scores
 - Trace-level and observation-level scoring
 - Score metadata and comments
 
-### Coming Soon 🚧
-- Dataset management
-- Prompt management
-- Batch operations
-- Fetching existing traces
+#### Dataset Management
+- **Creation** - Create datasets with metadata
+- **Listing** - List all datasets with pagination
+- **Fetching** - Get dataset details by name
+- **Run Management** - Get, list, and delete dataset runs
+
+#### Prompt Management
+- **Fetching** - Get prompts by name and version
+- **Listing** - List prompts with filtering
+- **Creation** - Basic prompt creation (placeholder implementation)
 
 ## License
 

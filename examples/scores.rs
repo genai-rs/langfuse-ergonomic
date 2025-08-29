@@ -24,31 +24,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "conversation_turn": 1,
             "topic": "programming"
         }))
-        .send()
+        .call()
         .await?;
 
     println!("Created trace: {}", trace.id);
 
     // Add a numeric score for response quality
     let quality_score_id = client
-        .score(&trace.id, "response_quality")
+        .score()
+        .trace_id(&trace.id)
+        .name("response_quality")
         .value(0.85)
         .comment("Good response with code example")
         .metadata(json!({
             "evaluated_by": "automated_scorer",
             "criteria": ["relevance", "completeness", "code_quality"]
         }))
-        .send()
+        .call()
         .await?;
 
     println!("Created quality score: {}", quality_score_id);
 
     // Add a categorical score for sentiment
     let sentiment_score_id = client
-        .score(&trace.id, "user_sentiment")
+        .score()
+        .trace_id(&trace.id)
+        .name("user_sentiment")
         .string_value("positive")
         .comment("User expressed satisfaction")
-        .send()
+        .call()
         .await?;
 
     println!("Created sentiment score: {}", sentiment_score_id);
@@ -56,53 +60,46 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Use the binary score helper for a success/failure metric
     let success_score_id = client
         .binary_score(&trace.id, "task_completed", true)
-        .comment("User's request was successfully addressed")
-        .send()
         .await?;
 
     println!("Created binary score: {}", success_score_id);
 
     // Use the rating score helper for user feedback
-    let rating_score_id = client
-        .rating_score(&trace.id, "user_rating", 4, 5)
-        .comment("User gave 4 out of 5 stars")
-        .metadata(json!({
-            "feedback_prompt": "How helpful was this response?"
-        }))
-        .send()
-        .await?;
+    let rating_score_id = client.rating_score(&trace.id, "user_rating", 4, 5).await?;
 
     println!("Created rating score: {}", rating_score_id);
 
     // Use categorical score helper for classification
     let category_score_id = client
         .categorical_score(&trace.id, "response_type", "code_generation")
-        .comment("Response included code generation")
-        .send()
         .await?;
 
     println!("Created categorical score: {}", category_score_id);
 
     // Create a generation and score it
     let generation_id = client
-        .generation(&trace.id)
+        .generation()
+        .trace_id(&trace.id)
         .name("code-generation")
         .model("gpt-4")
         .input(json!({"prompt": "Write a Python function to sort a list"}))
         .output(json!({"code": "def sort_list(lst):\n    return sorted(lst)"}))
-        .tokens(15, 20)
-        .send()
+        .prompt_tokens(15)
+        .completion_tokens(20)
+        .call()
         .await?;
 
     println!("Created generation: {}", generation_id);
 
     // Score the specific generation (observation-level score)
     let generation_score_id = client
-        .score(&trace.id, "code_correctness")
+        .score()
+        .trace_id(&trace.id)
+        .name("code_correctness")
         .observation_id(&generation_id)
         .value(1.0)
         .comment("Generated code is syntactically correct and functional")
-        .send()
+        .call()
         .await?;
 
     println!("Created generation-specific score: {}", generation_score_id);
@@ -117,10 +114,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for (name, value, comment) in criteria {
         let score_id = client
-            .score(&trace.id, name)
+            .score()
+            .trace_id(&trace.id)
+            .name(name)
             .value(value)
             .comment(comment)
-            .send()
+            .call()
             .await?;
         println!("Created {} score: {}", name, score_id);
     }

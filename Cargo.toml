@@ -56,6 +56,19 @@ path = "examples/observations.rs"
 name = "scores"
 path = "examples/scores.rs"
 
+[[example]]
+name = "datasets"
+path = "examples/datasets.rs"
+
+[[example]]
+name = "traces_fetch"
+path = "examples/traces_fetch.rs"
+
+[[example]]
+name = "prompts"
+path = "examples/prompts.rs"
+
+
 [features]
 default = ["rustls"]
 rustls = ["langfuse-client-base/rustls"]
