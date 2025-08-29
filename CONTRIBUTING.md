@@ -1,6 +1,6 @@
-# Contributing to langfuse-rs
+# Contributing to langfuse-ergonomic
 
-Thank you for your interest in contributing to langfuse-rs! This guide will help you get started.
+Thank you for your interest in contributing to langfuse-ergonomic! This guide will help you get started.
 
 ## Development Setup
 
@@ -14,13 +14,14 @@ Thank you for your interest in contributing to langfuse-rs! This guide will help
 
 1. Fork and clone the repository:
 ```bash
-git clone https://github.com/YOUR_USERNAME/langfuse-rs.git
-cd langfuse-rs
+git clone https://github.com/YOUR_USERNAME/langfuse-ergonomic.git
+cd langfuse-ergonomic
 ```
 
 2. Set up the development environment:
 ```bash
-just init  # Install git hooks and verify dependencies
+# Install git hooks and verify dependencies
+./scripts/setup-hooks.sh
 ```
 
 3. Create a `.env` file with your Langfuse credentials:
@@ -47,7 +48,10 @@ git checkout -b feat/your-feature-name
 
 3. **Run pre-commit checks:**
 ```bash
-just check  # Runs fmt, clippy, and tests
+# Run formatting, linting, and tests
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all
 ```
 
 Or individually:
@@ -91,14 +95,7 @@ gh pr create  # or use GitHub web UI
 
 The `langfuse-client-base` crate contains auto-generated code from the OpenAPI specification. 
 
-**DO NOT** edit files in `langfuse-client-base/src/` directly. Instead:
-
-1. Update the OpenAPI generation script if needed
-2. Regenerate the client:
-```bash
-just generate
-# or: ./scripts/generate-openapi-client.sh
-```
+**DO NOT** edit files in `langfuse-client-base/src/` directly. The langfuse-ergonomic repository uses the langfuse-client-base crate from crates.io as a dependency.
 
 ### Examples
 
@@ -159,15 +156,15 @@ async fn test_api_feature() {
 ## Project Structure
 
 ```
-langfuse-rs/
-├── langfuse-client-base/   # Auto-generated OpenAPI client
-│   └── src/                # Generated code (do not edit)
-├── langfuse-ergonomic/     # User-friendly wrapper
-│   ├── src/                # Hand-written ergonomic API
-│   └── examples/           # Usage examples
-├── scripts/                # Build and generation scripts
+langfuse-ergonomic/
+├── src/                    # Hand-written ergonomic API
+├── examples/               # Usage examples  
+├── scripts/                # Build and setup scripts
+├── tests/                  # Integration tests
 └── .github/workflows/      # CI/CD configuration
 ```
+
+The project depends on `langfuse-client-base` from crates.io, which contains the auto-generated OpenAPI client.
 
 ## Release Process
 
@@ -180,7 +177,7 @@ Releases are automated using [release-plz](https://release-plz.ieni.dev/):
 
 ## Getting Help
 
-- Open an [issue](https://github.com/timvw/langfuse-rs/issues) for bugs or feature requests
+- Open an [issue](https://github.com/genai-rs/langfuse-ergonomic/issues) for bugs or feature requests
 - Check existing issues before creating a new one
 - Join the [Langfuse community](https://langfuse.com/docs/community) for general questions
 

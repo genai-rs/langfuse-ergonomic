@@ -22,7 +22,7 @@ Ergonomic Rust client for [Langfuse](https://langfuse.com), the open-source LLM 
 
 ```toml
 [dependencies]
-langfuse-ergonomic = "0.1"
+langfuse-ergonomic = "*"
 tokio = { version = "1", features = ["full"] }
 serde_json = "1"
 ```
