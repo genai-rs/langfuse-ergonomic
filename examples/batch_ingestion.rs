@@ -1,11 +1,8 @@
 //! Example demonstrating batch ingestion with automatic chunking and retries
 
 use chrono::Utc;
-use langfuse_client_base::models::{
-    CreateGenerationEvent, CreateSpanEvent, CreateTraceEvent, IngestionEvent, TraceLevel,
-};
+use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
 use langfuse_ergonomic::{Batcher, LangfuseClient};
-use std::collections::HashMap;
 use uuid::Uuid;
 
 #[tokio::main]
@@ -24,113 +21,51 @@ async fn main() -> anyhow::Result<()> {
         .max_retries(3)
         .build();
 
-    // Create multiple traces with spans and generations
-    for i in 0..10 {
+    // Create multiple traces
+    for i in 0..20 {
         let trace_id = Uuid::new_v4().to_string();
+        let timestamp = Utc::now().to_rfc3339();
 
         // Add trace event
-        let trace_event = IngestionEvent::IngestionEventOneOf(Box::new(CreateTraceEvent {
+        let trace_event = IngestionEvent::IngestionEventOneOf(Box::new(IngestionEventOneOf {
             id: trace_id.clone(),
-            timestamp: Some(Utc::now()),
-            name: Some(format!("batch-trace-{}", i)),
-            user_id: Some("test-user".to_string()),
-            metadata: Some(HashMap::from([
-                ("batch_number".to_string(), serde_json::json!(i)),
-                ("batch_test".to_string(), serde_json::json!(true)),
-            ])),
-            release: Some("v1.0.0".to_string()),
-            version: Some("1.0.0".to_string()),
-            session_id: Some("batch-session-001".to_string()),
-            public: Some(false),
-            tags: Some(vec!["batch".to_string(), "test".to_string()]),
-            input: None,
-            output: None,
-            level: Some(TraceLevel::Default),
+            timestamp: timestamp.clone(),
+            r#type: langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
+            body: Box::new(TraceBody {
+                id: Some(Some(trace_id.clone())),
+                timestamp: Some(Some(timestamp.clone())),
+                name: Some(Some(format!("batch-trace-{}", i))),
+                user_id: Some(Some("test-user".to_string())),
+                metadata: Some(Some(serde_json::json!({
+                    "batch_number": i,
+                    "batch_test": true,
+                    "timestamp": timestamp
+                }))),
+                release: Some(Some("v1.0.0".to_string())),
+                version: Some(Some("1.0.0".to_string())),
+                session_id: Some(Some("batch-session-001".to_string())),
+                public: Some(Some(false)),
+                tags: Some(Some(vec!["batch".to_string(), "test".to_string()])),
+                input: Some(Some(serde_json::json!({
+                    "test_input": format!("Input for trace {}", i)
+                }))),
+                output: Some(Some(serde_json::json!({
+                    "test_output": format!("Output for trace {}", i)
+                }))),
+                environment: None,
+            }),
+            metadata: None,
         }));
 
         batcher.add(trace_event).await?;
 
-        // Add span events
-        for j in 0..3 {
-            let span_id = Uuid::new_v4().to_string();
-            let span_event = IngestionEvent::IngestionEventOneOf1(Box::new(CreateSpanEvent {
-                id: span_id.clone(),
-                trace_id: Some(trace_id.clone()),
-                parent_observation_id: None,
-                name: Some(format!("span-{}-{}", i, j)),
-                start_time: Some(Utc::now()),
-                end_time: Some(Utc::now()),
-                metadata: Some(HashMap::from([(
-                    "span_index".to_string(),
-                    serde_json::json!(j),
-                )])),
-                level: Some(TraceLevel::Default),
-                status_message: None,
-                input: Some(serde_json::json!({
-                    "prompt": format!("Process item {} in batch {}", j, i)
-                })),
-                output: Some(serde_json::json!({
-                    "result": format!("Completed processing item {}", j)
-                })),
-                version: None,
-            }));
-
-            batcher.add(span_event).await?;
-
-            // Add generation event
-            let gen_event = IngestionEvent::IngestionEventOneOf2(Box::new(CreateGenerationEvent {
-                id: Uuid::new_v4().to_string(),
-                trace_id: Some(trace_id.clone()),
-                parent_observation_id: Some(span_id),
-                name: Some(format!("generation-{}-{}", i, j)),
-                start_time: Some(Utc::now()),
-                completion_start_time: Some(Utc::now()),
-                end_time: Some(Utc::now()),
-                model: Some("gpt-4".to_string()),
-                model_parameters: Some(HashMap::from([
-                    ("temperature".to_string(), serde_json::json!(0.7)),
-                    ("max_tokens".to_string(), serde_json::json!(100)),
-                ])),
-                prompt: Some(serde_json::json!({
-                    "messages": [
-                        {"role": "system", "content": "You are a helpful assistant."},
-                        {"role": "user", "content": format!("Process item {}", j)}
-                    ]
-                })),
-                completion: Some(serde_json::json!({
-                    "content": format!("Item {} has been processed successfully", j)
-                })),
-                usage: Some(langfuse_client_base::models::IngestionUsage {
-                    input: Some(20),
-                    output: Some(15),
-                    total: Some(35),
-                    unit: Some("TOKENS".to_string()),
-                    input_cost: Some(0.0006),
-                    output_cost: Some(0.0012),
-                    total_cost: Some(0.0018),
-                }),
-                metadata: None,
-                level: Some(TraceLevel::Default),
-                status_message: None,
-                version: None,
-                top_p: None,
-                frequency_penalty: None,
-                presence_penalty: None,
-                max_tokens: Some(100),
-                temperature: Some(0.7),
-                seed: None,
-                function_call: None,
-                functions: None,
-                response_format: None,
-                tool_choice: None,
-                tools: None,
-            }));
-
-            batcher.add(gen_event).await?;
+        // Add a small delay to simulate real-world usage
+        if i % 5 == 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
     }
 
-    println!("Added 40 events to the batcher (10 traces + 30 spans + 30 generations)");
+    println!("Added 20 trace events to the batcher");
     println!("Events will be automatically batched and sent...");
 
     // Wait a moment for automatic flush
@@ -156,6 +91,12 @@ async fn main() -> anyhow::Result<()> {
         "Shutdown complete: {} total succeeded, {} total failed",
         final_response.success_count, final_response.failure_count
     );
+
+    println!("\nBatcher features demonstrated:");
+    println!("- Automatic batching of events");
+    println!("- Configurable batch size and flush interval");
+    println!("- Automatic retry with exponential backoff");
+    println!("- Graceful shutdown with final flush");
 
     Ok(())
 }

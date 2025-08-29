@@ -2,7 +2,6 @@
 
 use chrono::Utc;
 use langfuse_ergonomic::LangfuseClient;
-use std::collections::HashMap;
 use std::time::Duration;
 
 #[tokio::main]
@@ -14,10 +13,10 @@ async fn main() -> anyhow::Result<()> {
     let client = LangfuseClient::builder()
         .public_key("your-public-key")
         .secret_key("your-secret-key")
-        .base_url("https://langfuse.your-domain.com") // Your self-hosted URL
+        .base_url("https://langfuse.your-domain.com".to_string()) // Your self-hosted URL
         .timeout(Duration::from_secs(30)) // Custom timeout for slower connections
         .connect_timeout(Duration::from_secs(5)) // Custom connection timeout
-        .user_agent("my-app/1.0.0") // Custom user agent
+        .user_agent("my-app/1.0.0".to_string()) // Custom user agent
         .build();
 
     // Validate the connection
@@ -52,14 +51,14 @@ async fn main() -> anyhow::Result<()> {
     let trace_response = env_client
         .trace()
         .name("self-hosted-test")
-        .metadata(HashMap::from([
-            (
-                "instance_type".to_string(),
-                serde_json::json!("self-hosted"),
-            ),
-            ("test_timestamp".to_string(), serde_json::json!(Utc::now())),
-        ]))
-        .tags(vec!["self-hosted", "connection-test"])
+        .metadata(serde_json::json!({
+            "instance_type": "self-hosted",
+            "test_timestamp": Utc::now()
+        }))
+        .tags(vec![
+            "self-hosted".to_string(),
+            "connection-test".to_string(),
+        ])
         .input(serde_json::json!({
             "test": "Testing connection to self-hosted instance"
         }))
@@ -85,21 +84,32 @@ async fn main() -> anyhow::Result<()> {
     println!("Batcher configured for self-hosted instance");
 
     // Add events to the batcher
-    use langfuse_client_base::models::{CreateTraceEvent, IngestionEvent, TraceLevel};
+    use langfuse_client_base::models::{
+        ingestion_event_one_of::Type, IngestionEvent, IngestionEventOneOf, TraceBody,
+    };
     use uuid::Uuid;
 
     for i in 0..5 {
-        let trace_event = IngestionEvent::IngestionEventOneOf(Box::new(CreateTraceEvent {
-            id: Uuid::new_v4().to_string(),
-            timestamp: Some(Utc::now()),
-            name: Some(format!("self-hosted-trace-{}", i)),
-            metadata: Some(HashMap::from([
-                ("index".to_string(), serde_json::json!(i)),
-                ("instance".to_string(), serde_json::json!("self-hosted")),
-            ])),
-            tags: Some(vec!["batch".to_string(), "self-hosted".to_string()]),
-            level: Some(TraceLevel::Default),
-            ..Default::default()
+        let trace_id = Uuid::new_v4().to_string();
+        let timestamp = Utc::now().to_rfc3339();
+
+        let trace_event = IngestionEvent::IngestionEventOneOf(Box::new(IngestionEventOneOf {
+            id: trace_id.clone(),
+            timestamp: timestamp.clone(),
+            r#type: Type::TraceCreate,
+            body: Box::new(TraceBody {
+                id: Some(Some(trace_id.clone())),
+                timestamp: Some(Some(timestamp)),
+                name: Some(Some(format!("self-hosted-trace-{}", i))),
+                metadata: Some(Some(serde_json::json!({
+                    "index": i,
+                    "instance": "self-hosted"
+                }))),
+                tags: Some(Some(vec!["batch".to_string(), "self-hosted".to_string()])),
+                environment: None,
+                ..Default::default()
+            }),
+            metadata: None,
         }));
 
         batcher.add(trace_event).await?;

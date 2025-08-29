@@ -48,7 +48,6 @@ impl LangfuseClient {
             .no_gzip()
             .no_brotli()
             .no_deflate()
-            .http2_prior_knowledge()
             .pool_max_idle_per_host(10)
             .pool_idle_timeout(Duration::from_secs(90));
 
