@@ -5,11 +5,12 @@
 
 pub mod client;
 pub mod error;
-// TODO: Re-enable these modules once updated to use generated API
-// pub mod observations;
-// pub mod scores;
+pub mod observations;
+pub mod scores;
 pub mod traces;
 
 pub use client::LangfuseClient;
 pub use error::{Error, Result};
+pub use observations::{ObservationBuilder, ObservationType};
+pub use scores::ScoreBuilder;
 pub use traces::TraceResponse;

@@ -1,6 +1,7 @@
 //! Score-related functionality for evaluating traces and observations
 
 use serde_json::Value;
+use uuid::Uuid;
 
 use crate::client::LangfuseClient;
 use crate::error::Result;
@@ -70,7 +71,7 @@ impl<'a> ScoreBuilder<'a> {
     }
 
     /// Execute the score creation
-    pub async fn send(self) -> Result<()> {
+    pub async fn send(self) -> Result<String> {
         // Validate that either value or string_value is set
         if self.value.is_none() && self.string_value.is_none() {
             return Err(crate::error::Error::Validation(
@@ -78,9 +79,61 @@ impl<'a> ScoreBuilder<'a> {
             ));
         }
 
-        // TODO: Implement actual API call when base client is generated
-        // For now, we'll just return Ok
-        Ok(())
+        use langfuse_client_base::apis::ingestion_api;
+        use langfuse_client_base::models::{
+            CreateScoreValue, IngestionBatchRequest, IngestionEvent, IngestionEventOneOf1,
+            ScoreBody, ScoreDataType,
+        };
+
+        let score_id = Uuid::new_v4().to_string();
+        let timestamp = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+
+        let value = if let Some(v) = self.value {
+            Box::new(CreateScoreValue::Number(v))
+        } else if let Some(s) = self.string_value {
+            Box::new(CreateScoreValue::String(s))
+        } else {
+            return Err(crate::error::Error::Validation(
+                "Score must have either a numeric value or string value".to_string(),
+            ));
+        };
+
+        let score_body = ScoreBody {
+            id: Some(Some(score_id.clone())),
+            trace_id: Some(Some(self.trace_id.clone())),
+            name: self.name.clone(),
+            value,
+            observation_id: self.observation_id.map(Some),
+            comment: self.comment.map(Some),
+            data_type: if self.value.is_some() {
+                Some(ScoreDataType::Numeric)
+            } else {
+                Some(ScoreDataType::Categorical)
+            },
+            config_id: None,
+            session_id: None,
+            dataset_run_id: None,
+            environment: None,
+            metadata: self.metadata.map(Some),
+        };
+
+        let event = IngestionEventOneOf1 {
+            body: Box::new(score_body),
+            id: Uuid::new_v4().to_string(),
+            timestamp: timestamp.clone(),
+            metadata: None,
+            r#type: langfuse_client_base::models::ingestion_event_one_of_1::Type::ScoreCreate,
+        };
+
+        let batch_request = IngestionBatchRequest {
+            batch: vec![IngestionEvent::IngestionEventOneOf1(Box::new(event))],
+            metadata: None,
+        };
+
+        ingestion_api::ingestion_batch(self.client.configuration(), batch_request)
+            .await
+            .map(|_| score_id)
+            .map_err(|e| crate::error::Error::Api(format!("Failed to create score: {}", e)))
     }
 }
 
