@@ -74,6 +74,10 @@ name = "batch_ingestion"
 path = "examples/batch_ingestion.rs"
 
 [[example]]
+name = "batch_ingestion_207"
+path = "examples/batch_ingestion_207.rs"
+
+[[example]]
 name = "self_hosted"  
 path = "examples/self_hosted.rs"
 
