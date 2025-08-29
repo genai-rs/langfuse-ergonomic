@@ -1,7 +1,6 @@
 # Configuration for release-plz
 # https://release-plz.ieni.dev/docs/config
 
-[workspace]
 # Enable changelog generation
 changelog_update = true
 
@@ -14,16 +13,6 @@ pr_labels = ["release"]
 pr_draft = false
 pr_name = "chore: release version {{version}}"
 
-# Package-specific configuration
-[[package]]
-name = "langfuse-client-base"
-# This is auto-generated, so we might want to handle it specially
-changelog_update = false
+# Publishing
 publish = true
-
-[[package]]
-name = "langfuse-ergonomic"  
-changelog_update = true
-publish = true
-# Ensure base client is published first
 publish_allow_dirty = false
