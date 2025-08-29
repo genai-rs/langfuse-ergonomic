@@ -1,0 +1,98 @@
+# GitHub repository settings
+# These settings document the repository configuration
+# To apply automatically, install the GitHub Settings app: https://github.com/apps/settings
+
+repository:
+  # Basic settings
+  name: langfuse-ergonomic
+  description: Ergonomic Rust client for Langfuse with builder patterns
+  homepage: https://docs.rs/langfuse-ergonomic
+  topics:
+    - langfuse
+    - observability
+    - llm
+    - tracing
+    - monitoring
+    - rust
+  
+  # Repository settings
+  private: false
+  has_issues: true
+  has_projects: false
+  has_wiki: false
+  has_downloads: true
+  
+  # Default branch
+  default_branch: main
+  
+  # Merge settings
+  allow_squash_merge: true
+  allow_merge_commit: true
+  allow_rebase_merge: true
+  
+  # Auto-delete branches after merge
+  delete_branch_on_merge: true
+  
+  # Security
+  allow_auto_merge: false
+  allow_update_branch: true
+  
+# Branch protection rules
+branches:
+  - name: main
+    # https://docs.github.com/en/rest/branches/branch-protection
+    protection:
+      # Require PR reviews
+      required_pull_request_reviews: null  # No required reviews for now
+      
+      # Require status checks
+      required_status_checks:
+        strict: true  # Require branches to be up to date before merging
+        contexts:
+          - "Security Audit"
+          - "Test Suite (macos-latest, stable)"
+          - "Test Suite (ubuntu-latest, stable)"
+          - "Test Suite (windows-latest, stable)"
+      
+      # Enforces
+      enforce_admins: false
+      required_linear_history: false
+      restrictions: null
+      
+      # Other settings
+      allow_force_pushes: false
+      allow_deletions: false
+      block_creations: false
+      required_conversation_resolution: false
+      lock_branch: false
+      allow_fork_syncing: false
+
+# Labels for issues and PRs
+labels:
+  - name: bug
+    color: d73a4a
+    description: Something isn't working
+  
+  - name: documentation
+    color: 0075ca
+    description: Improvements or additions to documentation
+  
+  - name: enhancement
+    color: a2eeef
+    description: New feature or request
+  
+  - name: good first issue
+    color: 7057ff
+    description: Good for newcomers
+  
+  - name: help wanted
+    color: 008672
+    description: Extra attention is needed
+  
+  - name: release
+    color: 00FF00
+    description: Release-related PR or issue
+  
+  - name: dependencies
+    color: 0366d6
+    description: Pull requests that update a dependency file
