@@ -14,6 +14,9 @@ Ergonomic Rust client for [Langfuse](https://langfuse.com), the open-source LLM 
 - 🔒 **Type Safe** - Strongly typed with compile-time guarantees
 - 🚀 **Easy Setup** - Simple configuration from environment variables
 - 📊 **Comprehensive** - Support for traces, observations, scores, and more
+- 🔁 **Batch Processing** - Automatic batching with retry logic and chunking
+- ⚡ **Production Ready** - Built-in timeouts, compression, and error handling
+- 🏠 **Self-Hosted Support** - Full support for self-hosted Langfuse instances
 
 ## Installation
 
@@ -76,13 +79,18 @@ LANGFUSE_SECRET_KEY=sk-lf-...
 LANGFUSE_BASE_URL=https://cloud.langfuse.com  # Optional
 ```
 
-Or configure explicitly:
+Or configure explicitly with advanced options:
 
 ```rust
+use std::time::Duration;
+
 let client = LangfuseClient::builder()
     .public_key("pk-lf-...")
     .secret_key("sk-lf-...")
     .base_url("https://cloud.langfuse.com")
+    .timeout(Duration::from_secs(30))        // Custom timeout
+    .connect_timeout(Duration::from_secs(5)) // Connection timeout
+    .user_agent("my-app/1.0.0")              // Custom user agent
     .build();
 ```
 
@@ -110,6 +118,43 @@ cargo run --example datasets
 
 # Prompt management
 cargo run --example prompts
+
+# Batch processing
+cargo run --example batch_ingestion
+
+# Self-hosted configuration
+cargo run --example self_hosted
+```
+
+### Batch Processing
+
+The client supports efficient batch processing with automatic chunking and retry logic:
+
+```rust
+use langfuse_ergonomic::{Batcher, LangfuseClient};
+use std::time::Duration;
+
+let client = LangfuseClient::from_env()?;
+
+// Create a batcher with custom configuration
+let batcher = Batcher::builder()
+    .client(client)
+    .max_events(100)                           // Events per batch
+    .flush_interval(Duration::from_secs(5))    // Auto-flush interval
+    .max_retries(3)                            // Retry attempts
+    .build();
+
+// Add events - they'll be automatically batched
+for event in events {
+    batcher.add(event).await?;
+}
+
+// Manual flush if needed
+let response = batcher.flush().await?;
+println!("Sent {} events", response.success_count);
+
+// Graceful shutdown
+batcher.shutdown().await?;
 ```
 
 ## API Coverage
@@ -150,6 +195,21 @@ cargo run --example prompts
 - **Fetching** - Get prompts by name and version
 - **Listing** - List prompts with filtering
 - **Creation** - Basic prompt creation (placeholder implementation)
+
+#### Batch Processing
+- **Automatic Batching** - Events are automatically grouped into optimal batch sizes
+- **Size Limits** - Respects Langfuse's 3.5MB batch size limit
+- **Retry Logic** - Exponential backoff for failed requests
+- **Partial Failures** - Handles 207 Multi-Status responses
+- **Background Processing** - Non-blocking event submission
+
+#### Production Features
+- **Timeouts** - Configurable request and connection timeouts
+- **Compression** - Built-in gzip, brotli, and deflate support
+- **HTTP/2** - Efficient connection multiplexing
+- **Connection Pooling** - Reuses connections for better performance
+- **Error Handling** - Structured error types with retry metadata
+- **Self-Hosted Support** - Full compatibility with self-hosted instances
 
 ## License
 

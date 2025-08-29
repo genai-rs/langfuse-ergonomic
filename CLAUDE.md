@@ -30,15 +30,24 @@ This repository was migrated from the monorepo at timvw/langfuse-rs to a standal
 - **NEVER commit directly to main branch**
 - Always create a feature branch first
 - Create a pull request for review
+- **IMPORTANT**: Before creating PRs, verify remotes are correct:
+  ```bash
+  git remote -v  # Should only show 'origin' pointing to genai-rs/langfuse-ergonomic
+  ```
+- If there are incorrect remotes (like 'upstream'), remove them:
+  ```bash
+  git remote remove upstream
+  ```
 - Example workflow:
   ```bash
   git checkout -b feat/your-feature-name
   # make changes
   git add -A
   git commit -m "feat: your commit message"
-  git push origin feat/your-feature-name
+  git push --set-upstream origin feat/your-feature-name
   gh pr create --title "feat: your feature" --body "Description of changes"
   ```
+- If `gh pr create` fails, use the web URL provided by git push to create the PR manually
 
 ### Pre-commit Checks
 - **ALWAYS run pre-commit checks before committing**:

@@ -14,7 +14,7 @@ categories = ["api-bindings", "web-programming::http-client", "development-tools
 rust-version = "1.75"
 
 [dependencies]
-langfuse-client-base = "0.1"
+langfuse-client-base = "0.2"
 bon = "3.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -67,6 +67,14 @@ path = "examples/traces_fetch.rs"
 [[example]]
 name = "prompts"
 path = "examples/prompts.rs"
+
+[[example]]
+name = "batch_ingestion"
+path = "examples/batch_ingestion.rs"
+
+[[example]]
+name = "self_hosted"  
+path = "examples/self_hosted.rs"
 
 
 [features]
