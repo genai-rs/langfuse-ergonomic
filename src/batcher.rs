@@ -131,6 +131,10 @@ impl Batcher {
 
         tokio::spawn(async move {
             let mut flush_interval = interval(config.flush_interval);
+            flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            
+            // Consume the first immediate tick
+            flush_interval.tick().await;
 
             loop {
                 tokio::select! {
@@ -147,7 +151,8 @@ impl Batcher {
 
                             // Check if we should flush based on size/count
                             let total_size: usize = buf.iter().map(|e| e.size).sum();
-                            buf.len() >= config.max_events || total_size >= config.max_bytes
+                            let len = buf.len();
+                            len >= config.max_events || total_size >= config.max_bytes
                         };
 
                         if should_flush {
@@ -178,8 +183,9 @@ impl Batcher {
             IngestionEvent::IngestionEventOneOf6(e) => e.id.clone(),
             _ => uuid::Uuid::new_v4().to_string(),
         };
+        
 
-        let batch_event = BatchEvent::new(event, id)?;
+        let batch_event = BatchEvent::new(event, id.clone())?;
 
         // Check size limit
         if batch_event.size > self.config.max_bytes {
@@ -193,12 +199,17 @@ impl Batcher {
             .send(batch_event)
             .await
             .map_err(|e| Error::Api(format!("Failed to queue event: {}", e)))?;
+            
 
         Ok(())
     }
 
     /// Manually flush the current batch
     pub async fn flush(&self) -> Result<IngestionResponse> {
+        // Give background task time to add pending events to buffer
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        
+        // Flush the buffer
         Self::flush_buffer(&self.client, &self.buffer, &self.config).await
     }
 
@@ -212,6 +223,7 @@ impl Batcher {
             let mut buffer = buffer.lock().await;
             std::mem::take(&mut *buffer)
         };
+        
 
         if events.is_empty() {
             return Ok(IngestionResponse {
@@ -260,7 +272,8 @@ impl Batcher {
                     }
                 }
                 Err(e) => {
-                    if config.fail_fast {
+                    // Always fail fast for auth errors
+                    if matches!(e, Error::Auth { .. }) || config.fail_fast {
                         return Err(e);
                     }
                     // Convert to failures
@@ -360,8 +373,6 @@ impl Batcher {
         client: &LangfuseClient,
         batch: IngestionBatchRequest,
     ) -> Result<IngestionResponse> {
-        use langfuse_client_base::apis::ingestion_api;
-
         // Get event IDs for tracking
         let event_ids: Vec<String> = batch
             .batch
@@ -377,11 +388,30 @@ impl Batcher {
                 _ => uuid::Uuid::new_v4().to_string(),
             })
             .collect();
+            
 
-        match ingestion_api::ingestion_batch(client.configuration(), batch).await {
-            Ok(_response) => {
-                // Check if response indicates partial failure (would need API to return this)
-                // For now, assume success if we get a 2xx response
+        // Use the raw response API to get status code
+        let response = client.configuration.client
+            .post(format!("{}/api/public/ingestion", client.base_url))
+            .basic_auth(
+                &client.public_key,
+                Some(&client.secret_key)
+            )
+            .json(&batch)
+            .send()
+            .await
+            .map_err(|e| Error::Network(e))?;
+
+        let status = response.status();
+        let request_id = response.headers()
+            .get("x-request-id")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+
+        // Handle different status codes
+        match status.as_u16() {
+            200 | 201 | 202 => {
+                // Full success
                 let count = event_ids.len();
                 Ok(IngestionResponse {
                     success_ids: event_ids,
@@ -390,41 +420,90 @@ impl Batcher {
                     failure_count: 0,
                 })
             }
-            Err(e) => {
-                // Parse error to determine if it's retryable
-                let error_str = e.to_string();
-
-                // Check for rate limiting
-                if error_str.contains("429") || error_str.contains("rate limit") {
-                    return Err(Error::RateLimit {
-                        retry_after: Some(Duration::from_secs(5)),
-                        request_id: None,
-                    });
+            207 => {
+                // Multi-Status: Parse the response to identify partial failures
+                let body = response.text().await
+                    .map_err(|e| Error::Api(format!("Failed to read 207 response: {}", e)))?;
+                
+                // Parse the 207 response body
+                #[derive(serde::Deserialize)]
+                struct MultiStatusResponse {
+                    successes: Vec<SuccessItem>,
+                    errors: Vec<ErrorItem>,
                 }
-
-                // Check for server errors (5xx)
-                if error_str.contains("500")
-                    || error_str.contains("502")
-                    || error_str.contains("503")
-                    || error_str.contains("504")
-                {
-                    return Err(Error::Server {
-                        status: 500,
-                        message: error_str,
-                        request_id: None,
-                    });
+                
+                #[derive(serde::Deserialize)]
+                struct SuccessItem {
+                    id: String,
+                    #[allow(dead_code)]
+                    status: Option<u16>,
                 }
-
-                // Check for auth errors
-                if error_str.contains("401") || error_str.contains("unauthorized") {
-                    return Err(Error::Auth {
-                        message: error_str,
-                        request_id: None,
-                    });
+                
+                #[derive(serde::Deserialize)]
+                struct ErrorItem {
+                    id: String,
+                    status: Option<u16>,
+                    error: Option<String>,
+                    message: Option<String>,
                 }
-
-                // Default to API error
-                Err(Error::Api(error_str))
+                
+                let multi_status: MultiStatusResponse = serde_json::from_str(&body)
+                    .map_err(|e| Error::Api(format!("Failed to parse 207 response: {}", e)))?;
+                
+                let success_ids: Vec<String> = multi_status.successes.iter()
+                    .map(|s| s.id.clone())
+                    .collect();
+                    
+                let failures: Vec<EventError> = multi_status.errors.iter()
+                    .map(|e| EventError {
+                        event_id: e.id.clone(),
+                        message: e.message.as_ref()
+                            .or(e.error.as_ref())
+                            .unwrap_or(&"Unknown error".to_string())
+                            .clone(),
+                        code: e.status.map(|s| s.to_string()),
+                        retryable: e.status.map_or(false, |s| s >= 500 || s == 429),
+                    })
+                    .collect();
+                
+                Ok(IngestionResponse {
+                    success_count: success_ids.len(),
+                    failure_count: failures.len(),
+                    success_ids,
+                    failures,
+                })
+            }
+            401 | 403 => {
+                Err(Error::Auth {
+                    message: response.text().await.unwrap_or_else(|_| "Authentication failed".to_string()),
+                    request_id,
+                })
+            }
+            429 => {
+                let retry_after = response.headers()
+                    .get("retry-after")
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .map(Duration::from_secs);
+                    
+                Err(Error::RateLimit {
+                    retry_after,
+                    request_id,
+                })
+            }
+            500..=599 => {
+                Err(Error::Server {
+                    status: status.as_u16(),
+                    message: response.text().await.unwrap_or_else(|_| "Server error".to_string()),
+                    request_id,
+                })
+            }
+            _ => {
+                Err(Error::Client {
+                    status: status.as_u16(),
+                    message: response.text().await.unwrap_or_else(|_| format!("Unexpected status: {}", status)),
+                    request_id,
+                })
             }
         }
     }
