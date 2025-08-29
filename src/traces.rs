@@ -3,6 +3,8 @@
 use bon::bon;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use uuid::Uuid;
 
 use crate::client::LangfuseClient;
@@ -11,6 +13,45 @@ use crate::error::Result;
 /// Response from trace creation
 pub struct TraceResponse {
     pub id: String,
+    pub base_url: String,
+}
+
+impl TraceResponse {
+    /// Get the Langfuse URL for this trace
+    pub fn url(&self) -> String {
+        // Remove /api if present from base_url
+        let web_url = self.base_url.replace("/api", "");
+        format!("{}/trace/{}", web_url.trim_end_matches('/'), self.id)
+    }
+}
+
+/// Helper functions for generating deterministic IDs
+pub struct IdGenerator;
+
+impl IdGenerator {
+    /// Generate a deterministic UUID v5 from a seed string
+    /// This ensures the same seed always produces the same ID
+    pub fn from_seed(seed: &str) -> String {
+        // Use UUID v5 with a namespace for deterministic generation
+        let namespace = Uuid::NAMESPACE_OID;
+        Uuid::new_v5(&namespace, seed.as_bytes()).to_string()
+    }
+    
+    /// Generate a deterministic ID from multiple components
+    /// Useful for creating hierarchical IDs (e.g., trace -> span -> event)
+    pub fn from_components(components: &[&str]) -> String {
+        let combined = components.join(":");
+        Self::from_seed(&combined)
+    }
+    
+    /// Generate a deterministic ID using a hash-based approach
+    /// Alternative to UUID v5 for simpler use cases
+    pub fn from_hash(seed: &str) -> String {
+        let mut hasher = DefaultHasher::new();
+        seed.hash(&mut hasher);
+        let hash = hasher.finish();
+        format!("{:016x}", hash)
+    }
 }
 
 #[bon]
@@ -77,7 +118,10 @@ impl LangfuseClient {
 
         ingestion_api::ingestion_batch(self.configuration(), batch_request)
             .await
-            .map(|_| TraceResponse { id: trace_id })
+            .map(|_| TraceResponse { 
+                id: trace_id,
+                base_url: self.configuration().base_path.clone(),
+            })
             .map_err(|e| crate::error::Error::Api(format!("Failed to create trace: {}", e)))
     }
 
