@@ -113,3 +113,7 @@ labels:
   - name: ci
     color: FFFF00
     description: Continuous Integration
+  
+  - name: msrv
+    color: FF6B35
+    description: Minimum Supported Rust Version changes
