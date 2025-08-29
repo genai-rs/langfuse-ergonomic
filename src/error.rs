@@ -1,10 +1,11 @@
 //! Error types for the ergonomic Langfuse client
 
+use crate::security::Redactable;
 use std::fmt;
 use std::time::Duration;
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error)]
 pub enum Error {
     #[error("API error: {0}")]
     Api(String),
@@ -97,6 +98,38 @@ impl fmt::Display for EventError {
             write!(f, " [retryable]")?;
         }
         Ok(())
+    }
+}
+
+impl fmt::Debug for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Redact sensitive information in error messages
+        match self {
+            Error::Api(msg) => write!(f, "Api({})", msg.redacted()),
+            Error::Configuration(msg) => write!(f, "Configuration({})", msg.redacted()),
+            Error::Validation(msg) => write!(f, "Validation({})", msg.redacted()),
+            Error::Serialization(e) => write!(f, "Serialization({:?})", e),
+            Error::Network(e) => write!(f, "Network({:?})", e),
+            Error::Auth { message, request_id } => {
+                write!(f, "Auth {{ message: {}, request_id: {:?} }}", message.redacted(), request_id)
+            }
+            Error::RateLimit { retry_after, request_id } => {
+                write!(f, "RateLimit {{ retry_after: {:?}, request_id: {:?} }}", retry_after, request_id)
+            }
+            Error::Server { status, message, request_id } => {
+                write!(f, "Server {{ status: {}, message: {}, request_id: {:?} }}", status, message.redacted(), request_id)
+            }
+            Error::Client { status, message, request_id } => {
+                write!(f, "Client {{ status: {}, message: {}, request_id: {:?} }}", status, message.redacted(), request_id)
+            }
+            Error::PartialFailure { success_count, failure_count, errors, success_ids } => {
+                write!(f, "PartialFailure {{ success_count: {}, failure_count: {}, errors: {:?}, success_ids: {:?} }}", 
+                    success_count, failure_count, errors, success_ids)
+            }
+            Error::BatchSizeExceeded { size, max_size } => {
+                write!(f, "BatchSizeExceeded {{ size: {}, max_size: {} }}", size, max_size)
+            }
+        }
     }
 }
 
