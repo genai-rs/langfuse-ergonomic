@@ -2,6 +2,13 @@
 
 This file contains important instructions and context for***REMOVED*** when working on this project.
 
+## Repository Context
+
+This is the **langfuse-ergonomic** repository - an ergonomic wrapper for the Langfuse API using builder patterns.
+
+- **Depends on**: [langfuse-client-base](https://github.com/genai-rs/langfuse-client-base) - the auto-generated OpenAPI client
+- **Purpose**: Provides a user-friendly API using the Bon builder pattern library
+
 ## Development Workflow
 
 ### Git Workflow
@@ -34,36 +41,19 @@ This file contains important instructions and context for***REMOVED*** when work
   - `docs:` for documentation only
   - `chore:` for maintenance tasks
   - `test:` for test additions/changes
-- Include the co-authored-by trailer:
-  ```
- ***REMOVED***
-  
- ***REMOVED***  ```
-
-## Project Structure
-
-### Crates
-- `langfuse-client-base/` - Auto-generated OpenAPI client (do not edit directly)
-- `langfuse-ergonomic/` - User-friendly wrapper with builder patterns
-
-### Important Files
-- `scripts/generate-openapi-client.sh` - Regenerates the OpenAPI client
-- `release-plz.toml` - Release ***REMOVED*** configuration
-- `.env` - Contains Langfuse API credentials (never commit this file)
 
 ## API Credentials
 
 The project uses environment variables for Langfuse authentication:
 - `LANGFUSE_PUBLIC_KEY` - Public API key
 - `LANGFUSE_SECRET_KEY` - Secret API key  
-- `LANGFUSE_HOST` - API endpoint (defaults to https://cloud.langfuse.com)
+- `LANGFUSE_BASE_URL` - API endpoint (defaults to https://cloud.langfuse.com)
 
 ## Testing
 
 ### Running Examples
 Always test examples with real credentials before committing:
 ```bash
-cd langfuse-ergonomic
 cargo run --example test_trace
 cargo run --example basic_trace
 cargo run --example trace_with_metadata
@@ -72,7 +62,7 @@ cargo run --example multiple_traces
 
 ### CI/CD
 - GitHub Actions runs on every push and PR
-- Release-plz creates automated release PRs
+- release-plz creates automated release PRs
 - Packages are published to crates.io on release
 
 ## Current Implementation Status
@@ -94,8 +84,8 @@ cargo run --example multiple_traces
 ## Common Tasks
 
 ### Adding a New Example
-1. Create the example file in `langfuse-ergonomic/examples/`
-2. Add entry to `langfuse-ergonomic/Cargo.toml`:
+1. Create the example file in `examples/`
+2. Add entry to `Cargo.toml`:
    ```toml
    [[example]]
    name = "your_example"
@@ -109,39 +99,15 @@ cargo run --example multiple_traces
 - Mark unimplemented features as "Planned"
 - Test all code examples in documentation
 
-### Handling Generated Code Issues
-- Clippy warnings in generated code are suppressed via `langfuse-client-base/Cargo.toml`
-- Formatting is automatically applied after generation
-- The generation script preserves our custom Cargo.toml
-
 ## Important Notes
 
-1. **Generated Code**: The `langfuse-client-base` crate is auto-generated. Don't edit it directly.
+1. **Base Client**: This crate depends on langfuse-client-base from crates.io
 2. **Token Scopes**: crates.io tokens must have the pattern `langfuse-*` for publishing
 3. **Documentation**: docs.rs builds documentation automatically after crates.io publish
 4. **Examples**: All examples must be tested with real API credentials before committing
 
-## Useful Commands
-
-```bash
-# Initialize development environment
-just init
-
-# Generate OpenAPI client
-just generate
-
-# Run all checks
-just check
-
-# Create a release (via PR)
-just release
-
-# View all available commands
-just --list
-```
-
 ## Repository Links
-- GitHub: https://github.com/timvw/langfuse-rs
+- GitHub: https://github.com/genai-rs/langfuse-ergonomic
 - crates.io: https://crates.io/crates/langfuse-ergonomic
 - docs.rs: https://docs.rs/langfuse-ergonomic
 - Langfuse API docs: https://langfuse.com/docs/api
