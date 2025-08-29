@@ -9,9 +9,40 @@ changelog_update = true
 git_release_enable = true
 git_tag_enable = true
 
+# Git release body template - ensures GitHub releases have proper content
+git_release_body = """
+## What's Changed
+
+{{ changelog }}
+
+**Full Changelog**: https://github.com/genai-rs/langfuse-ergonomic/compare/{{ previous_version }}...{{ version }}
+"""
+
 # PR settings
 pr_labels = ["release"]
 pr_draft = false
+
+# PR body template - ensures PR descriptions show the changelog
+pr_body = """
+## 📦 Package Updates
+
+This PR updates the following packages:
+
+{% for release in releases %}
+- **{{ release.package }}**: `{{ release.previous_version }}` → `{{ release.next_version }}`
+{% endfor %}
+
+## 📝 Changelog
+
+{% for release in releases %}
+### {{ release.package }}
+
+{{ release.changelog }}
+{% endfor %}
+
+---
+*This PR was created by [release-plz](https://github.com/MarcoIeni/release-plz)*
+"""
 
 # Publishing
 publish = true
