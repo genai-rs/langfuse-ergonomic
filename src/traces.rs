@@ -19,9 +19,20 @@ pub struct TraceResponse {
 impl TraceResponse {
     /// Get the Langfuse URL for this trace
     pub fn url(&self) -> String {
-        // Remove /api if present from base_url
-        let web_url = self.base_url.replace("/api", "");
-        format!("{}/trace/{}", web_url.trim_end_matches('/'), self.id)
+        // More robust URL construction that handles various base_url formats
+        let mut web_url = self.base_url.clone();
+        
+        // Remove trailing slashes
+        web_url = web_url.trim_end_matches('/').to_string();
+        
+        // Replace /api/public or /api at the end with empty string
+        if web_url.ends_with("/api/public") {
+            web_url = web_url[..web_url.len() - 11].to_string();
+        } else if web_url.ends_with("/api") {
+            web_url = web_url[..web_url.len() - 4].to_string();
+        }
+        
+        format!("{}/trace/{}", web_url, self.id)
     }
 }
 
