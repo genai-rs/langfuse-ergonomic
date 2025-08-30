@@ -1,0 +1,32 @@
+name: Dependencies
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  udeps:
+    name: Check Unused Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+        
+      - name: Cache cargo-udeps
+        uses: actions/cache@v4
+        id: cache-udeps
+        with:
+          path: ~/.cargo/bin/cargo-udeps
+          key: cargo-udeps-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          
+      - name: Install cargo-udeps
+        if: steps.cache-udeps.outputs.cache-hit != 'true'
+        run: cargo install cargo-udeps --locked
+        
+      - name: Run cargo-udeps
+        run: cargo +nightly udeps --all-targets --all-features
