@@ -51,10 +51,15 @@ async fn main() -> anyhow::Result<()> {
     println!("\n{}", "=".repeat(50));
     println!("Creating test events...\n");
 
+    // Note: session_id and user_id are NOT secrets in Langfuse context
+    // They are identifiers for organizing/filtering traces, not authentication credentials
     let session_id = format!("batch-test-session-{}", Uuid::new_v4());
     let user_id = "test-user-batch";
 
+    // Safe to log: these are trace organization identifiers, not secrets
+    // codeql[rust/cleartext-logging] - False positive: session_id is not a secret
     println!("📁 Session ID: {}", session_id);
+    // codeql[rust/cleartext-logging] - False positive: user_id is not a secret
     println!("👤 User ID: {}\n", user_id);
 
     // Create multiple traces to test batching
