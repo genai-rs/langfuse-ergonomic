@@ -32,8 +32,8 @@
 //!     .input(json!({"query": "Hello, world!"}))
 //!     .output(json!({"response": "Hi there!"}))
 //!     .user_id("user-123")
-//!     .tags(["production", "chat"])
-//!     .send()
+//!     .tags(vec!["production".to_string(), "chat".to_string()])
+//!     .call()
 //!     .await?;
 //!
 //! println!("Created trace: {}", trace.id);
@@ -60,7 +60,7 @@
 //! let client = LangfuseClient::builder()
 //!     .public_key("pk-lf-...")
 //!     .secret_key("sk-lf-...")
-//!     .base_url("https://cloud.langfuse.com")
+//!     .base_url("https://cloud.langfuse.com".to_string())
 //!     .timeout(Duration::from_secs(30))
 //!     .build();
 //! ```
