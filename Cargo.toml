@@ -31,7 +31,6 @@ rand = "0.8"
 [dev-dependencies]
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dotenvy = "0.15"
-pretty_assertions = "1.4"
 mockito = "1.4"
 
 [[example]]
