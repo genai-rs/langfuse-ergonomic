@@ -41,14 +41,21 @@ impl LangfuseClient {
         let secret_key = secret_key.into();
 
         // Build HTTP client with sensible defaults
-        let client_builder = reqwest::Client::builder()
+        #[allow(unused_mut)]
+        let mut client_builder = reqwest::Client::builder()
             .timeout(timeout.unwrap_or(DEFAULT_TIMEOUT))
             .connect_timeout(connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT))
-            .no_gzip()
-            .no_brotli()
-            .no_deflate()
             .pool_max_idle_per_host(10)
             .pool_idle_timeout(Duration::from_secs(90));
+
+        // Disable compression by default, enable with feature flag
+        #[cfg(not(feature = "compression"))]
+        {
+            client_builder = client_builder
+                .no_gzip()
+                .no_brotli()
+                .no_deflate();
+        }
 
         // Build client (ignore errors for now, use default client if building fails)
         let client = client_builder
