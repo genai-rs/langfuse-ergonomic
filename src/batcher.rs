@@ -106,12 +106,12 @@ impl BatchEvent {
 ///   - Cons: Can cause application slowdown
 ///   - Use when: Data integrity is critical
 ///
-/// - **DropNew**: New events are dropped when queue is full
+/// - **`DropNew`**: New events are dropped when queue is full
 ///   - Pros: Application continues at full speed
 ///   - Cons: Recent events may be lost
 ///   - Use when: Historical data is more important
 ///
-/// - **DropOldest**: Oldest events are dropped to make room
+/// - **`DropOldest`**: Oldest events are dropped to make room
 ///   - Pros: Keeps most recent data
 ///   - Cons: Older events may be lost
 ///   - Use when: Recent data is more important
@@ -395,12 +395,12 @@ impl Batcher {
                 self.tx
                     .send(batch_event)
                     .await
-                    .map_err(|e| Error::Api(format!("Failed to queue event: {}", e)))?;
+                    .map_err(|e| Error::Api(format!("Failed to queue event: {e}")))?;
             }
             BackpressurePolicy::DropNew => {
                 // Try to send, drop if full
                 match self.tx.try_send(batch_event) {
-                    Ok(_) => {}
+                    Ok(()) => {}
                     Err(mpsc::error::TrySendError::Full(_)) => {
                         self.metrics.dropped.fetch_add(1, Ordering::Relaxed);
                         return Err(Error::Backpressure {
@@ -408,13 +408,13 @@ impl Batcher {
                             reason: "Queue full, new event dropped".to_string(),
                         });
                     }
-                    Err(e) => return Err(Error::Api(format!("Failed to queue event: {}", e))),
+                    Err(e) => return Err(Error::Api(format!("Failed to queue event: {e}"))),
                 }
             }
             BackpressurePolicy::DropOldest => {
                 // Try to send, if full, remove oldest and retry
                 match self.tx.try_send(batch_event.clone()) {
-                    Ok(_) => {}
+                    Ok(()) => {}
                     Err(mpsc::error::TrySendError::Full(_)) => {
                         // Remove oldest from buffer
                         {
@@ -430,9 +430,9 @@ impl Batcher {
                         self.tx
                             .send(batch_event)
                             .await
-                            .map_err(|e| Error::Api(format!("Failed to queue event: {}", e)))?;
+                            .map_err(|e| Error::Api(format!("Failed to queue event: {e}")))?;
                     }
-                    Err(e) => return Err(Error::Api(format!("Failed to queue event: {}", e))),
+                    Err(e) => return Err(Error::Api(format!("Failed to queue event: {e}"))),
                 }
             }
         }
@@ -494,6 +494,7 @@ impl Batcher {
     }
 
     /// Internal flush implementation
+    #[allow(clippy::too_many_lines)]
     async fn flush_buffer(
         client: &LangfuseClient,
         buffer: &Mutex<VecDeque<BatchEvent>>,
@@ -695,7 +696,7 @@ impl Batcher {
 
                 // Add jitter to avoid thundering herd
                 let actual_delay = if config.retry_jitter {
-                    let jitter_range = delay.as_millis() as u64 / 4; // 25% jitter
+                    let jitter_range = delay.as_millis().min(u64::MAX as u128) as u64 / 4; // 25% jitter
                     let jitter = rand::thread_rng().gen_range(0..=jitter_range);
                     delay + Duration::from_millis(jitter)
                 } else {
@@ -736,6 +737,7 @@ impl Batcher {
     }
 
     /// Send a single batch and handle 207 responses
+    #[allow(clippy::too_many_lines)]
     async fn send_batch_internal(
         client: &LangfuseClient,
         batch: IngestionBatchRequest,
@@ -777,7 +779,7 @@ impl Batcher {
             .headers()
             .get("x-request-id")
             .and_then(|v| v.to_str().ok())
-            .map(|s| s.to_string());
+            .map(ToString::to_string);
 
         // Handle different status codes
         match status.as_u16() {
@@ -792,12 +794,6 @@ impl Batcher {
                 })
             }
             207 => {
-                // Multi-Status: Parse the response to identify partial failures
-                let body = response
-                    .text()
-                    .await
-                    .map_err(|e| Error::Api(format!("Failed to read 207 response: {}", e)))?;
-
                 // Parse the 207 response body
                 #[derive(serde::Deserialize)]
                 struct MultiStatusResponse {
@@ -820,8 +816,14 @@ impl Batcher {
                     message: Option<String>,
                 }
 
+                // Multi-Status: Parse the response to identify partial failures
+                let body = response
+                    .text()
+                    .await
+                    .map_err(|e| Error::Api(format!("Failed to read 207 response: {e}")))?;
+
                 let multi_status: MultiStatusResponse = serde_json::from_str(&body)
-                    .map_err(|e| Error::Api(format!("Failed to parse 207 response: {}", e)))?;
+                    .map_err(|e| Error::Api(format!("Failed to parse 207 response: {e}")))?;
 
                 let success_ids: Vec<String> = multi_status
                     .successes
