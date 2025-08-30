@@ -2,7 +2,7 @@ name: Security (Comprehensive)
 
 on:
   push:
-    branches: [main]  # Only on main, not PRs (CI handles that)
+    branches: [main]
   schedule:
     # Run comprehensive security checks daily at 2 AM UTC
     - cron: '0 2 * * *'
