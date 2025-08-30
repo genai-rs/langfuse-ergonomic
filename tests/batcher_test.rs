@@ -15,6 +15,72 @@ fn create_mock_client(server: &Server) -> LangfuseClient {
 }
 
 #[tokio::test]
+async fn test_metrics_accuracy_on_retries() {
+    let mut server = Server::new_async().await;
+
+    // First request fails with 503, second succeeds
+    let mock1 = server
+        .mock("POST", "/api/public/ingestion")
+        .with_status(503)
+        .with_body(r#"{"error": "Service unavailable"}"#)
+        .expect(1)
+        .create_async()
+        .await;
+
+    let mock2 = server
+        .mock("POST", "/api/public/ingestion")
+        .with_status(207)
+        .with_body(r#"{"successes": [{"id": "test-event", "status": 201}], "errors": []}"#)
+        .expect(1)
+        .create_async()
+        .await;
+
+    let client = create_mock_client(&server);
+
+    // Use the bon-generated builder
+    let batcher = Batcher::builder()
+        .client(client)
+        .max_retries(1)
+        .initial_retry_delay(Duration::from_millis(10))
+        .build()
+        .await;
+
+    // Add a single event using the correct types from langfuse-client-base
+    use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
+    
+    let trace_body = TraceBody {
+        id: Some(Some("test-event".to_string())),
+        name: Some(Some("test".to_string())),
+        timestamp: Some(Some(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true))),
+        ..Default::default()
+    };
+    
+    let event_one_of = IngestionEventOneOf {
+        body: Box::new(trace_body),
+        id: uuid::Uuid::new_v4().to_string(),
+        timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        metadata: None,
+        r#type: langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
+    };
+    
+    let event = IngestionEvent::IngestionEventOneOf(Box::new(event_one_of));
+    batcher.add(event).await.unwrap();
+
+    // Flush and verify metrics
+    let result = batcher.flush().await.unwrap();
+    let metrics = batcher.metrics();
+
+    // Should have 1 successful flush, 1 retry
+    assert_eq!(metrics.flushed, 1, "Should have 1 flushed event");
+    assert_eq!(metrics.retries, 1, "Should have 1 retry");
+    assert_eq!(metrics.failed, 0, "Should have no permanently failed events");
+    assert_eq!(metrics.queued, 0, "Queue should be empty after flush");
+
+    mock1.assert_async().await;
+    mock2.assert_async().await;
+}
+
+#[tokio::test]
 async fn test_batch_207_partial_success() {
     let mut server = Server::new_async().await;
 
