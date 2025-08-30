@@ -98,6 +98,23 @@ impl BatchEvent {
 }
 
 /// Policy for handling events when the queue is full
+///
+/// ## Behavior
+///
+/// - **Block**: Producer waits until space is available (default)
+///   - Pros: No data loss
+///   - Cons: Can cause application slowdown
+///   - Use when: Data integrity is critical
+///
+/// - **DropNew**: New events are dropped when queue is full
+///   - Pros: Application continues at full speed
+///   - Cons: Recent events may be lost
+///   - Use when: Historical data is more important
+///
+/// - **DropOldest**: Oldest events are dropped to make room
+///   - Pros: Keeps most recent data
+///   - Cons: Older events may be lost
+///   - Use when: Recent data is more important
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackpressurePolicy {
     /// Block the producer until space is available
@@ -430,6 +447,12 @@ impl Batcher {
     /// - Retryable failures (5xx, 429) will be automatically re-queued for retry
     /// - Non-retryable failures (4xx) are reported and discarded
     /// - Returns immediately after the flush attempt, even if events are re-queued
+    ///
+    /// ## Deterministic Behavior
+    /// - Events are processed in FIFO order
+    /// - Flush waits for all pending batches to complete
+    /// - Metrics are updated atomically and accurately reflect state
+    /// - Returns success if all events were sent or re-queued for retry
     /// - Use `shutdown()` for a final flush that waits for all retries to complete
     ///
     /// ## Partial Failures
@@ -454,6 +477,20 @@ impl Batcher {
     /// Get current metrics
     pub fn metrics(&self) -> BatcherMetricsSnapshot {
         self.metrics.snapshot()
+    }
+
+    /// Wait for all pending events to be processed
+    ///
+    /// ## Behavior
+    /// - Blocks until the queue is empty
+    /// - Does NOT guarantee events were successfully sent
+    /// - Use `flush()` after this to ensure events are sent
+    /// - Useful for ensuring all events are queued before shutdown
+    pub async fn wait_for_pending(&self) {
+        // Wait until queue is empty
+        while self.metrics.queued.load(Ordering::Relaxed) > 0 {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
     }
 
     /// Internal flush implementation
