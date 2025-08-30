@@ -79,7 +79,8 @@ async fn main() -> anyhow::Result<()> {
         .max_events(20) // Lower limit for self-hosted instances
         .flush_interval(Duration::from_secs(10)) // Longer interval
         .max_retries(5) // More retries for potentially unstable connections
-        .build();
+        .build()
+        .await;
 
     println!("Batcher configured for self-hosted instance");
 
