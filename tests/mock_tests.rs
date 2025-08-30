@@ -142,7 +142,11 @@ async fn test_rate_limiting_handling() {
     assert!(result.is_err(), "Should fail with rate limit error");
 
     if let Err(error) = result {
-        assert!(error.to_string().contains("429") || error.to_string().contains("rate"));
+        // Check that it's a rate limit error
+        assert!(error.is_retryable(), "Rate limit errors should be retryable");
+        let error_str = error.to_string();
+        assert!(error_str.contains("Rate limit"), 
+                "Expected rate limit error, got: {}", error_str);
     }
 }
 
