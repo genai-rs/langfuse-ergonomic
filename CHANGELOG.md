@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.2.1...v0.3.0) - 2025-08-30
+
+### Added
+
+- add comprehensive batch test example
+- add security workflows for secrets and vulnerability scanning
+- add optional compression support via feature flag
+- add final polish to batch processing
+- enhance batching with comprehensive improvements
+- implement batching with 207 Multi-Status and auto-chunking
+- add Trace URLs and BYO IDs support
+
+### Fixed
+
+- format code to pass CI checks
+- resolve flaky test_shutdown_idempotency test
+- production-ready batching improvements
+- apply cargo fmt formatting
+- address production-readiness feedback
+- resolve clippy warnings
+- apply cargo fmt formatting
+
+### Other
+
+- add Renovate configuration for automated dependency updates
+- add comprehensive batch processing documentation
+- fix formatting issues for CI
+- fix formatting issues
+
 ## [0.2.1](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.2.0...v0.2.1) - 2025-08-29
 
 ### Added
