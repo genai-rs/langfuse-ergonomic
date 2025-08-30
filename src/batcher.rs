@@ -902,7 +902,7 @@ impl Batcher {
         // Log final metrics
         let final_metrics = self.metrics.snapshot();
         if final_metrics.failed > 0 || final_metrics.dropped > 0 {
-            eprintln!(
+            tracing::warn!(
                 "Batcher shutdown - flushed: {}, failed: {}, dropped: {}",
                 final_metrics.flushed, final_metrics.failed, final_metrics.dropped
             );
