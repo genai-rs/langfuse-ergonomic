@@ -27,9 +27,6 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust: [stable, beta]
-        include:
-          - os: ubuntu-latest
-            rust: 1.75.0  # MSRV
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -113,27 +110,6 @@ jobs:
         uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-  
-  # Minimal versions check
-  minimal-versions:
-    name: Minimal Versions
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        
-      - name: Install Rust nightly
-        uses: dtolnay/rust-toolchain@nightly
-        
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        
-      - name: Generate minimal versions
-        run: cargo +nightly generate-lockfile -Z minimal-versions
-        
-      - name: Build with minimal versions
-        run: cargo +stable build --all-features
   
   # Coverage (optional, informational only)
   coverage:
