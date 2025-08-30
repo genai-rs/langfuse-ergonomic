@@ -88,8 +88,20 @@ jobs:
       - name: Test with no features
         run: cargo test --no-default-features
         
-      - name: Test with compression feature
+      - name: Test with default features (rustls)
+        run: cargo test
+        
+      - name: Test with rustls explicitly
+        run: cargo test --no-default-features --features rustls
+        
+      - name: Test with native-tls
+        run: cargo test --no-default-features --features native-tls
+        
+      - name: Test with compression + rustls
         run: cargo test --features compression
+        
+      - name: Test with compression + native-tls
+        run: cargo test --no-default-features --features "compression,native-tls"
         
       - name: Test with all features
         run: cargo test --all-features

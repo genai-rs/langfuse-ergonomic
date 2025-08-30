@@ -63,6 +63,7 @@ branches:
           - "Check Unused Dependencies"   # Keep dependencies clean
           - "TruffleHog Secrets Scan"    # Prevent secret leaks
           - "Gitleaks Secrets Scan"      # Additional secret scanning
+          - "cargo-deny"                 # License, security, and dependency checks
           
           # Note: Code Coverage is informational only, not required
       
