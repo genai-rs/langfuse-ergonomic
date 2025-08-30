@@ -120,7 +120,7 @@ impl LangfuseClient {
     /// Validate that the client credentials are valid
     pub async fn validate(&self) -> Result<bool> {
         use crate::error::Error;
-        
+
         // Make a lightweight request to the health endpoint
         let url = format!("{}/api/public/health", self.base_url);
         let response = self
