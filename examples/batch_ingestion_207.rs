@@ -3,13 +3,13 @@
 //! This example shows how to:
 //! - Use the batcher for efficient event ingestion
 //! - Handle partial failures (207 responses)
-//! - Retry failed events automatically
-//! - Configure batch size and flush intervals
+//! - Configure batch size, flush intervals, and backpressure
+//! - Monitor metrics (queued, flushed, failed, dropped)
+//! - Graceful shutdown with guarantees
 
-use langfuse_ergonomic::{BatcherConfig, LangfuseClient, IngestionResponse};
-use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
+use langfuse_ergonomic::{Batcher, LangfuseClient, BackpressurePolicy};
+use langfuse_client_base::models::{TraceBody, IngestionEvent};
 use serde_json::json;
-use std::sync::Arc;
 use std::time::Duration;
 
 #[tokio::main]
@@ -17,24 +17,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize from environment variables
     dotenvy::dotenv().ok();
     
-    let client = Arc::new(LangfuseClient::from_env()?);
+    let client = LangfuseClient::from_env()?;
     
-    // Create a batcher with custom configuration
-    let config = BatcherConfig {
-        max_events: 50,                           // Batch up to 50 events
-        max_bytes: 2_000_000,                     // Or up to 2MB
-        flush_interval: Duration::from_secs(5),   // Auto-flush every 5 seconds
-        max_retries: 3,                           // Retry failed events up to 3 times
-        fail_fast: false,                         // Continue on partial failures
-        ..Default::default()
-    };
-    let batcher = client.clone().create_batcher(Some(config));
+    println!("🚀 Starting batch ingestion example with advanced features...\n");
     
-    println!("🚀 Starting batch ingestion example...");
+    // Create a batcher with comprehensive configuration
+    let batcher = Batcher::builder()
+        .client(client)
+        .max_events(10)                          // Batch up to 10 events
+        .max_bytes(2_000_000)                    // Or up to 2MB
+        .flush_interval(Duration::from_secs(3))  // Auto-flush every 3 seconds
+        .max_retries(3)                          // Retry failed events up to 3 times
+        .fail_fast(false)                        // Continue on partial failures
+        .max_queue_size(100)                     // Queue up to 100 events
+        .backpressure_policy(BackpressurePolicy::Block) // Block when queue is full
+        .build();
+    
+    println!("📊 Batcher Configuration:");
+    println!("  - Max events per batch: 10");
+    println!("  - Max batch size: 2MB");
+    println!("  - Auto-flush interval: 3 seconds");
+    println!("  - Max retries: 3");
+    println!("  - Backpressure: Block when full");
+    println!("  - Max queue size: 100 events\n");
     
     // Simulate sending multiple events
-    for i in 1..=10 {
-        let trace_body = TraceBody {
+    println!("📤 Adding events to batch...");
+    for i in 1..=15 {
+        let trace = TraceBody {
             id: Some(Some(format!("batch-trace-{}", i))),
             name: Some(Some(format!("Batch Test Trace {}", i))),
             input: Some(Some(json!({
@@ -47,144 +57,195 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }))),
             metadata: Some(Some(json!({
                 "source": "batch_example",
-                "version": env!("CARGO_PKG_VERSION")
+                "version": env!("CARGO_PKG_VERSION"),
+                "batch_features": {
+                    "207_handling": true,
+                    "auto_chunking": true,
+                    "retry_logic": true,
+                    "metrics": true
+                }
             }))),
             user_id: Some(Some("batch-user".to_string())),
             session_id: Some(Some(format!("batch-session-{}", i % 3))),
             tags: Some(Some(vec![
                 "batch".to_string(),
-                format!("group-{}", i % 2)
+                format!("group-{}", i % 2),
+                "207-example".to_string()
             ])),
             ..Default::default()
         };
         
-        let event = IngestionEventOneOf {
-            body: Box::new(trace_body),
-            id: format!("event-{}", uuid::Uuid::new_v4()),
-            timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-            metadata: None,
-            r#type: langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
-        };
-        
-        let ingestion_event = IngestionEvent::IngestionEventOneOf(Box::new(event));
+        let event = IngestionEvent::IngestionEventOneOf(Box::new(trace));
         
         // Add to batch
-        match batcher.add(ingestion_event).await {
-            Ok(_) => println!("  ✅ Added event {} to batch", i),
+        match batcher.add(event).await {
+            Ok(_) => {
+                println!("  ✅ Added event {} to batch", i);
+                
+                // Show metrics periodically
+                if i % 5 == 0 {
+                    let metrics = batcher.metrics();
+                    println!("    📈 Current metrics - Queued: {}, Flushed: {}, Failed: {}, Dropped: {}", 
+                        metrics.queued, metrics.flushed, metrics.failed, metrics.dropped);
+                }
+                
+                // Trigger auto-flush at event 10 (max_events)
+                if i == 10 {
+                    println!("\n  🔄 Auto-flush triggered (reached max_events)...");
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    let metrics = batcher.metrics();
+                    println!("    📈 After auto-flush - Flushed: {}, Queued: {}", 
+                        metrics.flushed, metrics.queued);
+                }
+            }
             Err(e) => eprintln!("  ❌ Failed to add event {}: {}", i, e),
         }
         
         // Small delay to simulate real-world event generation
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(50)).await;
     }
     
-    println!("\n📤 Flushing batch...");
+    println!("\n⏱️  Waiting for timer-based auto-flush (3 seconds)...");
+    tokio::time::sleep(Duration::from_secs(4)).await;
     
-    // Manually flush the batch (also happens automatically on interval)
+    let metrics = batcher.metrics();
+    println!("📊 Metrics after auto-flush:");
+    println!("  - Events flushed: {}", metrics.flushed);
+    println!("  - Events queued: {}", metrics.queued);
+    println!("  - Events failed: {}", metrics.failed);
+    println!("  - Events dropped: {}", metrics.dropped);
+    println!("  - Retry attempts: {}", metrics.retries);
+    
+    // Demonstrate manual flush
+    println!("\n📤 Adding more events and performing manual flush...");
+    for i in 16..=20 {
+        let trace = TraceBody {
+            id: Some(Some(format!("manual-trace-{}", i))),
+            name: Some(Some(format!("Manual Flush Trace {}", i))),
+            metadata: Some(Some(json!({
+                "flush_type": "manual",
+                "example_feature": "207_multi_status"
+            }))),
+            ..Default::default()
+        };
+        
+        let event = IngestionEvent::IngestionEventOneOf(Box::new(trace));
+        batcher.add(event).await?;
+        println!("  ➕ Added event {}", i);
+    }
+    
+    println!("\n🚿 Performing manual flush...");
     match batcher.flush().await {
         Ok(response) => {
-            print_ingestion_response(&response);
+            println!("✅ Manual flush successful!");
+            println!("  - Successfully flushed: {}", response.success_count);
+            println!("  - Failed: {}", response.failure_count);
+            
+            if response.failure_count > 0 {
+                println!("\n  ⚠️  Some events failed:");
+                for error in response.failures.iter().take(3) {
+                    println!("    - Event {}: {}", error.event_id, error.message);
+                    if error.retryable {
+                        println!("      (Will be retried automatically)");
+                    }
+                }
+            }
         }
         Err(e) => {
-            eprintln!("❌ Flush failed: {}", e);
+            eprintln!("❌ Manual flush failed: {}", e);
             
-            // Check if it's a partial failure
+            // Check if it's a partial failure (207 response)
             if let langfuse_ergonomic::Error::PartialFailure { 
                 success_count, 
                 failure_count, 
                 errors, 
                 .. 
-            } = e {
-                println!("\n⚠️  Partial failure detected:");
+            } = &e {
+                println!("\n⚠️  Partial failure (207 Multi-Status):");
                 println!("  ✅ Successful: {}", success_count);
                 println!("  ❌ Failed: {}", failure_count);
                 
-                if !errors.is_empty() {
-                    println!("\n  Failed events:");
-                    for error in errors.iter().take(5) {
-                        println!("    - {}: {} {}", 
-                            error.event_id, 
-                            error.message,
-                            if error.retryable { "[retryable]" } else { "" }
-                        );
-                    }
-                    if errors.len() > 5 {
-                        println!("    ... and {} more", errors.len() - 5);
+                println!("\n  Failed events will be retried:");
+                for error in errors.iter().take(3) {
+                    println!("    - {}: {}", error.event_id, error.message);
+                    if error.retryable {
+                        println!("      Status: Retryable ♻️");
+                    } else {
+                        println!("      Status: Not retryable ❌");
                     }
                 }
             }
         }
     }
     
-    // Simulate more events being added while the batcher is running
-    println!("\n🔄 Adding more events (will auto-flush)...");
+    // Demonstrate backpressure handling
+    println!("\n🎯 Testing backpressure handling...");
+    println!("  Creating a new batcher with DropNew policy and small queue...");
     
-    for i in 11..=15 {
-        let trace_body = TraceBody {
-            id: Some(Some(format!("auto-trace-{}", i))),
-            name: Some(Some(format!("Auto-flush Trace {}", i))),
+    let client2 = LangfuseClient::from_env()?;
+    let backpressure_batcher = Batcher::builder()
+        .client(client2)
+        .max_queue_size(3)
+        .backpressure_policy(BackpressurePolicy::DropNew)
+        .build();
+    
+    for i in 1..=5 {
+        let trace = TraceBody {
+            id: Some(Some(format!("backpressure-trace-{}", i))),
+            name: Some(Some(format!("Backpressure Test {}", i))),
             ..Default::default()
         };
         
-        let event = IngestionEventOneOf {
-            body: Box::new(trace_body),
-            id: format!("auto-event-{}", uuid::Uuid::new_v4()),
-            timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-            metadata: None,
-            r#type: langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
-        };
-        
-        let ingestion_event = IngestionEvent::IngestionEventOneOf(Box::new(event));
-        batcher.add(ingestion_event).await?;
-        println!("  ➕ Added event {}", i);
+        let event = IngestionEvent::IngestionEventOneOf(Box::new(trace));
+        match backpressure_batcher.add(event).await {
+            Ok(_) => println!("  ✅ Event {} queued", i),
+            Err(e) => println!("  ⚠️  Event {} dropped: {}", i, e),
+        }
     }
     
-    // Wait for auto-flush
-    println!("\n⏳ Waiting for auto-flush (5 seconds)...");
-    tokio::time::sleep(Duration::from_secs(6)).await;
+    let bp_metrics = backpressure_batcher.metrics();
+    println!("  📊 Backpressure test - Queued: {}, Dropped: {}", 
+        bp_metrics.queued, bp_metrics.dropped);
     
-    // Shutdown the batcher and get final results
-    println!("\n🛑 Shutting down batcher...");
+    // Graceful shutdown
+    println!("\n🛑 Shutting down batchers gracefully...");
+    
+    // Shutdown main batcher
     match batcher.shutdown().await {
         Ok(response) => {
-            println!("Final flush results:");
-            print_ingestion_response(&response);
+            println!("✅ Main batcher shutdown complete:");
+            println!("  - Final flush successful: {}", response.success_count);
+            println!("  - Final flush failed: {}", response.failure_count);
+            
+            let final_metrics = batcher.metrics();
+            println!("\n📊 Final metrics:");
+            println!("  - Total flushed: {}", final_metrics.flushed);
+            println!("  - Total failed: {}", final_metrics.failed);
+            println!("  - Total dropped: {}", final_metrics.dropped);
+            println!("  - Total retries: {}", final_metrics.retries);
+            if final_metrics.last_error_ts > 0 {
+                println!("  - Last error: {} seconds ago", 
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs() - final_metrics.last_error_ts
+                );
+            }
         }
-        Err(e) => eprintln!("❌ Shutdown flush failed: {}", e),
+        Err(e) => eprintln!("❌ Shutdown failed: {}", e),
     }
+    
+    // Shutdown backpressure test batcher
+    let _ = backpressure_batcher.shutdown().await;
     
     println!("\n✨ Batch ingestion example complete!");
+    println!("   This example demonstrated:");
+    println!("   • 207 Multi-Status handling for partial failures");
+    println!("   • Automatic retry with exponential backoff");
+    println!("   • Size and count-based auto-chunking");
+    println!("   • Backpressure policies (Block, DropNew, DropOldest)");
+    println!("   • Comprehensive metrics tracking");
+    println!("   • Graceful shutdown with guarantees");
     
     Ok(())
-}
-
-/// Helper to print ingestion response details
-fn print_ingestion_response(response: &IngestionResponse) {
-    println!("\n📊 Ingestion Results:");
-    println!("  ✅ Successful: {}", response.success_count);
-    println!("  ❌ Failed: {}", response.failure_count);
-    
-    if response.success_count > 0 {
-        println!("\n  Successfully ingested event IDs:");
-        for id in response.success_ids.iter().take(5) {
-            println!("    - {}", id);
-        }
-        if response.success_ids.len() > 5 {
-            println!("    ... and {} more", response.success_ids.len() - 5);
-        }
-    }
-    
-    if response.failure_count > 0 {
-        println!("\n  Failed events:");
-        for error in response.failures.iter().take(5) {
-            println!("    - {}: {} {}", 
-                error.event_id, 
-                error.message,
-                if error.retryable { "[retryable]" } else { "" }
-            );
-        }
-        if response.failures.len() > 5 {
-            println!("    ... and {} more", response.failures.len() - 5);
-        }
-    }
 }
