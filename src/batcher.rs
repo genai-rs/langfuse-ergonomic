@@ -22,7 +22,7 @@
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let client = LangfuseClient::from_env()?;
-//! 
+//!
 //! // Create with defaults
 //! let batcher = Batcher::builder()
 //!     .client(client)
@@ -38,7 +38,7 @@
 //!
 //! // Monitor metrics
 //! let metrics = batcher.metrics();
-//! println!("Queued: {}, Flushed: {}, Failed: {}", 
+//! println!("Queued: {}, Flushed: {}, Failed: {}",
 //!     metrics.queued, metrics.flushed, metrics.failed);
 //! # Ok(())
 //! # }

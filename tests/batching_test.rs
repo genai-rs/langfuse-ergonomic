@@ -23,7 +23,7 @@ fn create_test_event(id: &str) -> IngestionEvent {
         public: None,
         environment: None,
     };
-    
+
     IngestionEvent::IngestionEventOneOf(Box::new(IngestionEventOneOf::new(
         trace_body,
         id.to_string(),
