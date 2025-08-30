@@ -2,7 +2,7 @@
 
 use chrono::Utc;
 use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
-use langfuse_ergonomic::{Batcher, BackpressurePolicy, LangfuseClient};
+use langfuse_ergonomic::{BackpressurePolicy, Batcher, LangfuseClient};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -102,7 +102,16 @@ async fn main() -> anyhow::Result<()> {
                     "batch-test".to_string(),
                     "comprehensive".to_string(),
                     trace_type.to_string(),
-                    format!("priority-{}", if i < 5 { "high" } else if i < 15 { "medium" } else { "low" }),
+                    format!(
+                        "priority-{}",
+                        if i < 5 {
+                            "high"
+                        } else if i < 15 {
+                            "medium"
+                        } else {
+                            "low"
+                        }
+                    ),
                 ])),
                 input: Some(Some(serde_json::json!({
                     "query": format!("Test query for {} #{}", trace_type, i),
@@ -138,16 +147,16 @@ async fn main() -> anyhow::Result<()> {
         }));
 
         batcher.add(trace_event).await?;
-        
+
         // Print progress for every 5 traces
         if (i + 1) % 5 == 0 {
             println!("  ✅ Added {} traces (latest: {})", i + 1, trace_type);
-            
+
             // Check metrics periodically
             let current_metrics = batcher.metrics();
-            println!("     📊 Current: queued={}, flushed={}", 
-                current_metrics.queued,
-                current_metrics.flushed
+            println!(
+                "     📊 Current: queued={}, flushed={}",
+                current_metrics.queued, current_metrics.flushed
             );
         }
 
@@ -173,7 +182,10 @@ async fn main() -> anyhow::Result<()> {
 
     let after_auto_flush_metrics = batcher.metrics();
     println!("📊 Metrics after automatic flush:");
-    println!("  - Total events queued: {}", after_auto_flush_metrics.queued);
+    println!(
+        "  - Total events queued: {}",
+        after_auto_flush_metrics.queued
+    );
     println!("  - Events flushed: {}", after_auto_flush_metrics.flushed);
     println!("  - Events failed: {}", after_auto_flush_metrics.failed);
     println!("  - Events dropped: {}", after_auto_flush_metrics.dropped);
@@ -214,7 +226,10 @@ async fn main() -> anyhow::Result<()> {
                     "test_phase": "additional",
                     "trace_index": i
                 }))),
-                tags: Some(Some(vec!["additional".to_string(), "post-flush".to_string()])),
+                tags: Some(Some(vec![
+                    "additional".to_string(),
+                    "post-flush".to_string(),
+                ])),
                 input: Some(Some(serde_json::json!({ "additional": true, "index": i }))),
                 output: Some(Some(serde_json::json!({ "processed": true }))),
                 release: Some(Some("v2.0.0".to_string())),
@@ -230,7 +245,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Get final metrics before shutdown (shutdown consumes the batcher)
     let final_metrics = batcher.metrics();
-    
+
     // Graceful shutdown
     println!("\n🛑 Shutting down batcher...");
     let shutdown_response = batcher.shutdown().await?;
@@ -243,7 +258,7 @@ async fn main() -> anyhow::Result<()> {
     println!("  - Total events failed: {}", final_metrics.failed);
     println!("  - Total events dropped: {}", final_metrics.dropped);
     println!("  - Total retries: {}", final_metrics.retries);
-    
+
     let success_rate = if final_metrics.queued > 0 {
         (final_metrics.flushed as f64 / final_metrics.queued as f64) * 100.0
     } else {
@@ -261,10 +276,19 @@ async fn main() -> anyhow::Result<()> {
     println!("\n{}", "=".repeat(50));
     println!("🎉 Test complete!");
     println!("\n📌 View results at:");
-    println!("   Session: https://cloud.langfuse.com/sessions/{}", session_id);
+    println!(
+        "   Session: https://cloud.langfuse.com/sessions/{}",
+        session_id
+    );
     if !trace_ids.is_empty() {
-        println!("   First trace: https://cloud.langfuse.com/traces/{}", trace_ids[0]);
-        println!("   Last trace: https://cloud.langfuse.com/traces/{}", trace_ids[trace_ids.len() - 1]);
+        println!(
+            "   First trace: https://cloud.langfuse.com/traces/{}",
+            trace_ids[0]
+        );
+        println!(
+            "   Last trace: https://cloud.langfuse.com/traces/{}",
+            trace_ids[trace_ids.len() - 1]
+        );
     }
     println!("\n💡 Login with:");
     println!("   Email: langfuse@timvw.be");
