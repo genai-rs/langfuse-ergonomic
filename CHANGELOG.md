@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.2.1...v0.3.0) - 2025-08-30
+
+### Added
+
+- improve CI/CD and tooling
+- improve error handling with better status mapping
+- improve public API ergonomics
+- improve batcher with better documentation and metrics
+- add stricter branch protection with quality checks
+- harden CI with comprehensive testing and checks
+- add dependency management with cargo-deny
+- add comprehensive batch test example
+- add security workflows for secrets and vulnerability scanning
+- add optional compression support via feature flag
+- add final polish to batch processing
+- enhance batching with comprehensive improvements
+- implement batching with 207 Multi-Status and auto-chunking
+- add Trace URLs and BYO IDs support
+
+### Fixed
+
+- suppress false positive security alerts for session_id/user_id
+- resolve compilation error in delete_multiple_traces
+- improve error messages with context
+- documentation inconsistencies and code cleanup
+- remove missing_docs lint to fix CI
+- remove clippy pedantic lints to fix CI
+- remove deprecated unmaintained key from cargo-deny config
+- add CDLA-Permissive-2.0 to allowed licenses
+- resolve clippy pedantic warnings
+- update rate limit test to match new error format
+- resolve clippy warnings
+- formatting issues
+- resolve clippy unused variable warning in test
+- apply cargo fmt
+- resolve clippy bool_assert_comparison warning
+- resolve clippy redundant_closure warning
+- apply cargo fmt
+- implement validate method and improve correctness
+- align TLS features with reqwest dependencies
+- apply cargo fmt
+- clean up dependencies and use tracing instead of eprintln
+- update branch protection check names to match CI output
+- remove problematic MSRV and minimal-versions tests
+- correct doctest compilation errors
+- remove unused pretty_assertions dependency
+- format code to pass CI checks
+- resolve flaky test_shutdown_idempotency test
+- production-ready batching improvements
+- apply cargo fmt formatting
+- address production-readiness feedback
+- resolve clippy warnings
+- apply cargo fmt formatting
+
+### Other
+
+- add comprehensive mock tests for API endpoints
+- improve crate-level documentation
+- add Renovate configuration for automated dependency updates
+- add comprehensive batch processing documentation
+- fix formatting issues for CI
+- fix formatting issues
+
 ## [0.2.1](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.2.0...v0.2.1) - 2025-08-29
 
 ### Added
