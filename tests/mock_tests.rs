@@ -46,6 +46,49 @@ async fn test_trace_creation_success() {
 }
 
 #[tokio::test]
+async fn test_validate_success() {
+    let mut server = Server::new_async().await;
+
+    let mock = server
+        .mock("GET", "/api/public/health")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"status": "ok"}"#)
+        .create_async()
+        .await;
+
+    let client = create_mock_client(&server);
+    let result = client.validate().await;
+
+    mock.assert_async().await;
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), true);
+}
+
+#[tokio::test]
+async fn test_validate_auth_error() {
+    let mut server = Server::new_async().await;
+
+    let mock = server
+        .mock("GET", "/api/public/health")
+        .with_status(401)
+        .with_header("content-type", "application/json")
+        .with_header("x-request-id", "req-123")
+        .with_body(r#"{"error": "Unauthorized"}"#)
+        .create_async()
+        .await;
+
+    let client = create_mock_client(&server);
+    let result = client.validate().await;
+
+    mock.assert_async().await;
+    assert!(result.is_err());
+    if let Err(err) = result {
+        assert!(err.to_string().contains("Invalid credentials"));
+    }
+}
+
+#[tokio::test]
 async fn test_trace_creation_auth_error() {
     let mut server = Server::new_async().await;
 

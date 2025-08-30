@@ -119,9 +119,41 @@ impl LangfuseClient {
 
     /// Validate that the client credentials are valid
     pub async fn validate(&self) -> Result<bool> {
-        // This would make a simple API call to validate credentials
-        // For now, we'll just return Ok(true)
-        Ok(true)
+        use crate::error::Error;
+        
+        // Make a lightweight request to the health endpoint
+        let url = format!("{}/api/public/health", self.base_url);
+        let response = self
+            .configuration
+            .client
+            .get(&url)
+            .basic_auth(&self.public_key, Some(&self.secret_key))
+            .timeout(Duration::from_secs(5))
+            .send()
+            .await
+            .map_err(|e| Error::Network(e))?;
+
+        // Check if we got a successful response
+        match response.status() {
+            status if status.is_success() => Ok(true),
+            status if status == 401 || status == 403 => Err(Error::Auth {
+                message: "Invalid credentials".to_string(),
+                request_id: response
+                    .headers()
+                    .get("x-request-id")
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.to_string()),
+            }),
+            status => Err(Error::Client {
+                status: status.as_u16(),
+                message: format!("Validation failed with status {}", status),
+                request_id: response
+                    .headers()
+                    .get("x-request-id")
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.to_string()),
+            }),
+        }
     }
 
     /// Create a batcher for efficient batch ingestion
