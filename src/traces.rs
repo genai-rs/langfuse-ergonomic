@@ -242,7 +242,7 @@ impl LangfuseClient {
         trace_api::trace_delete(self.configuration(), &trace_id)
             .await
             .map(|_| ()) // Ignore the response body, just return success
-            .map_err(|e| crate::error::Error::Api(format!("Failed to delete trace: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to delete trace '{}': {}", trace_id, e)))
     }
 
     /// Delete multiple traces
@@ -257,7 +257,7 @@ impl LangfuseClient {
         trace_api::trace_delete_multiple(self.configuration(), request)
             .await
             .map(|_| ()) // Ignore the response body, just return success
-            .map_err(|e| crate::error::Error::Api(format!("Failed to delete traces: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to delete {} traces: {}", trace_ids.len(), e)))
     }
 
     // ===== OBSERVATIONS (SPANS, GENERATIONS, EVENTS) =====
