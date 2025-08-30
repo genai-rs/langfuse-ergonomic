@@ -904,7 +904,9 @@ impl Batcher {
         if final_metrics.failed > 0 || final_metrics.dropped > 0 {
             tracing::warn!(
                 "Batcher shutdown - flushed: {}, failed: {}, dropped: {}",
-                final_metrics.flushed, final_metrics.failed, final_metrics.dropped
+                final_metrics.flushed,
+                final_metrics.failed,
+                final_metrics.dropped
             );
         }
 
