@@ -1,4 +1,48 @@
 //! Batch ingestion with automatic chunking, retries, and 207 handling
+//!
+//! ## Default Configuration
+//!
+//! | Setting | Default Value | Description |
+//! |---------|--------------|-------------|
+//! | `max_events` | 100 | Maximum events per batch |
+//! | `max_bytes` | 3.5 MB | Maximum batch size (conservative for Langfuse's 5MB limit) |
+//! | `flush_interval` | 5 seconds | Auto-flush interval |
+//! | `max_retries` | 3 | Retry attempts with exponential backoff |
+//! | `max_queue_size` | 10,000 | Maximum events to queue in memory |
+//! | `backpressure_policy` | `Block` | Strategy when queue is full |
+//! | `retry_jitter` | Enabled (25%) | Random jitter to avoid thundering herd |
+//! | `initial_retry_delay` | 100ms | Starting delay for retries |
+//! | `max_retry_delay` | 30s | Maximum delay between retries |
+//!
+//! ## Example
+//!
+//! ```no_run
+//! use langfuse_ergonomic::{Batcher, BackpressurePolicy, LangfuseClient};
+//! use std::time::Duration;
+//!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let client = LangfuseClient::from_env()?;
+//! 
+//! // Create with defaults
+//! let batcher = Batcher::builder()
+//!     .client(client)
+//!     .build();
+//!
+//! // Or customize configuration
+//! let batcher = Batcher::builder()
+//!     .client(LangfuseClient::from_env()?)
+//!     .max_events(50)
+//!     .max_bytes(2_000_000)
+//!     .backpressure_policy(BackpressurePolicy::DropNew)
+//!     .build();
+//!
+//! // Monitor metrics
+//! let metrics = batcher.metrics();
+//! println!("Queued: {}, Flushed: {}, Failed: {}", 
+//!     metrics.queued, metrics.flushed, metrics.failed);
+//! # Ok(())
+//! # }
+//! ```
 
 use bon::bon;
 use rand::Rng;

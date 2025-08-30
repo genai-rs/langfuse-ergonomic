@@ -7,7 +7,7 @@
 //! - Monitor metrics (queued, flushed, failed, dropped)
 //! - Graceful shutdown with guarantees
 
-use langfuse_client_base::models::{IngestionEvent, TraceBody};
+use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
 use langfuse_ergonomic::{BackpressurePolicy, Batcher, LangfuseClient};
 use serde_json::json;
 use std::time::Duration;
@@ -75,7 +75,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ..Default::default()
         };
 
-        let event = IngestionEvent::IngestionEventOneOf(Box::new(trace));
+        let event = IngestionEvent::IngestionEventOneOf(Box::new(IngestionEventOneOf::new(
+            trace,
+            format!("event-{}", i),
+            chrono::Utc::now().to_rfc3339(),
+            langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
+        )));
 
         // Add to batch
         match batcher.add(event).await {
@@ -133,7 +138,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ..Default::default()
         };
 
-        let event = IngestionEvent::IngestionEventOneOf(Box::new(trace));
+        let event = IngestionEvent::IngestionEventOneOf(Box::new(IngestionEventOneOf::new(
+            trace,
+            format!("event-{}", i),
+            chrono::Utc::now().to_rfc3339(),
+            langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
+        )));
         batcher.add(event).await?;
         println!("  ➕ Added event {}", i);
     }
@@ -169,6 +179,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("\n⚠️  Partial failure (207 Multi-Status):");
                 println!("  ✅ Successful: {}", success_count);
                 println!("  ❌ Failed: {}", failure_count);
+                
+                // Note: request_id and retry_after metadata is available
+                // in other error types like RateLimit and Client errors
 
                 println!("\n  Failed events will be retried:");
                 for error in errors.iter().take(3) {
@@ -178,6 +191,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     } else {
                         println!("      Status: Not retryable ❌");
                     }
+                }
+            } else if let langfuse_ergonomic::Error::RateLimit { retry_after, request_id } = &e {
+                println!("\n⚠️  Rate limited:");
+                if let Some(req_id) = request_id {
+                    println!("  📋 Request ID: {}", req_id);
+                }
+                if let Some(retry) = retry_after {
+                    println!("  ⏱️  Retry after: {} seconds", retry.as_secs());
+                }
+            } else if let langfuse_ergonomic::Error::Client { request_id, .. } = &e {
+                if let Some(req_id) = request_id {
+                    println!("  📋 Request ID: {}", req_id);
                 }
             }
         }
@@ -201,7 +226,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ..Default::default()
         };
 
-        let event = IngestionEvent::IngestionEventOneOf(Box::new(trace));
+        let event = IngestionEvent::IngestionEventOneOf(Box::new(IngestionEventOneOf::new(
+            trace,
+            format!("event-{}", i),
+            chrono::Utc::now().to_rfc3339(),
+            langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
+        )));
         match backpressure_batcher.add(event).await {
             Ok(_) => println!("  ✅ Event {} queued", i),
             Err(e) => println!("  ⚠️  Event {} dropped: {}", i, e),
@@ -217,6 +247,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Graceful shutdown
     println!("\n🛑 Shutting down batchers gracefully...");
 
+    // Get final metrics before shutdown (shutdown consumes self)
+    let final_metrics = batcher.metrics();
+    
     // Shutdown main batcher
     match batcher.shutdown().await {
         Ok(response) => {
@@ -224,7 +257,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("  - Final flush successful: {}", response.success_count);
             println!("  - Final flush failed: {}", response.failure_count);
 
-            let final_metrics = batcher.metrics();
             println!("\n📊 Final metrics:");
             println!("  - Total flushed: {}", final_metrics.flushed);
             println!("  - Total failed: {}", final_metrics.failed);
