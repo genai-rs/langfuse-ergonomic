@@ -31,7 +31,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .fail_fast(false) // Continue on partial failures
         .max_queue_size(100) // Queue up to 100 events
         .backpressure_policy(BackpressurePolicy::Block) // Block when queue is full
-        .build();
+        .build()
+        .await;
 
     println!("📊 Batcher Configuration:");
     println!("  - Max events per batch: 10");
@@ -223,7 +224,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .client(client2)
         .max_queue_size(3)
         .backpressure_policy(BackpressurePolicy::DropNew)
-        .build();
+        .build()
+        .await;
 
     for i in 1..=5 {
         let trace = TraceBody {

@@ -54,7 +54,8 @@ async fn test_batch_207_partial_success() {
         .client(client)
         .max_events(10)
         .max_retries(2)
-        .build();
+        .build()
+        .await;
 
     // Add test events
     use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
@@ -136,7 +137,8 @@ async fn test_batch_size_chunking() {
         .max_events(100)
         .max_bytes(2000) // Very small limit to force chunking
         .flush_interval(Duration::from_secs(60)) // Long interval to prevent auto-flush
-        .build();
+        .build()
+        .await;
 
     // Add large events that will exceed the size limit
     use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
@@ -200,7 +202,11 @@ async fn test_batch_retry_on_rate_limit() {
         .await;
 
     let client = create_mock_client(&server);
-    let batcher = Batcher::builder().client(client).max_retries(2).build();
+    let batcher = Batcher::builder()
+        .client(client)
+        .max_retries(2)
+        .build()
+        .await;
 
     // Add a test event
     use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
@@ -250,7 +256,8 @@ async fn test_batch_auth_failure_no_retry() {
     let batcher = Batcher::builder()
         .client(client)
         .max_retries(3) // Even with retries, auth should fail fast
-        .build();
+        .build()
+        .await;
 
     // Add a test event
     use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
