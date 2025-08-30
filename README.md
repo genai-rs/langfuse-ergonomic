@@ -128,10 +128,19 @@ cargo run --example self_hosted
 
 ### Batch Processing
 
-The client supports efficient batch processing with automatic chunking and retry logic:
+The client supports efficient batch processing with automatic chunking, retry logic, and comprehensive error handling:
+
+#### Default Configuration
+- **Max events per batch**: 100 events
+- **Max batch size**: 3.5 MB (conservative limit for Langfuse Cloud's 5MB limit)
+- **Auto-flush interval**: 5 seconds
+- **Max retries**: 3 attempts with exponential backoff
+- **Retry jitter**: Enabled by default (25% random jitter to avoid thundering herd)
+- **Backpressure policy**: Block (waits when queue is full)
+- **Max queue size**: 10,000 events
 
 ```rust
-use langfuse_ergonomic::{Batcher, LangfuseClient};
+use langfuse_ergonomic::{Batcher, BackpressurePolicy, LangfuseClient};
 use std::time::Duration;
 
 let client = LangfuseClient::from_env()?;
@@ -139,9 +148,12 @@ let client = LangfuseClient::from_env()?;
 // Create a batcher with custom configuration
 let batcher = Batcher::builder()
     .client(client)
-    .max_events(100)                           // Events per batch
-    .flush_interval(Duration::from_secs(5))    // Auto-flush interval
-    .max_retries(3)                            // Retry attempts
+    .max_events(50)                            // Events per batch (default: 100)
+    .max_bytes(2_000_000)                      // Max batch size in bytes (default: 3.5MB)
+    .flush_interval(Duration::from_secs(10))   // Auto-flush interval (default: 5s)
+    .max_retries(5)                            // Retry attempts (default: 3)
+    .max_queue_size(5000)                      // Max events to queue (default: 10,000)
+    .backpressure_policy(BackpressurePolicy::DropNew) // What to do when queue is full
     .build();
 
 // Add events - they'll be automatically batched
@@ -153,8 +165,53 @@ for event in events {
 let response = batcher.flush().await?;
 println!("Sent {} events", response.success_count);
 
-// Graceful shutdown
-batcher.shutdown().await?;
+// Monitor metrics
+let metrics = batcher.metrics();
+println!("Queued: {}, Flushed: {}, Failed: {}, Dropped: {}", 
+    metrics.queued, metrics.flushed, metrics.failed, metrics.dropped);
+
+// Graceful shutdown (flushes remaining events)
+let final_response = batcher.shutdown().await?;
+```
+
+#### Advanced Features
+
+**207 Multi-Status Handling**: Automatically handles partial failures where some events succeed and others fail.
+
+**Backpressure Policies**:
+- `Block`: Wait when queue is full (default)
+- `DropNew`: Drop new events when queue is full
+- `DropOldest`: Remove oldest events to make room
+
+**Metrics & Monitoring**:
+```rust
+let metrics = batcher.metrics();
+// Available metrics:
+// - queued: Current events waiting to be sent
+// - flushed: Total successfully sent
+// - failed: Total failed after all retries
+// - dropped: Total dropped due to backpressure
+// - retries: Total retry attempts
+// - last_error_ts: Unix timestamp of last error
+```
+
+**Error Handling**:
+```rust
+match batcher.flush().await {
+    Ok(response) => {
+        println!("Success: {}, Failed: {}", 
+            response.success_count, response.failure_count);
+    }
+    Err(Error::PartialFailure { success_count, failure_count, errors, .. }) => {
+        println!("Partial success: {} ok, {} failed", success_count, failure_count);
+        for error in errors {
+            if error.retryable {
+                println!("Retryable error: {}", error.message);
+            }
+        }
+    }
+    Err(e) => eprintln!("Complete failure: {}", e),
+}
 ```
 
 ## API Coverage
