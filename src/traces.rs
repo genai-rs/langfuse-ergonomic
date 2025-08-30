@@ -8,7 +8,49 @@ use std::hash::{Hash, Hasher};
 use uuid::Uuid;
 
 use crate::client::LangfuseClient;
-use crate::error::Result;
+use crate::error::{Error, Result};
+
+/// Helper trait for ergonomic tag creation
+pub trait IntoTags {
+    fn into_tags(self) -> Vec<String>;
+}
+
+/// Helper to convert level strings to ObservationLevel
+pub fn parse_observation_level(level: &str) -> langfuse_client_base::models::ObservationLevel {
+    use langfuse_client_base::models::ObservationLevel;
+    
+    match level.to_uppercase().as_str() {
+        "DEBUG" => ObservationLevel::Debug,
+        "INFO" | "DEFAULT" => ObservationLevel::Default,  // Map INFO to Default
+        "WARN" | "WARNING" => ObservationLevel::Warning,
+        "ERROR" => ObservationLevel::Error,
+        _ => ObservationLevel::Default,  // Fallback to Default for unknown levels
+    }
+}
+
+impl IntoTags for Vec<String> {
+    fn into_tags(self) -> Vec<String> {
+        self
+    }
+}
+
+impl IntoTags for Vec<&str> {
+    fn into_tags(self) -> Vec<String> {
+        self.into_iter().map(|s| s.to_string()).collect()
+    }
+}
+
+impl<const N: usize> IntoTags for [&str; N] {
+    fn into_tags(self) -> Vec<String> {
+        self.into_iter().map(|s| s.to_string()).collect()
+    }
+}
+
+impl<const N: usize> IntoTags for [String; N] {
+    fn into_tags(self) -> Vec<String> {
+        self.into_iter().collect()
+    }
+}
 
 /// Response from trace creation
 pub struct TraceResponse {
@@ -531,6 +573,10 @@ impl LangfuseClient {
     }
 
     /// Create a rating score (e.g., 1-5 stars)
+    ///
+    /// # Validation
+    /// - `max_rating` must be greater than 0
+    /// - `rating` must be less than or equal to `max_rating`
     pub async fn rating_score(
         &self,
         trace_id: impl Into<String>,
@@ -538,6 +584,19 @@ impl LangfuseClient {
         rating: u8,
         max_rating: u8,
     ) -> Result<String> {
+        // Validate inputs
+        if max_rating == 0 {
+            return Err(Error::Validation(
+                "max_rating must be greater than 0".to_string(),
+            ));
+        }
+        if rating > max_rating {
+            return Err(Error::Validation(format!(
+                "rating ({}) must be less than or equal to max_rating ({})",
+                rating, max_rating
+            )));
+        }
+
         let normalized = rating as f64 / max_rating as f64;
         let final_metadata = serde_json::json!({
             "rating": rating,
