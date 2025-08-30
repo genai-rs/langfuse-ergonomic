@@ -7,8 +7,8 @@
 //! - Monitor metrics (queued, flushed, failed, dropped)
 //! - Graceful shutdown with guarantees
 
-use langfuse_ergonomic::{Batcher, LangfuseClient, BackpressurePolicy};
-use langfuse_client_base::models::{TraceBody, IngestionEvent};
+use langfuse_client_base::models::{IngestionEvent, TraceBody};
+use langfuse_ergonomic::{BackpressurePolicy, Batcher, LangfuseClient};
 use serde_json::json;
 use std::time::Duration;
 
@@ -16,23 +16,23 @@ use std::time::Duration;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize from environment variables
     dotenvy::dotenv().ok();
-    
+
     let client = LangfuseClient::from_env()?;
-    
+
     println!("🚀 Starting batch ingestion example with advanced features...\n");
-    
+
     // Create a batcher with comprehensive configuration
     let batcher = Batcher::builder()
         .client(client)
-        .max_events(10)                          // Batch up to 10 events
-        .max_bytes(2_000_000)                    // Or up to 2MB
-        .flush_interval(Duration::from_secs(3))  // Auto-flush every 3 seconds
-        .max_retries(3)                          // Retry failed events up to 3 times
-        .fail_fast(false)                        // Continue on partial failures
-        .max_queue_size(100)                     // Queue up to 100 events
+        .max_events(10) // Batch up to 10 events
+        .max_bytes(2_000_000) // Or up to 2MB
+        .flush_interval(Duration::from_secs(3)) // Auto-flush every 3 seconds
+        .max_retries(3) // Retry failed events up to 3 times
+        .fail_fast(false) // Continue on partial failures
+        .max_queue_size(100) // Queue up to 100 events
         .backpressure_policy(BackpressurePolicy::Block) // Block when queue is full
         .build();
-    
+
     println!("📊 Batcher Configuration:");
     println!("  - Max events per batch: 10");
     println!("  - Max batch size: 2MB");
@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  - Max retries: 3");
     println!("  - Backpressure: Block when full");
     println!("  - Max queue size: 100 events\n");
-    
+
     // Simulate sending multiple events
     println!("📤 Adding events to batch...");
     for i in 1..=15 {
@@ -70,44 +70,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tags: Some(Some(vec![
                 "batch".to_string(),
                 format!("group-{}", i % 2),
-                "207-example".to_string()
+                "207-example".to_string(),
             ])),
             ..Default::default()
         };
-        
+
         let event = IngestionEvent::IngestionEventOneOf(Box::new(trace));
-        
+
         // Add to batch
         match batcher.add(event).await {
             Ok(_) => {
                 println!("  ✅ Added event {} to batch", i);
-                
+
                 // Show metrics periodically
                 if i % 5 == 0 {
                     let metrics = batcher.metrics();
-                    println!("    📈 Current metrics - Queued: {}, Flushed: {}, Failed: {}, Dropped: {}", 
-                        metrics.queued, metrics.flushed, metrics.failed, metrics.dropped);
+                    println!(
+                        "    📈 Current metrics - Queued: {}, Flushed: {}, Failed: {}, Dropped: {}",
+                        metrics.queued, metrics.flushed, metrics.failed, metrics.dropped
+                    );
                 }
-                
+
                 // Trigger auto-flush at event 10 (max_events)
                 if i == 10 {
                     println!("\n  🔄 Auto-flush triggered (reached max_events)...");
                     tokio::time::sleep(Duration::from_millis(100)).await;
                     let metrics = batcher.metrics();
-                    println!("    📈 After auto-flush - Flushed: {}, Queued: {}", 
-                        metrics.flushed, metrics.queued);
+                    println!(
+                        "    📈 After auto-flush - Flushed: {}, Queued: {}",
+                        metrics.flushed, metrics.queued
+                    );
                 }
             }
             Err(e) => eprintln!("  ❌ Failed to add event {}: {}", i, e),
         }
-        
+
         // Small delay to simulate real-world event generation
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
-    
+
     println!("\n⏱️  Waiting for timer-based auto-flush (3 seconds)...");
     tokio::time::sleep(Duration::from_secs(4)).await;
-    
+
     let metrics = batcher.metrics();
     println!("📊 Metrics after auto-flush:");
     println!("  - Events flushed: {}", metrics.flushed);
@@ -115,7 +119,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  - Events failed: {}", metrics.failed);
     println!("  - Events dropped: {}", metrics.dropped);
     println!("  - Retry attempts: {}", metrics.retries);
-    
+
     // Demonstrate manual flush
     println!("\n📤 Adding more events and performing manual flush...");
     for i in 16..=20 {
@@ -128,19 +132,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }))),
             ..Default::default()
         };
-        
+
         let event = IngestionEvent::IngestionEventOneOf(Box::new(trace));
         batcher.add(event).await?;
         println!("  ➕ Added event {}", i);
     }
-    
+
     println!("\n🚿 Performing manual flush...");
     match batcher.flush().await {
         Ok(response) => {
             println!("✅ Manual flush successful!");
             println!("  - Successfully flushed: {}", response.success_count);
             println!("  - Failed: {}", response.failure_count);
-            
+
             if response.failure_count > 0 {
                 println!("\n  ⚠️  Some events failed:");
                 for error in response.failures.iter().take(3) {
@@ -153,18 +157,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => {
             eprintln!("❌ Manual flush failed: {}", e);
-            
+
             // Check if it's a partial failure (207 response)
-            if let langfuse_ergonomic::Error::PartialFailure { 
-                success_count, 
-                failure_count, 
-                errors, 
-                .. 
-            } = &e {
+            if let langfuse_ergonomic::Error::PartialFailure {
+                success_count,
+                failure_count,
+                errors,
+                ..
+            } = &e
+            {
                 println!("\n⚠️  Partial failure (207 Multi-Status):");
                 println!("  ✅ Successful: {}", success_count);
                 println!("  ❌ Failed: {}", failure_count);
-                
+
                 println!("\n  Failed events will be retried:");
                 for error in errors.iter().take(3) {
                     println!("    - {}: {}", error.event_id, error.message);
@@ -177,46 +182,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-    
+
     // Demonstrate backpressure handling
     println!("\n🎯 Testing backpressure handling...");
     println!("  Creating a new batcher with DropNew policy and small queue...");
-    
+
     let client2 = LangfuseClient::from_env()?;
     let backpressure_batcher = Batcher::builder()
         .client(client2)
         .max_queue_size(3)
         .backpressure_policy(BackpressurePolicy::DropNew)
         .build();
-    
+
     for i in 1..=5 {
         let trace = TraceBody {
             id: Some(Some(format!("backpressure-trace-{}", i))),
             name: Some(Some(format!("Backpressure Test {}", i))),
             ..Default::default()
         };
-        
+
         let event = IngestionEvent::IngestionEventOneOf(Box::new(trace));
         match backpressure_batcher.add(event).await {
             Ok(_) => println!("  ✅ Event {} queued", i),
             Err(e) => println!("  ⚠️  Event {} dropped: {}", i, e),
         }
     }
-    
+
     let bp_metrics = backpressure_batcher.metrics();
-    println!("  📊 Backpressure test - Queued: {}, Dropped: {}", 
-        bp_metrics.queued, bp_metrics.dropped);
-    
+    println!(
+        "  📊 Backpressure test - Queued: {}, Dropped: {}",
+        bp_metrics.queued, bp_metrics.dropped
+    );
+
     // Graceful shutdown
     println!("\n🛑 Shutting down batchers gracefully...");
-    
+
     // Shutdown main batcher
     match batcher.shutdown().await {
         Ok(response) => {
             println!("✅ Main batcher shutdown complete:");
             println!("  - Final flush successful: {}", response.success_count);
             println!("  - Final flush failed: {}", response.failure_count);
-            
+
             let final_metrics = batcher.metrics();
             println!("\n📊 Final metrics:");
             println!("  - Total flushed: {}", final_metrics.flushed);
@@ -224,20 +231,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("  - Total dropped: {}", final_metrics.dropped);
             println!("  - Total retries: {}", final_metrics.retries);
             if final_metrics.last_error_ts > 0 {
-                println!("  - Last error: {} seconds ago", 
+                println!(
+                    "  - Last error: {} seconds ago",
                     std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap()
-                        .as_secs() - final_metrics.last_error_ts
+                        .as_secs()
+                        - final_metrics.last_error_ts
                 );
             }
         }
         Err(e) => eprintln!("❌ Shutdown failed: {}", e),
     }
-    
+
     // Shutdown backpressure test batcher
     let _ = backpressure_batcher.shutdown().await;
-    
+
     println!("\n✨ Batch ingestion example complete!");
     println!("   This example demonstrated:");
     println!("   • 207 Multi-Status handling for partial failures");
@@ -246,6 +255,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   • Backpressure policies (Block, DropNew, DropOldest)");
     println!("   • Comprehensive metrics tracking");
     println!("   • Graceful shutdown with guarantees");
-    
+
     Ok(())
 }

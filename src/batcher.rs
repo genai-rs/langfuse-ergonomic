@@ -1,12 +1,12 @@
 //! Batch ingestion with automatic chunking, retries, and 207 handling
 
 use bon::bon;
+use rand::Rng;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::interval;
-use rand::Rng;
 
 use crate::client::LangfuseClient;
 use crate::error::{Error, EventError, IngestionResponse, Result};
@@ -213,7 +213,7 @@ impl Batcher {
         tokio::spawn(async move {
             let mut flush_interval = interval(config.flush_interval);
             flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-            
+
             // Consume the first immediate tick
             flush_interval.tick().await;
 
@@ -271,7 +271,6 @@ impl Batcher {
             IngestionEvent::IngestionEventOneOf6(e) => e.id.clone(),
             _ => uuid::Uuid::new_v4().to_string(),
         };
-        
 
         let batch_event = BatchEvent::new(event, id.clone())?;
 
@@ -334,11 +333,18 @@ impl Batcher {
     pub async fn flush(&self) -> Result<IngestionResponse> {
         // Give background task time to add pending events to buffer
         tokio::time::sleep(Duration::from_millis(50)).await;
-        
+
         // Flush the buffer
-        Self::flush_buffer(&self.client, &self.buffer, &self.config, &self.metrics, &self.flush_mutex).await
+        Self::flush_buffer(
+            &self.client,
+            &self.buffer,
+            &self.config,
+            &self.metrics,
+            &self.flush_mutex,
+        )
+        .await
     }
-    
+
     /// Get current metrics
     pub fn metrics(&self) -> BatcherMetricsSnapshot {
         self.metrics.snapshot()
@@ -354,7 +360,7 @@ impl Batcher {
     ) -> Result<IngestionResponse> {
         // Prevent concurrent flushes
         let _guard = flush_mutex.lock().await;
-        
+
         let mut events = {
             let mut buffer = buffer.lock().await;
             let events = std::mem::take(&mut *buffer);
@@ -362,7 +368,6 @@ impl Batcher {
             metrics.queued.store(0, Ordering::Relaxed);
             events
         };
-        
 
         if events.is_empty() {
             return Ok(IngestionResponse {
@@ -386,9 +391,13 @@ impl Batcher {
             match Self::send_batch_with_retry(client, &chunk, config, metrics).await {
                 Ok(response) => {
                     // Update metrics
-                    metrics.flushed.fetch_add(response.success_count as u64, Ordering::Relaxed);
-                    metrics.failed.fetch_add(response.failure_count as u64, Ordering::Relaxed);
-                    
+                    metrics
+                        .flushed
+                        .fetch_add(response.success_count as u64, Ordering::Relaxed);
+                    metrics
+                        .failed
+                        .fetch_add(response.failure_count as u64, Ordering::Relaxed);
+
                     all_success_ids.extend(response.success_ids.clone());
 
                     // Queue retryable failures
@@ -411,7 +420,7 @@ impl Batcher {
                     // Payload too large - split this chunk and retry
                     let mid = chunk.len() / 2;
                     let (first_half, second_half) = chunk.split_at(mid);
-                    
+
                     // Insert the two halves back into the chunks to process
                     chunks.insert(chunk_idx + 1, second_half.to_vec());
                     chunks[chunk_idx] = first_half.to_vec();
@@ -424,9 +433,9 @@ impl Batcher {
                             .duration_since(std::time::UNIX_EPOCH)
                             .unwrap_or_default()
                             .as_secs(),
-                        Ordering::Relaxed
+                        Ordering::Relaxed,
                     );
-                    
+
                     // Queue all events for retry
                     for event in &chunk {
                         if event.retry_count < config.max_retries {
@@ -446,12 +455,14 @@ impl Batcher {
                             .duration_since(std::time::UNIX_EPOCH)
                             .unwrap_or_default()
                             .as_secs(),
-                        Ordering::Relaxed
+                        Ordering::Relaxed,
                     );
-                    
+
                     // Always fail fast for auth errors
                     if matches!(e, Error::Auth { .. }) || config.fail_fast {
-                        metrics.failed.fetch_add(chunk.len() as u64, Ordering::Relaxed);
+                        metrics
+                            .failed
+                            .fetch_add(chunk.len() as u64, Ordering::Relaxed);
                         return Err(e);
                     }
                     // Convert to failures
@@ -473,7 +484,9 @@ impl Batcher {
         if !retry_queue.is_empty() {
             let mut buffer = buffer.lock().await;
             buffer.extend(retry_queue.clone());
-            metrics.queued.fetch_add(retry_queue.len() as u64, Ordering::Relaxed);
+            metrics
+                .queued
+                .fetch_add(retry_queue.len() as u64, Ordering::Relaxed);
         }
 
         Ok(IngestionResponse {
@@ -527,7 +540,7 @@ impl Batcher {
         for attempt in 0..=config.max_retries {
             if attempt > 0 {
                 metrics.retries.fetch_add(1, Ordering::Relaxed);
-                
+
                 // Add jitter to avoid thundering herd
                 let actual_delay = if config.retry_jitter {
                     let jitter_range = delay.as_millis() as u64 / 4; // 25% jitter
@@ -536,7 +549,7 @@ impl Batcher {
                 } else {
                     delay
                 };
-                
+
                 tokio::time::sleep(actual_delay).await;
                 delay = std::cmp::min(delay * 2, config.max_retry_delay);
             }
@@ -592,22 +605,21 @@ impl Batcher {
                 _ => uuid::Uuid::new_v4().to_string(),
             })
             .collect();
-            
 
         // Use the raw response API to get status code
-        let response = client.configuration.client
+        let response = client
+            .configuration
+            .client
             .post(format!("{}/api/public/ingestion", client.base_url))
-            .basic_auth(
-                &client.public_key,
-                Some(&client.secret_key)
-            )
+            .basic_auth(&client.public_key, Some(&client.secret_key))
             .json(&batch)
             .send()
             .await
             .map_err(|e| Error::Network(e))?;
 
         let status = response.status();
-        let request_id = response.headers()
+        let request_id = response
+            .headers()
             .get("x-request-id")
             .and_then(|v| v.to_str().ok())
             .map(|s| s.to_string());
@@ -626,23 +638,25 @@ impl Batcher {
             }
             207 => {
                 // Multi-Status: Parse the response to identify partial failures
-                let body = response.text().await
+                let body = response
+                    .text()
+                    .await
                     .map_err(|e| Error::Api(format!("Failed to read 207 response: {}", e)))?;
-                
+
                 // Parse the 207 response body
                 #[derive(serde::Deserialize)]
                 struct MultiStatusResponse {
                     successes: Vec<SuccessItem>,
                     errors: Vec<ErrorItem>,
                 }
-                
+
                 #[derive(serde::Deserialize)]
                 struct SuccessItem {
                     id: String,
                     #[allow(dead_code)]
                     status: Option<u16>,
                 }
-                
+
                 #[derive(serde::Deserialize)]
                 struct ErrorItem {
                     id: String,
@@ -650,18 +664,24 @@ impl Batcher {
                     error: Option<String>,
                     message: Option<String>,
                 }
-                
+
                 let multi_status: MultiStatusResponse = serde_json::from_str(&body)
                     .map_err(|e| Error::Api(format!("Failed to parse 207 response: {}", e)))?;
-                
-                let success_ids: Vec<String> = multi_status.successes.iter()
+
+                let success_ids: Vec<String> = multi_status
+                    .successes
+                    .iter()
                     .map(|s| s.id.clone())
                     .collect();
-                    
-                let failures: Vec<EventError> = multi_status.errors.iter()
+
+                let failures: Vec<EventError> = multi_status
+                    .errors
+                    .iter()
                     .map(|e| EventError {
                         event_id: e.id.clone(),
-                        message: e.message.as_ref()
+                        message: e
+                            .message
+                            .as_ref()
                             .or(e.error.as_ref())
                             .unwrap_or(&"Unknown error".to_string())
                             .clone(),
@@ -669,7 +689,7 @@ impl Batcher {
                         retryable: e.status.map_or(false, |s| s >= 500 || s == 429),
                     })
                     .collect();
-                
+
                 Ok(IngestionResponse {
                     success_count: success_ids.len(),
                     failure_count: failures.len(),
@@ -677,12 +697,13 @@ impl Batcher {
                     failures,
                 })
             }
-            401 | 403 => {
-                Err(Error::Auth {
-                    message: response.text().await.unwrap_or_else(|_| "Authentication failed".to_string()),
-                    request_id,
-                })
-            }
+            401 | 403 => Err(Error::Auth {
+                message: response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Authentication failed".to_string()),
+                request_id,
+            }),
             413 => {
                 // Payload too large - need to reduce chunk size
                 if events.len() == 1 {
@@ -701,36 +722,39 @@ impl Batcher {
                 }
             }
             429 => {
-                let retry_after = response.headers()
+                let retry_after = response
+                    .headers()
                     .get("retry-after")
                     .and_then(|v| v.to_str().ok())
                     .and_then(|s| s.parse::<u64>().ok())
                     .map(Duration::from_secs);
-                    
+
                 Err(Error::RateLimit {
                     retry_after,
                     request_id,
                 })
             }
-            500..=599 => {
-                Err(Error::Server {
-                    status: status.as_u16(),
-                    message: response.text().await.unwrap_or_else(|_| "Server error".to_string()),
-                    request_id,
-                })
-            }
-            _ => {
-                Err(Error::Client {
-                    status: status.as_u16(),
-                    message: response.text().await.unwrap_or_else(|_| format!("Unexpected status: {}", status)),
-                    request_id,
-                })
-            }
+            500..=599 => Err(Error::Server {
+                status: status.as_u16(),
+                message: response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Server error".to_string()),
+                request_id,
+            }),
+            _ => Err(Error::Client {
+                status: status.as_u16(),
+                message: response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| format!("Unexpected status: {}", status)),
+                request_id,
+            }),
         }
     }
 
     /// Shutdown the batcher and flush remaining events
-    /// 
+    ///
     /// This method:
     /// - Marks the batcher as shutting down (rejecting new events)
     /// - Flushes all pending events
@@ -742,7 +766,7 @@ impl Batcher {
             // Already shutting down, just return current state
             return self.flush().await;
         }
-        
+
         // Signal shutdown to background task
         let _ = self.shutdown_tx.send(()).await;
 
@@ -751,7 +775,7 @@ impl Batcher {
 
         // Final flush with longer timeout for in-flight retries
         let flush_result = self.flush().await;
-        
+
         // Log final metrics
         let final_metrics = self.metrics.snapshot();
         if final_metrics.failed > 0 || final_metrics.dropped > 0 {
@@ -760,7 +784,7 @@ impl Batcher {
                 final_metrics.flushed, final_metrics.failed, final_metrics.dropped
             );
         }
-        
+
         flush_result
     }
 }
