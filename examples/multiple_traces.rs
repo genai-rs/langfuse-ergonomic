@@ -12,9 +12,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Connected to Langfuse");
 
     // Create a session ID to link multiple traces
+    // Note: session_id and user_id are NOT secrets - they're identifiers for organizing traces
     let session_id = format!("session-{}", Uuid::new_v4());
     let user_id = "user-123";
 
+    // Safe to log: session_id is a trace organization identifier, not an authentication secret
+    // codeql[rust/cleartext-logging] - False positive: session_id is not a secret
     println!("📝 Creating conversation session: {}", session_id);
 
     // First trace: User asks a question

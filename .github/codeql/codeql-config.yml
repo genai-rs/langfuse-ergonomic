@@ -1,0 +1,15 @@
+# CodeQL configuration for langfuse-ergonomic
+# This file configures CodeQL code scanning to reduce false positives
+
+name: "CodeQL config for langfuse-ergonomic"
+
+# Query filters to suppress false positives
+query-filters:
+  - exclude:
+      id: js/clear-text-logging
+      # session_id and user_id in Langfuse are NOT secrets
+      # They are identifiers for organizing/filtering traces, not authentication credentials
+      # Suppressing false positives for these specific identifiers in examples
+      paths:
+        - examples/comprehensive_batch_test.rs
+        - examples/multiple_traces.rs
