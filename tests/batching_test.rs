@@ -62,7 +62,8 @@ async fn test_207_mixed_response() {
     let batcher = Batcher::builder()
         .client(client)
         .max_retries(0) // No retries for this test
-        .build();
+        .build()
+        .await;
 
     // Add events
     batcher.add(create_test_event("success-1")).await.unwrap();
@@ -128,7 +129,11 @@ async fn test_retry_after_header() {
         .base_url(server.url())
         .build();
 
-    let batcher = Batcher::builder().client(client).max_retries(1).build();
+    let batcher = Batcher::builder()
+        .client(client)
+        .max_retries(1)
+        .build()
+        .await;
 
     batcher.add(create_test_event("test-1")).await.unwrap();
 
@@ -172,7 +177,7 @@ async fn test_413_payload_too_large() {
         .base_url(server.url())
         .build();
 
-    let batcher = Batcher::builder().client(client).build();
+    let batcher = Batcher::builder().client(client).build().await;
 
     // Add multiple events
     batcher.add(create_test_event("test-1")).await.unwrap();
@@ -198,7 +203,8 @@ async fn test_413_single_event_too_large() {
     let batcher = Batcher::builder()
         .client(client)
         .max_bytes(100) // Very small limit
-        .build();
+        .build()
+        .await;
 
     // Try to add an event larger than max_bytes
     let large_event = create_test_event(&"x".repeat(200));
@@ -228,7 +234,8 @@ async fn test_backpressure_drop_new() {
         .client(client)
         .max_queue_size(2)
         .backpressure_policy(BackpressurePolicy::DropNew)
-        .build();
+        .build()
+        .await;
 
     // Fill the queue
     batcher.add(create_test_event("test-1")).await.unwrap();
@@ -265,7 +272,7 @@ async fn test_concurrent_flush_protection() {
         .base_url(server.url())
         .build();
 
-    let batcher = Batcher::builder().client(client).build();
+    let batcher = Batcher::builder().client(client).build().await;
 
     batcher.add(create_test_event("test-1")).await.unwrap();
 
@@ -290,6 +297,7 @@ async fn test_shutdown_idempotency() {
         .mock("POST", "/api/public/ingestion")
         .with_status(200)
         .with_body(r#"{"successes": [], "errors": []}"#)
+        .expect(1)
         .create_async()
         .await;
 
@@ -299,7 +307,7 @@ async fn test_shutdown_idempotency() {
         .base_url(server.url())
         .build();
 
-    let batcher = Batcher::builder().client(client).build();
+    let batcher = Batcher::builder().client(client).build().await;
 
     batcher.add(create_test_event("test-1")).await.unwrap();
 
@@ -343,7 +351,7 @@ async fn test_metrics_tracking() {
         .base_url(server.url())
         .build();
 
-    let batcher = Batcher::builder().client(client).build();
+    let batcher = Batcher::builder().client(client).build().await;
 
     // Add and flush first batch
     batcher.add(create_test_event("test-1")).await.unwrap();
@@ -387,7 +395,8 @@ async fn test_auto_flush_on_size() {
     let batcher = Batcher::builder()
         .client(client)
         .max_events(2) // Auto-flush after 2 events
-        .build();
+        .build()
+        .await;
 
     // Add 2 events - should trigger auto-flush
     batcher.add(create_test_event("test-1")).await.unwrap();
