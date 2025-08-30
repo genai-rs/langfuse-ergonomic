@@ -91,3 +91,4 @@ path = "examples/trace_urls_byo_ids.rs"
 default = ["rustls"]
 rustls = ["langfuse-client-base/rustls"]
 native-tls = ["langfuse-client-base/native-tls"]
+compression = ["reqwest/gzip", "reqwest/brotli", "reqwest/deflate"]
