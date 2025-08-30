@@ -848,17 +848,15 @@ impl Batcher {
                         // Try parsing as seconds (integer)
                         s.parse::<u64>().ok().or_else(|| {
                             // Try parsing as HTTP-date (RFC2616)
-                            chrono::DateTime::parse_from_rfc2822(s)
-                                .ok()
-                                .and_then(|dt| {
-                                    let now = chrono::Utc::now();
-                                    let retry_time = dt.with_timezone(&chrono::Utc);
-                                    if retry_time > now {
-                                        Some((retry_time - now).num_seconds() as u64)
-                                    } else {
-                                        None
-                                    }
-                                })
+                            chrono::DateTime::parse_from_rfc2822(s).ok().and_then(|dt| {
+                                let now = chrono::Utc::now();
+                                let retry_time = dt.with_timezone(&chrono::Utc);
+                                if retry_time > now {
+                                    Some((retry_time - now).num_seconds() as u64)
+                                } else {
+                                    None
+                                }
+                            })
                         })
                     })
                     .map(Duration::from_secs);
