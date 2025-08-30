@@ -281,7 +281,6 @@ impl LangfuseClient {
         use langfuse_client_base::apis::ingestion_api;
         use langfuse_client_base::models::{
             CreateSpanBody, IngestionBatchRequest, IngestionEvent, IngestionEventOneOf2,
-            ObservationLevel,
         };
 
         let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -298,13 +297,7 @@ impl LangfuseClient {
                 .map(|t| Some(t.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))),
             input: input.map(Some),
             output: output.map(Some),
-            level: level.map(|l| match l.as_str() {
-                "DEBUG" => ObservationLevel::Debug,
-                "DEFAULT" => ObservationLevel::Default,
-                "WARNING" => ObservationLevel::Warning,
-                "ERROR" => ObservationLevel::Error,
-                _ => ObservationLevel::Default,
-            }),
+            level: level.map(|l| parse_observation_level(&l)),
             status_message: status_message.map(Some),
             parent_observation_id: parent_observation_id.map(Some),
             version: None,
@@ -355,7 +348,6 @@ impl LangfuseClient {
         use langfuse_client_base::apis::ingestion_api;
         use langfuse_client_base::models::{
             CreateGenerationBody, IngestionBatchRequest, IngestionEvent, IngestionEventOneOf4,
-            ObservationLevel,
         };
 
         let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -379,13 +371,7 @@ impl LangfuseClient {
             usage_details: None,
             cost_details: None,
             metadata: metadata.map(Some),
-            level: level.map(|l| match l.as_str() {
-                "DEBUG" => ObservationLevel::Debug,
-                "DEFAULT" => ObservationLevel::Default,
-                "WARNING" => ObservationLevel::Warning,
-                "ERROR" => ObservationLevel::Error,
-                _ => ObservationLevel::Default,
-            }),
+            level: level.map(|l| parse_observation_level(&l)),
             status_message: status_message.map(Some),
             parent_observation_id: parent_observation_id.map(Some),
             version: None,
@@ -431,7 +417,6 @@ impl LangfuseClient {
         use langfuse_client_base::apis::ingestion_api;
         use langfuse_client_base::models::{
             CreateEventBody, IngestionBatchRequest, IngestionEvent, IngestionEventOneOf6,
-            ObservationLevel,
         };
 
         let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -446,13 +431,7 @@ impl LangfuseClient {
             start_time: Some(Some(timestamp.clone())),
             input: input.map(Some),
             output: output.map(Some),
-            level: level.map(|l| match l.as_str() {
-                "DEBUG" => ObservationLevel::Debug,
-                "DEFAULT" => ObservationLevel::Default,
-                "WARNING" => ObservationLevel::Warning,
-                "ERROR" => ObservationLevel::Error,
-                _ => ObservationLevel::Default,
-            }),
+            level: level.map(|l| parse_observation_level(&l)),
             status_message: status_message.map(Some),
             parent_observation_id: parent_observation_id.map(Some),
             version: None,
