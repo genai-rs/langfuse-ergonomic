@@ -307,6 +307,19 @@ impl Batcher {
                     }
                     _ = shutdown_rx.recv() => {
                         shutdown_flag_clone.store(true, Ordering::Relaxed);
+
+                        // Drain any remaining events from the channel before shutting down
+                        {
+                            let mut rx_guard = rx.lock().await;
+                            while let Ok(event) = rx_guard.try_recv() {
+                                let event_size = event.size;
+                                let mut buf = buffer.lock().await;
+                                buf.push_back(event);
+                                buffer_size_clone.fetch_add(event_size, Ordering::Relaxed);
+                                metrics_clone.queued.fetch_add(1, Ordering::Relaxed);
+                            }
+                        }
+
                         // Final flush before shutdown
                         let _ = Self::flush_buffer(&client, &buffer, &buffer_size_clone, &config, &metrics_clone, &flush_mutex_clone).await;
                         break;
