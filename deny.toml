@@ -1,9 +1,21 @@
 # Configuration for cargo-deny
 # https://github.com/EmbarkStudios/cargo-deny
 
+[graph]
+# Specify target triples to check
+targets = [
+    { triple = "x86_64-unknown-linux-gnu" },
+    { triple = "x86_64-apple-darwin" },
+    { triple = "x86_64-pc-windows-msvc" },
+    { triple = "aarch64-apple-darwin" },
+]
+
 [advisories]
 # Use version 2 for stricter defaults
 version = 2
+# Path to advisory database
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
 # Allow unmaintained crates in dependencies but not in workspace
 unmaintained = "transitive"
 yanked = "warn"
@@ -16,11 +28,14 @@ allow = [
     "MIT",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
     "BSD-3-Clause",
     "ISC",
+    "Unicode-DFS-2016",
     "Unicode-3.0",
-    "CDLA-Permissive-2.0",
+    "CC0-1.0",
 ]
+confidence-threshold = 0.8
 
 [[licenses.exceptions]]
 # Ring uses a custom license but is widely trusted
@@ -28,14 +43,25 @@ name = "ring"
 allow = ["ISC", "MIT", "OpenSSL"]
 
 [bans]
-# Deny multiple versions of the same crate
+# Warn when multiple versions of the same crate are detected
 multiple-versions = "warn"
 wildcards = "allow"
 highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
 
-# Skip certain crates that commonly have multiple versions
+# Skip certain duplicate dependencies we can't avoid
 skip = [
+    # These are transitive dependencies we can't control
     { name = "windows-sys" },
+    { name = "windows-targets" },
+    { name = "windows_x86_64_gnu" },
+    { name = "windows_x86_64_msvc" },
+    { name = "windows_i686_gnu" },
+    { name = "windows_i686_msvc" },
+    { name = "windows_aarch64_msvc" },
+    { name = "windows_x86_64_gnullvm" },
+    { name = "windows_aarch64_gnullvm" },
 ]
 
 [sources]
