@@ -4,6 +4,9 @@ use std::fmt;
 use std::time::Duration;
 use thiserror::Error;
 
+/// Result type for Langfuse operations
+pub type Result<T> = std::result::Result<T, Error>;
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("API error: {0}")]
@@ -80,8 +83,6 @@ pub enum Error {
         reason: String,
     },
 }
-
-pub type Result<T> = std::result::Result<T, Error>;
 
 /// Error details for individual events in a batch
 #[derive(Debug, Clone)]
@@ -359,5 +360,47 @@ mod tests {
         assert!(display.contains("minimal-id"));
         assert!(display.contains("Minimal error"));
         assert!(!display.contains("retryable"));
+    }
+}
+
+/// Helper to map API errors to appropriate error types based on status code
+pub fn map_api_error<E: std::fmt::Display>(err: E) -> Error {
+    let error_str = err.to_string();
+    
+    // Try to extract status code from error message
+    if error_str.contains("401") || error_str.contains("Unauthorized") {
+        Error::Auth {
+            message: error_str,
+            request_id: None,
+        }
+    } else if error_str.contains("403") || error_str.contains("Forbidden") {
+        Error::Auth {
+            message: error_str,
+            request_id: None,
+        }
+    } else if error_str.contains("429") || error_str.contains("Too Many Requests") {
+        Error::RateLimit {
+            retry_after: None,
+            request_id: None,
+        }
+    } else if error_str.contains("500") || error_str.contains("Internal Server Error") 
+            || error_str.contains("502") || error_str.contains("Bad Gateway")
+            || error_str.contains("503") || error_str.contains("Service Unavailable")
+            || error_str.contains("504") || error_str.contains("Gateway Timeout") {
+        Error::Server {
+            status: 500,
+            message: error_str,
+            request_id: None,
+        }
+    } else if error_str.contains("400") || error_str.contains("Bad Request")
+            || error_str.contains("404") || error_str.contains("Not Found")
+            || error_str.contains("422") || error_str.contains("Unprocessable Entity") {
+        Error::Client {
+            status: 400,
+            message: error_str,
+            request_id: None,
+        }
+    } else {
+        Error::Api(error_str)
     }
 }
