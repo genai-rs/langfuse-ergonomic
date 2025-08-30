@@ -69,7 +69,7 @@ async fn test_metrics_accuracy_on_retries() {
     batcher.add(event).await.unwrap();
 
     // Flush and verify metrics
-    let result = batcher.flush().await.unwrap();
+    let _result = batcher.flush().await.unwrap();
     let metrics = batcher.metrics();
 
     // Should have 1 successful flush, 1 retry
