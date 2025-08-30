@@ -27,6 +27,15 @@ tokio = { version = "1", features = ["full"] }
 serde_json = "1"
 ```
 
+### Optional Features
+
+```toml
+[dependencies]
+langfuse-ergonomic = { version = "*", features = ["compression"] }
+```
+
+- `compression` - Enable gzip, brotli, and deflate compression for requests (reduces bandwidth usage)
+
 ## Quick Start
 
 ```rust
@@ -262,6 +271,7 @@ match batcher.flush().await {
 
 #### Production Features
 - **Timeouts** - Configurable request and connection timeouts
+- **Compression** - Optional gzip, brotli, and deflate support (via `compression` feature flag)
 - **HTTP/2** - Efficient connection multiplexing
 - **Connection Pooling** - Reuses connections for better performance
 - **Error Handling** - Structured error types with retry metadata
