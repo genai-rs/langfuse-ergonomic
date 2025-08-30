@@ -184,11 +184,17 @@ impl BatcherMetrics {
 /// Snapshot of batcher metrics at a point in time
 #[derive(Debug, Clone)]
 pub struct BatcherMetricsSnapshot {
+    /// Number of events currently queued
     pub queued: u64,
+    /// Total events successfully flushed
     pub flushed: u64,
+    /// Total events that failed after all retries
     pub failed: u64,
+    /// Total events dropped due to backpressure
     pub dropped: u64,
+    /// Total retry attempts made
     pub retries: u64,
+    /// Unix timestamp of last error (seconds since epoch)
     pub last_error_ts: u64,
 }
 
