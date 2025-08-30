@@ -12,7 +12,9 @@ pub mod prompts;
 pub mod scores;
 pub mod traces;
 
-pub use batcher::{BatchEvent, Batcher, BatcherConfig, BackpressurePolicy, BatcherMetrics, BatcherMetricsSnapshot};
+pub use batcher::{
+    BackpressurePolicy, BatchEvent, Batcher, BatcherConfig, BatcherMetrics, BatcherMetricsSnapshot,
+};
 pub use client::LangfuseClient;
 pub use error::{Error, EventError, IngestionResponse, Result};
 pub use traces::{IdGenerator, TraceResponse};
