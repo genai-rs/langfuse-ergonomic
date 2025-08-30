@@ -13,6 +13,27 @@ keywords = ["langfuse", "observability", "llm", "tracing", "monitoring"]
 categories = ["api-bindings", "web-programming::http-client", "development-tools::debugging"]
 rust-version = "1.75"
 
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.rustdoc]
+broken_intra_doc_links = "warn"
+private_intra_doc_links = "warn"
+missing_crate_level_docs = "warn"
+invalid_codeblock_attributes = "warn"
+invalid_html_tags = "warn"
+invalid_rust_codeblocks = "warn"
+bare_urls = "warn"
+unescaped_backticks = "warn"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"
+
 [dependencies]
 langfuse-client-base = "0.2"
 bon = "3.0"
