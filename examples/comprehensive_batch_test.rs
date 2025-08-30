@@ -282,11 +282,11 @@ async fn main() -> anyhow::Result<()> {
     );
     if !trace_ids.is_empty() {
         println!(
-            "   First trace: https://cloud.langfuse.com/traces/{}",
+            "   First trace: https://cloud.langfuse.com/trace/{}",
             trace_ids[0]
         );
         println!(
-            "   Last trace: https://cloud.langfuse.com/traces/{}",
+            "   Last trace: https://cloud.langfuse.com/trace/{}",
             trace_ids[trace_ids.len() - 1]
         );
     }

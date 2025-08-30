@@ -104,14 +104,23 @@ cargo run --example multiple_traces
 - Environment-based configuration
 - Trace metadata, tags, input/output
 - Session and user tracking
-
-### Not Yet Implemented ❌
 - Observations (spans, generations, events)
 - Scoring system (numeric, binary, categorical)
 - Fetching existing traces
-- Batch operations
+- Batch operations with advanced features:
+  - Automatic retries with exponential backoff
+  - 207 Multi-Status response handling
+  - 413 Payload Too Large handling with automatic chunking
+  - Backpressure policies (Block, DropNew, DropOldest)
+  - Metrics tracking
+  - Graceful shutdown
 - Dataset management
-- Prompt management
+- Prompt management (basic - get/create)
+
+### Not Yet Implemented ❌
+- Advanced prompt versioning and caching
+- Full dataset item operations
+- Observation updates/deletions
 
 ## Common Tasks
 

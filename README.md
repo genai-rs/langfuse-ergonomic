@@ -54,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .output(json!({"response": "Hi there!"}))
         .user_id("user-123")
         .tags(["production", "chat"])
-        .send()
+        .call()
         .await?;
     
     println!("Created trace: {}", trace.id);
