@@ -47,14 +47,16 @@ async fn test_metrics_accuracy_on_retries() {
 
     // Add a single event using the correct types from langfuse-client-base
     use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
-    
+
     let trace_body = TraceBody {
         id: Some(Some("test-event".to_string())),
         name: Some(Some("test".to_string())),
-        timestamp: Some(Some(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true))),
+        timestamp: Some(Some(
+            chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        )),
         ..Default::default()
     };
-    
+
     let event_one_of = IngestionEventOneOf {
         body: Box::new(trace_body),
         id: uuid::Uuid::new_v4().to_string(),
@@ -62,7 +64,7 @@ async fn test_metrics_accuracy_on_retries() {
         metadata: None,
         r#type: langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
     };
-    
+
     let event = IngestionEvent::IngestionEventOneOf(Box::new(event_one_of));
     batcher.add(event).await.unwrap();
 
@@ -73,7 +75,10 @@ async fn test_metrics_accuracy_on_retries() {
     // Should have 1 successful flush, 1 retry
     assert_eq!(metrics.flushed, 1, "Should have 1 flushed event");
     assert_eq!(metrics.retries, 1, "Should have 1 retry");
-    assert_eq!(metrics.failed, 0, "Should have no permanently failed events");
+    assert_eq!(
+        metrics.failed, 0,
+        "Should have no permanently failed events"
+    );
     assert_eq!(metrics.queued, 0, "Queue should be empty after flush");
 
     mock1.assert_async().await;
