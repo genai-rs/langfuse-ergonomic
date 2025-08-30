@@ -1,41 +1,46 @@
 {
-  // Renovate configuration for langfuse-rs
-  // This configuration aims to keep all dependencies up-to-date automatically
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   
-  // Base presets
+  // ========================================
+  // BASE CONFIGURATION
+  // ========================================
   "extends": [
-    "config:recommended",       // Recommended settings
-    ":dependencyDashboard",      // Creates issue with dependency dashboard
-    ":semanticCommitTypeAll(chore)", // Use 'chore' for all updates
-    ":automergePatch",          // Auto-merge patch updates
-    ":automergeMinor",          // Auto-merge minor updates
-    ":prHourlyLimitNone",       // No hourly limit for PR creation
-    ":prConcurrentLimitNone",   // No concurrent PR limit
-    "helpers:pinGitHubActionDigests" // Pin GitHub Actions to SHA
+    "config:recommended",        // Best practices preset
+    ":dependencyDashboard",       // Create dependency dashboard issue
+    ":semanticCommitTypeAll(chore)", // Use 'chore:' prefix for all commits
+    ":rebaseStalePrs",           // Rebase PRs when they get out of date
+    ":prConcurrentLimit10"       // Limit to 10 concurrent PRs
   ],
   
-  // Basic settings
+  // ========================================
+  // SCHEDULE & TIMING
+  // ========================================
   "timezone": "UTC",
-  "schedule": ["after 2am and before 6am on monday"],
-  "labels": ["dependencies", "renovate"],
-  "assignees": ["timvw"],
-  
-  // Commit message format
-  "commitMessagePrefix": "chore(deps):",
-  "commitMessageAction": "update",
-  "commitMessageTopic": "{{depName}}",
-  "commitMessageExtra": "to {{newVersion}}",
-  
-  // Enable all managers
-  "enabledManagers": [
-    "cargo",           // Rust dependencies
-    "github-actions",  // GitHub Actions
-    "npm",            // Node.js dependencies (for OpenAPI generator)
-    "regex"           // Custom regex patterns
+  "schedule": [
+    "after 2am and before 6am on monday" // Weekly updates
   ],
   
-  // Package-specific rules
+  // ========================================
+  // MANAGERS
+  // ========================================
+  "enabledManagers": [
+    "cargo",          // Rust dependencies
+    "github-actions"  // GitHub Actions versions
+  ],
+  
+  // ========================================
+  // PR CONFIGURATION
+  // ========================================
+  "labels": ["dependencies"],
+  "commitMessagePrefix": "chore(deps):",
+  "prBodyTemplate": "This PR updates dependencies. See the [Dependency Dashboard](../../issues) for details.",
+  "rangeStrategy": "auto",
+  
+  // No ignored paths - this repo doesn't have generated code
+  
+  // ========================================
+  // PACKAGE RULES
+  // ========================================
   "packageRules": [
     // === Rust Dependencies ===
     {
@@ -56,160 +61,82 @@
       "description": "Rust major updates - require manual review",
       "matchManagers": ["cargo"],
       "matchUpdateTypes": ["major"],
-      "labels": ["breaking-change"],
+      "labels": ["dependencies", "breaking"],
       "automerge": false
-    },
-    
-    // === Critical Dependencies ===
-    {
-      "description": "Serde ecosystem - group together",
-      "matchPackagePatterns": ["^serde"],
-      "groupName": "serde ecosystem"
-    },
-    {
-      "description": "Tokio ecosystem - group together",
-      "matchPackagePatterns": ["^tokio"],
-      "groupName": "tokio ecosystem"
-    },
-    {
-      "description": "Reqwest and HTTP-related",
-      "matchPackageNames": ["reqwest", "http", "http-body", "hyper"],
-      "groupName": "http ecosystem"
     },
     
     // === GitHub Actions ===
     {
-      "description": "Auto-merge all GitHub Actions updates",
+      "description": "Group all GitHub Actions updates",
       "matchManagers": ["github-actions"],
-      "automerge": true,
-      "automergeType": "pr",
-      "schedule": ["every weekend"]
-    },
-    {
-      "description": "Group GitHub Actions by type",
-      "matchManagers": ["github-actions"],
-      "matchPackagePatterns": ["actions/"],
-      "groupName": "github-actions"
-    },
-    
-    // === Dev Dependencies ===
-    {
-      "description": "Auto-merge all dev dependency updates",
-      "matchDepTypes": ["dev-dependencies"],
+      "groupName": "github-actions",
       "automerge": true
     },
     
     // === Security Updates ===
     {
       "description": "Security updates - merge immediately",
-      "matchPackagePatterns": ["*"],
       "matchUpdateTypes": ["security"],
-      "labels": ["security", "priority"],
+      "labels": ["security", "dependencies"],
       "automerge": true,
-      "schedule": ["at any time"],
-      "prPriority": 10
+      "prPriority": 10,
+      "schedule": ["at any time"], // Don't wait for schedule
+      "minimumReleaseAge": "0 days"
     },
     
-    // === OpenAPI Generator ===
+    // === Core Dependencies (require careful review) ===
     {
-      "description": "OpenAPI generator tooling",
-      "matchPackageNames": ["@openapitools/openapi-generator-cli"],
-      "labels": ["openapi"],
+      "description": "Core dependencies - manual review required",
+      "matchPackageNames": [
+        "serde",
+        "reqwest",
+        "tokio",
+        "bon",
+        "langfuse-client-base"
+      ],
+      "labels": ["dependencies", "core"],
+      "automerge": false,
       "assignees": ["timvw"]
     },
     
-    // === Workspace Dependencies ===
+    // === Dev Dependencies ===
     {
-      "description": "Group workspace dependencies",
-      "matchManagers": ["cargo"],
-      "matchDepTypes": ["workspace.dependencies"],
-      "groupName": "workspace dependencies",
-      "automerge": true
+      "description": "Dev dependencies - auto-merge all",
+      "matchDepTypes": ["devDependencies"],
+      "automerge": true,
+      "labels": ["dependencies", "dev"]
+    },
+    
+    // === Langfuse Base Client ===
+    {
+      "description": "Langfuse base client - manual review",
+      "matchPackageNames": ["langfuse-client-base"],
+      "labels": ["dependencies", "langfuse-base"],
+      "automerge": false,
+      "assignees": ["timvw"],
+      "prBodyNotes": [
+        "⚠️ **Langfuse Base Client Update**",
+        "This updates the underlying OpenAPI-generated client.",
+        "Please review for API compatibility changes."
+      ]
     }
   ],
   
-  // Cargo-specific configuration
-  "cargo": {
-    "enabled": true,
-    "rangeStrategy": "auto",
-    "lockFileMaintenance": {
-      "enabled": true,
-      "schedule": ["before 3am on monday"],
-      "automerge": true
-    }
-  },
-  
-  // GitHub Actions configuration
-  "github-actions": {
-    "enabled": true,
-    "fileMatch": [
-      ".github/workflows/*.yml",
-      ".github/workflows/*.yaml",
-      ".github/actions/*/action.yml",
-      ".github/actions/*/action.yaml"
-    ]
-  },
-  
-  // NPM configuration (for OpenAPI generator)
-  "npm": {
-    "enabled": true,
-    "fileMatch": ["package.json", "scripts/package.json"],
-    "rangeStrategy": "bump"
-  },
-  
-  // PR settings
-  "prConcurrentLimit": 10,
-  "prCreation": "immediate",
-  "rebaseWhen": "behind-base-branch",
-  "recreateWhen": "always",
-  
-  // Semantic commits
-  "semanticCommits": "enabled",
-  
-  // Vulnerability alerts
+  // ========================================
+  // VULNERABILITY ALERTS
+  // ========================================
   "vulnerabilityAlerts": {
     "enabled": true,
     "labels": ["security"],
-    "automerge": true,
-    "schedule": ["at any time"]
+    "assignees": ["@timvw"],
+    "prPriority": 100  // Highest priority
   },
   
-  // Post-update options
-  "postUpdateOptions": [
-    "cargoUpdateWorkspace",  // Update Cargo.lock
-    "npmDedupe"              // Deduplicate npm packages
-  ],
-  
-  // Ignore generated code
-  "ignorePaths": [
-    "langfuse-client-base/src/**", // Generated OpenAPI client code
-    "langfuse-client-base/docs/**", // Generated docs
-    "target/**"                      // Build artifacts
-  ],
-  
-  // Custom regex patterns for version updates
-  "regexManagers": [
-    {
-      "description": "Update Rust version in rust-toolchain.toml",
-      "fileMatch": ["rust-toolchain.toml"],
-      "matchStrings": ["channel = \"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""],
-      "depNameTemplate": "rust",
-      "datasourceTemplate": "github-releases",
-      "lookupNameTemplate": "rust-lang/rust"
-    }
-  ],
-  
-  // Branch settings
-  "branchPrefix": "renovate/",
-  "baseBranches": ["main"],
-  
-  // Dependency Dashboard
-  "dependencyDashboard": true,
-  "dependencyDashboardTitle": "Renovate Dependency Dashboard",
-  "dependencyDashboardHeader": "This issue lists Renovate updates and detected dependencies.",
-  
-  // Additional options
-  "suppressNotifications": ["prIgnoreNotification"],
-  "rebaseLabel": "rebase",
-  "stopUpdatingLabel": "stop-updating"
+  // ========================================
+  // RUST-SPECIFIC SETTINGS
+  // ========================================
+  "rust": {
+    "enabled": true,
+    "rangeStrategy": "bump"  // Use exact versions in Cargo.toml
+  }
 }
