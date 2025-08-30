@@ -696,7 +696,8 @@ impl Batcher {
 
                 // Add jitter to avoid thundering herd
                 let actual_delay = if config.retry_jitter {
-                    let jitter_range = delay.as_millis().min(u64::MAX as u128) as u64 / 4; // 25% jitter
+                    #[allow(clippy::cast_possible_truncation)]
+                    let jitter_range = delay.as_millis().min(u128::from(u64::MAX)) as u64 / 4; // 25% jitter
                     let jitter = rand::thread_rng().gen_range(0..=jitter_range);
                     delay + Duration::from_millis(jitter)
                 } else {
