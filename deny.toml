@@ -16,8 +16,6 @@ version = 2
 # Path to advisory database
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
-# Allow unmaintained crates in dependencies but not in workspace
-unmaintained = "transitive"
 yanked = "warn"
 
 [licenses]
