@@ -15,7 +15,7 @@ Ergonomic Rust client for [Langfuse](https://langfuse.com), the open-source LLM 
 - 🚀 **Easy Setup** - Simple configuration from environment variables
 - 📊 **Comprehensive** - Support for traces, observations, scores, and more
 - 🔁 **Batch Processing** - Automatic batching with retry logic and chunking
-- ⚡ **Production Ready** - Built-in timeouts, compression, and error handling
+- ⚡ **Production Ready** - Built-in timeouts, connection pooling, and error handling
 - 🏠 **Self-Hosted Support** - Full support for self-hosted Langfuse instances
 
 ## Installation
@@ -262,7 +262,6 @@ match batcher.flush().await {
 
 #### Production Features
 - **Timeouts** - Configurable request and connection timeouts
-- **Compression** - Built-in gzip, brotli, and deflate support
 - **HTTP/2** - Efficient connection multiplexing
 - **Connection Pooling** - Reuses connections for better performance
 - **Error Handling** - Structured error types with retry metadata

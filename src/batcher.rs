@@ -341,7 +341,10 @@ impl Batcher {
                     Ok(_) => {}
                     Err(mpsc::error::TrySendError::Full(_)) => {
                         self.metrics.dropped.fetch_add(1, Ordering::Relaxed);
-                        return Err(Error::Api("Queue full, event dropped".to_string()));
+                        return Err(Error::Backpressure {
+                            policy: BackpressurePolicy::DropNew,
+                            reason: "Queue full, new event dropped".to_string(),
+                        });
                     }
                     Err(e) => return Err(Error::Api(format!("Failed to queue event: {}", e))),
                 }
@@ -357,6 +360,7 @@ impl Batcher {
                             if !buf.is_empty() {
                                 buf.remove(0);
                                 self.metrics.dropped.fetch_add(1, Ordering::Relaxed);
+                                self.metrics.queued.fetch_sub(1, Ordering::Relaxed);
                             }
                         }
                         // Try again with blocking send
@@ -374,6 +378,17 @@ impl Batcher {
     }
 
     /// Manually flush the current batch
+    ///
+    /// ## Semantics
+    /// - Sends all currently buffered events in optimally-sized batches
+    /// - Retryable failures (5xx, 429) will be automatically re-queued for retry
+    /// - Non-retryable failures (4xx) are reported and discarded
+    /// - Returns immediately after the flush attempt, even if events are re-queued
+    /// - Use `shutdown()` for a final flush that waits for all retries to complete
+    ///
+    /// ## Partial Failures
+    /// The response may indicate partial failures even for events that will be retried.
+    /// This allows callers to track which events succeeded immediately vs required retry.
     pub async fn flush(&self) -> Result<IngestionResponse> {
         // Give background task time to add pending events to buffer
         tokio::time::sleep(Duration::from_millis(50)).await;
