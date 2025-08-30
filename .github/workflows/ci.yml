@@ -6,18 +6,30 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+  checks: write
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
 
 jobs:
   test:
-    name: Test Suite
+    name: Test Suite (${{ matrix.os }} / ${{ matrix.rust }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust: [stable, beta]
+        include:
+          - os: ubuntu-latest
+            rust: 1.75.0  # MSRV
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,54 +40,131 @@ jobs:
           toolchain: ${{ matrix.rust }}
           components: rustfmt, clippy
           
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
         with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-          
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          cache-all-crates: true
           
       - name: Check formatting
-        run: cargo fmt -- --check
+        if: matrix.rust == 'stable'
+        run: cargo fmt --all -- --check
         
       - name: Run clippy
+        if: matrix.rust == 'stable'
         run: cargo clippy --all-targets --all-features -- -D warnings
         
       - name: Build
-        run: cargo build --verbose
+        run: cargo build --verbose --all-features
         
       - name: Run tests
-        run: cargo test --verbose
+        run: cargo test --verbose --all-features
         env:
           LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
           LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
         
+      - name: Run tests (no default features)
+        run: cargo test --verbose --no-default-features
+        
       - name: Build documentation
         run: cargo doc --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: "-D warnings"
         
       - name: Build examples
-        run: cargo build --examples
+        run: cargo build --examples --all-features
+  
+  # Feature combinations test
+  features:
+    name: Feature Combinations
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        
+      - name: Test with no features
+        run: cargo test --no-default-features
+        
+      - name: Test with compression feature
+        run: cargo test --features compression
+        
+      - name: Test with all features
+        run: cargo test --all-features
   
   # Security audit
   security:
     name: Security Audit
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         
-      - name: Run security audit
-        run: |
-          cargo install cargo-audit
-          cargo audit
+      - name: Generate Cargo.lock if needed
+        run: cargo generate-lockfile
+        
+      - name: Run cargo audit
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+  
+  # Minimal versions check
+  minimal-versions:
+    name: Minimal Versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+        
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Generate minimal versions
+        run: cargo +nightly generate-lockfile -Z minimal-versions
+        
+      - name: Build with minimal versions
+        run: cargo +stable build --all-features
+  
+  # Coverage (optional, informational only)
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+          
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+        
+      - name: Generate coverage
+        run: cargo llvm-cov --all-features --lcov --output-path lcov.info
+        env:
+          LANGFUSE_PUBLIC_KEY: test-key
+          LANGFUSE_SECRET_KEY: test-secret
+        
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: lcov.info
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
