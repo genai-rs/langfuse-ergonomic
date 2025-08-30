@@ -175,7 +175,7 @@ impl LangfuseClient {
                 id: trace_id,
                 base_url: self.configuration().base_path.clone(),
             })
-            .map_err(|e| crate::error::map_api_error(e))
+            .map_err(crate::error::map_api_error)
     }
 
     /// Get a trace by ID
@@ -186,7 +186,7 @@ impl LangfuseClient {
 
         let trace = trace_api::trace_get(self.configuration(), &trace_id)
             .await
-            .map_err(|e| crate::error::map_api_error(e))?;
+            .map_err(crate::error::map_api_error)?;
 
         serde_json::to_value(trace)
             .map_err(|e| crate::error::Error::Api(format!("Failed to serialize trace: {}", e)))
