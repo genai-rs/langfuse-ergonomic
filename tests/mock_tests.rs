@@ -62,7 +62,7 @@ async fn test_validate_success() {
 
     mock.assert_async().await;
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), true);
+    assert!(result.unwrap());
 }
 
 #[tokio::test]
