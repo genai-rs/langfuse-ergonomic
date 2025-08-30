@@ -26,7 +26,8 @@
 //! // Create with defaults
 //! let batcher = Batcher::builder()
 //!     .client(client)
-//!     .build();
+//!     .build()
+//!     .await;
 //!
 //! // Or customize configuration
 //! let batcher = Batcher::builder()
@@ -34,7 +35,8 @@
 //!     .max_events(50)
 //!     .max_bytes(2_000_000)
 //!     .backpressure_policy(BackpressurePolicy::DropNew)
-//!     .build();
+//!     .build()
+//!     .await;
 //!
 //! // Monitor metrics
 //! let metrics = batcher.metrics();
@@ -46,7 +48,8 @@
 
 use bon::bon;
 use rand::Rng;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, Mutex};
@@ -193,25 +196,30 @@ pub struct BatcherMetricsSnapshot {
 pub struct Batcher {
     client: Arc<LangfuseClient>,
     config: BatcherConfig,
-    buffer: Arc<Mutex<Vec<BatchEvent>>>,
+    buffer: Arc<Mutex<VecDeque<BatchEvent>>>, // VecDeque for O(1) DropOldest
+    buffer_size: Arc<AtomicUsize>,            // Track running size for O(1) access
     tx: mpsc::Sender<BatchEvent>,
     rx: Arc<Mutex<mpsc::Receiver<BatchEvent>>>,
     shutdown_tx: mpsc::Sender<()>,
     metrics: Arc<BatcherMetrics>,
     flush_mutex: Arc<Mutex<()>>,
     shutdown_flag: Arc<AtomicBool>,
+    task_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
 }
 
 #[bon]
 impl Batcher {
     /// Create a new batcher with custom configuration
     #[builder]
-    pub fn new(
+    pub async fn new(
         client: LangfuseClient,
         max_events: Option<usize>,
         max_bytes: Option<usize>,
         flush_interval: Option<Duration>,
         max_retries: Option<u32>,
+        initial_retry_delay: Option<Duration>,
+        max_retry_delay: Option<Duration>,
+        retry_jitter: Option<bool>,
         fail_fast: Option<bool>,
         max_queue_size: Option<usize>,
         backpressure_policy: Option<BackpressurePolicy>,
@@ -221,10 +229,12 @@ impl Batcher {
             max_bytes: max_bytes.unwrap_or(MAX_BATCH_SIZE_BYTES),
             flush_interval: flush_interval.unwrap_or(DEFAULT_FLUSH_INTERVAL),
             max_retries: max_retries.unwrap_or(DEFAULT_MAX_RETRIES),
+            initial_retry_delay: initial_retry_delay.unwrap_or(Duration::from_millis(100)),
+            max_retry_delay: max_retry_delay.unwrap_or(Duration::from_secs(30)),
+            retry_jitter: retry_jitter.unwrap_or(true),
             fail_fast: fail_fast.unwrap_or(false),
             max_queue_size: max_queue_size.unwrap_or(10000),
             backpressure_policy: backpressure_policy.unwrap_or(BackpressurePolicy::Block),
-            ..Default::default()
         };
 
         let (tx, rx) = mpsc::channel(config.max_queue_size);
@@ -233,28 +243,34 @@ impl Batcher {
         let metrics = Arc::new(BatcherMetrics::default());
         let flush_mutex = Arc::new(Mutex::new(()));
         let shutdown_flag = Arc::new(AtomicBool::new(false));
+        let buffer_size = Arc::new(AtomicUsize::new(0));
+
+        let task_handle = Arc::new(Mutex::new(None));
 
         let batcher = Self {
             client: Arc::new(client),
             config: config.clone(),
-            buffer: Arc::new(Mutex::new(Vec::new())),
+            buffer: Arc::new(Mutex::new(VecDeque::new())),
+            buffer_size: buffer_size.clone(),
             tx,
             rx: Arc::new(Mutex::new(rx)),
             shutdown_tx,
             metrics: metrics.clone(),
             flush_mutex: flush_mutex.clone(),
             shutdown_flag: shutdown_flag.clone(),
+            task_handle: task_handle.clone(),
         };
 
         // Start background flush task
         let buffer = batcher.buffer.clone();
+        let buffer_size_clone = buffer_size.clone();
         let client = batcher.client.clone();
         let rx = batcher.rx.clone();
         let metrics_clone = metrics.clone();
         let flush_mutex_clone = flush_mutex.clone();
         let shutdown_flag_clone = shutdown_flag.clone();
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             let mut flush_interval = interval(config.flush_interval);
             flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
@@ -264,36 +280,46 @@ impl Batcher {
             loop {
                 tokio::select! {
                     _ = flush_interval.tick() => {
-                        let _ = Self::flush_buffer(&client, &buffer, &config, &metrics_clone, &flush_mutex_clone).await;
+                        let _ = Self::flush_buffer(&client, &buffer, &buffer_size_clone, &config, &metrics_clone, &flush_mutex_clone).await;
                     }
                     Some(event) = async {
                         let mut rx = rx.lock().await;
                         rx.recv().await
                     } => {
                         metrics_clone.queued.fetch_add(1, Ordering::Relaxed);
+
+                        let event_size = event.size;
                         let should_flush = {
                             let mut buf = buffer.lock().await;
-                            buf.push(event);
+                            buf.push_back(event);
 
-                            // Check if we should flush based on size/count
-                            let total_size: usize = buf.iter().map(|e| e.size).sum();
+                            // Update running size atomically
+                            let new_size = buffer_size_clone.fetch_add(event_size, Ordering::Relaxed) + event_size;
                             let len = buf.len();
-                            len >= config.max_events || total_size >= config.max_bytes
+
+                            // O(1) check if we should flush
+                            len >= config.max_events || new_size >= config.max_bytes
                         };
 
                         if should_flush {
-                            let _ = Self::flush_buffer(&client, &buffer, &config, &metrics_clone, &flush_mutex_clone).await;
+                            let _ = Self::flush_buffer(&client, &buffer, &buffer_size_clone, &config, &metrics_clone, &flush_mutex_clone).await;
                         }
                     }
                     _ = shutdown_rx.recv() => {
                         shutdown_flag_clone.store(true, Ordering::Relaxed);
                         // Final flush before shutdown
-                        let _ = Self::flush_buffer(&client, &buffer, &config, &metrics_clone, &flush_mutex_clone).await;
+                        let _ = Self::flush_buffer(&client, &buffer, &buffer_size_clone, &config, &metrics_clone, &flush_mutex_clone).await;
                         break;
                     }
                 }
             }
         });
+
+        // Store the task handle
+        {
+            let mut handle_guard = task_handle.lock().await;
+            *handle_guard = Some(handle);
+        }
 
         batcher
     }
@@ -357,8 +383,9 @@ impl Batcher {
                         // Remove oldest from buffer
                         {
                             let mut buf = self.buffer.lock().await;
-                            if !buf.is_empty() {
-                                buf.remove(0);
+                            if let Some(dropped) = buf.pop_front() {
+                                // Update buffer size when dropping - O(1) with VecDeque
+                                self.buffer_size.fetch_sub(dropped.size, Ordering::Relaxed);
                                 self.metrics.dropped.fetch_add(1, Ordering::Relaxed);
                                 self.metrics.queued.fetch_sub(1, Ordering::Relaxed);
                             }
@@ -397,6 +424,7 @@ impl Batcher {
         Self::flush_buffer(
             &self.client,
             &self.buffer,
+            &self.buffer_size,
             &self.config,
             &self.metrics,
             &self.flush_mutex,
@@ -412,17 +440,20 @@ impl Batcher {
     /// Internal flush implementation
     async fn flush_buffer(
         client: &LangfuseClient,
-        buffer: &Arc<Mutex<Vec<BatchEvent>>>,
+        buffer: &Mutex<VecDeque<BatchEvent>>,
+        buffer_size: &AtomicUsize,
         config: &BatcherConfig,
-        metrics: &Arc<BatcherMetrics>,
-        flush_mutex: &Arc<Mutex<()>>,
+        metrics: &BatcherMetrics,
+        flush_mutex: &Mutex<()>,
     ) -> Result<IngestionResponse> {
         // Prevent concurrent flushes
         let _guard = flush_mutex.lock().await;
 
-        let mut events = {
+        let mut events: Vec<BatchEvent> = {
             let mut buffer = buffer.lock().await;
-            let events = std::mem::take(&mut *buffer);
+            let events = buffer.drain(..).collect();
+            // Reset size atomically when clearing buffer
+            buffer_size.store(0, Ordering::Relaxed);
             // Update queued metric
             metrics.queued.store(0, Ordering::Relaxed);
             events
@@ -541,11 +572,17 @@ impl Batcher {
 
         // Re-queue retry events
         if !retry_queue.is_empty() {
+            // Calculate total size of retry events
+            let retry_size: usize = retry_queue.iter().map(|e| e.size).sum();
+
             let mut buffer = buffer.lock().await;
             buffer.extend(retry_queue.clone());
+
+            // Update both queued count and buffer size
             metrics
                 .queued
                 .fetch_add(retry_queue.len() as u64, Ordering::Relaxed);
+            buffer_size.fetch_add(retry_size, Ordering::Relaxed);
         }
 
         Ok(IngestionResponse {
@@ -591,7 +628,7 @@ impl Batcher {
         client: &LangfuseClient,
         events: &[BatchEvent],
         config: &BatcherConfig,
-        metrics: &Arc<BatcherMetrics>,
+        metrics: &BatcherMetrics,
     ) -> Result<IngestionResponse> {
         let mut delay = config.initial_retry_delay;
         let mut last_error = None;
@@ -669,7 +706,10 @@ impl Batcher {
         let response = client
             .configuration
             .client
-            .post(format!("{}/api/public/ingestion", client.base_url))
+            .post(format!(
+                "{}/api/public/ingestion",
+                client.configuration.base_path
+            ))
             .basic_auth(&client.public_key, Some(&client.secret_key))
             .json(&batch)
             .send()
@@ -829,10 +869,15 @@ impl Batcher {
         // Signal shutdown to background task
         let _ = self.shutdown_tx.send(()).await;
 
-        // Wait for background task to finish processing
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        // Wait for background task to finish deterministically
+        if let Some(handle) = {
+            let mut handle_guard = self.task_handle.lock().await;
+            handle_guard.take()
+        } {
+            let _ = handle.await;
+        }
 
-        // Final flush with longer timeout for in-flight retries
+        // Final flush after task has stopped
         let flush_result = self.flush().await;
 
         // Log final metrics

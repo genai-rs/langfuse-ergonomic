@@ -163,7 +163,8 @@ let batcher = Batcher::builder()
     .max_retries(5)                            // Retry attempts (default: 3)
     .max_queue_size(5000)                      // Max events to queue (default: 10,000)
     .backpressure_policy(BackpressurePolicy::DropNew) // What to do when queue is full
-    .build();
+    .build()
+    .await;
 
 // Add events - they'll be automatically batched
 for event in events {

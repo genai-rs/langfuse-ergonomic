@@ -19,7 +19,8 @@ async fn main() -> anyhow::Result<()> {
         .max_events(50) // Lower limit for demonstration
         .flush_interval(std::time::Duration::from_secs(2))
         .max_retries(3)
-        .build();
+        .build()
+        .await;
 
     // Create multiple traces
     for i in 0..20 {

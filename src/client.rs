@@ -139,11 +139,11 @@ impl LangfuseClient {
     /// # use std::sync::Arc;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Arc::new(LangfuseClient::from_env()?);
-    /// let batcher = client.create_batcher(None);
+    /// let batcher = client.create_batcher(None).await;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn create_batcher(self: Arc<Self>, config: Option<BatcherConfig>) -> Batcher {
+    pub async fn create_batcher(self: Arc<Self>, config: Option<BatcherConfig>) -> Batcher {
         // Clone the Arc to avoid moving self
         let client = LangfuseClient {
             public_key: self.public_key.clone(),
@@ -168,9 +168,13 @@ impl LangfuseClient {
             .max_bytes(config.max_bytes)
             .flush_interval(config.flush_interval)
             .max_retries(config.max_retries)
+            .initial_retry_delay(config.initial_retry_delay)
+            .max_retry_delay(config.max_retry_delay)
+            .retry_jitter(config.retry_jitter)
             .max_queue_size(config.max_queue_size)
             .backpressure_policy(config.backpressure_policy)
             .fail_fast(config.fail_fast)
             .build()
+            .await
     }
 }
