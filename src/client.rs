@@ -131,7 +131,7 @@ impl LangfuseClient {
             .timeout(Duration::from_secs(5))
             .send()
             .await
-            .map_err(|e| Error::Network(e))?;
+            .map_err(Error::Network)?;
 
         // Check if we got a successful response
         match response.status() {
