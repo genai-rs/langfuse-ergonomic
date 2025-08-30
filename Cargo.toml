@@ -27,12 +27,6 @@ invalid_rust_codeblocks = "warn"
 bare_urls = "warn"
 unescaped_backticks = "warn"
 
-[lints.clippy]
-pedantic = { level = "warn", priority = -1 }
-module_name_repetitions = "allow"
-missing_errors_doc = "allow"
-missing_panics_doc = "allow"
-must_use_candidate = "allow"
 
 [dependencies]
 langfuse-client-base = "0.2"
