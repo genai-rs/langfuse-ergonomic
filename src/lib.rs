@@ -128,3 +128,9 @@ pub use batcher::{
 pub use client::LangfuseClient;
 pub use error::{Error, EventError, IngestionResponse, Result};
 pub use traces::{IdGenerator, TraceResponse};
+
+// Re-export frequently used types from langfuse-client-base to reduce direct imports
+pub use langfuse_client_base::models::{
+    CreateEventBody, CreateGenerationBody, CreateSpanBody, IngestionBatchRequest, IngestionEvent,
+    ObservationLevel, ScoreDataType, TraceBody,
+};
