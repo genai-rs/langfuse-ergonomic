@@ -70,6 +70,15 @@ pub enum Error {
     /// Batch size exceeded
     #[error("Batch size exceeded: {size} bytes (max: {max_size} bytes)")]
     BatchSizeExceeded { size: usize, max_size: usize },
+
+    /// Backpressure triggered when queue is full
+    #[error("Backpressure: {reason} (policy: {policy:?})")]
+    Backpressure {
+        /// The backpressure policy that was triggered
+        policy: crate::BackpressurePolicy,
+        /// Reason for the backpressure
+        reason: String,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -115,6 +124,7 @@ impl Error {
             Error::Configuration(_) => false,
             Error::Api(_) => false,
             Error::BatchSizeExceeded { .. } => false,
+            Error::Backpressure { .. } => false,
         }
     }
 

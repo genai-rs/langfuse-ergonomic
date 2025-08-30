@@ -164,6 +164,8 @@ impl LangfuseClient {
             .max_bytes(config.max_bytes)
             .flush_interval(config.flush_interval)
             .max_retries(config.max_retries)
+            .max_queue_size(config.max_queue_size)
+            .backpressure_policy(config.backpressure_policy)
             .fail_fast(config.fail_fast)
             .build()
     }
