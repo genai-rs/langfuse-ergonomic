@@ -179,7 +179,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("\n⚠️  Partial failure (207 Multi-Status):");
                 println!("  ✅ Successful: {}", success_count);
                 println!("  ❌ Failed: {}", failure_count);
-                
+
                 // Note: request_id and retry_after metadata is available
                 // in other error types like RateLimit and Client errors
 
@@ -192,7 +192,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         println!("      Status: Not retryable ❌");
                     }
                 }
-            } else if let langfuse_ergonomic::Error::RateLimit { retry_after, request_id } = &e {
+            } else if let langfuse_ergonomic::Error::RateLimit {
+                retry_after,
+                request_id,
+            } = &e
+            {
                 println!("\n⚠️  Rate limited:");
                 if let Some(req_id) = request_id {
                     println!("  📋 Request ID: {}", req_id);
@@ -249,7 +253,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Get final metrics before shutdown (shutdown consumes self)
     let final_metrics = batcher.metrics();
-    
+
     // Shutdown main batcher
     match batcher.shutdown().await {
         Ok(response) => {
