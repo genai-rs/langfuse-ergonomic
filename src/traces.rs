@@ -18,13 +18,13 @@ pub trait IntoTags {
 /// Helper to convert level strings to ObservationLevel
 pub fn parse_observation_level(level: &str) -> langfuse_client_base::models::ObservationLevel {
     use langfuse_client_base::models::ObservationLevel;
-    
+
     match level.to_uppercase().as_str() {
         "DEBUG" => ObservationLevel::Debug,
-        "INFO" | "DEFAULT" => ObservationLevel::Default,  // Map INFO to Default
+        "INFO" | "DEFAULT" => ObservationLevel::Default, // Map INFO to Default
         "WARN" | "WARNING" => ObservationLevel::Warning,
         "ERROR" => ObservationLevel::Error,
-        _ => ObservationLevel::Default,  // Fallback to Default for unknown levels
+        _ => ObservationLevel::Default, // Fallback to Default for unknown levels
     }
 }
 
