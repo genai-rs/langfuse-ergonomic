@@ -204,10 +204,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(retry) = retry_after {
                     println!("  ⏱️  Retry after: {} seconds", retry.as_secs());
                 }
-            } else if let langfuse_ergonomic::Error::Client { request_id, .. } = &e {
-                if let Some(req_id) = request_id {
-                    println!("  📋 Request ID: {}", req_id);
-                }
+            } else if let langfuse_ergonomic::Error::Client {
+                request_id: Some(req_id),
+                ..
+            } = &e
+            {
+                println!("  📋 Request ID: {}", req_id);
             }
         }
     }

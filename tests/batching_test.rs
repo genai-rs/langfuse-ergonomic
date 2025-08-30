@@ -4,7 +4,6 @@ use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBod
 use langfuse_ergonomic::{BackpressurePolicy, Batcher, LangfuseClient};
 use mockito::Server;
 use std::time::Duration;
-use tokio;
 
 /// Helper to create a test trace event
 fn create_test_event(id: &str) -> IngestionEvent {

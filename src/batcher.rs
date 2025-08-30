@@ -659,7 +659,7 @@ impl Batcher {
             .json(&batch)
             .send()
             .await
-            .map_err(|e| Error::Network(e))?;
+            .map_err(Error::Network)?;
 
         let status = response.status();
         let request_id = response
@@ -670,7 +670,7 @@ impl Batcher {
 
         // Handle different status codes
         match status.as_u16() {
-            200 | 201 | 202 => {
+            200..=202 => {
                 // Full success
                 let count = event_ids.len();
                 Ok(IngestionResponse {
@@ -730,7 +730,7 @@ impl Batcher {
                             .unwrap_or(&"Unknown error".to_string())
                             .clone(),
                         code: e.status.map(|s| s.to_string()),
-                        retryable: e.status.map_or(false, |s| s >= 500 || s == 429),
+                        retryable: e.status.is_some_and(|s| s >= 500 || s == 429),
                     })
                     .collect();
 
