@@ -1,6 +1,6 @@
 //! Comprehensive tests for batching functionality
 
-use langfuse_client_base::models::{IngestionEvent, TraceBody};
+use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
 use langfuse_ergonomic::{BackpressurePolicy, Batcher, LangfuseClient};
 use mockito::Server;
 use std::time::Duration;
@@ -8,7 +8,7 @@ use tokio;
 
 /// Helper to create a test trace event
 fn create_test_event(id: &str) -> IngestionEvent {
-    IngestionEvent::IngestionEventOneOf(Box::new(TraceBody {
+    let trace_body = TraceBody {
         id: Some(Some(id.to_string())),
         name: Some(Some(format!("Test event {}", id))),
         timestamp: None,
@@ -22,7 +22,14 @@ fn create_test_event(id: &str) -> IngestionEvent {
         tags: None,
         public: None,
         environment: None,
-    }))
+    };
+    
+    IngestionEvent::IngestionEventOneOf(Box::new(IngestionEventOneOf::new(
+        trace_body,
+        id.to_string(),
+        chrono::Utc::now().to_rfc3339(),
+        langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
+    )))
 }
 
 #[tokio::test]
@@ -274,7 +281,7 @@ async fn test_concurrent_flush_protection() {
 
 #[tokio::test]
 async fn test_shutdown_idempotency() {
-    let server = Server::new_async().await;
+    let mut server = Server::new_async().await;
 
     let mock = server
         .mock("POST", "/api/public/ingestion")
