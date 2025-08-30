@@ -237,6 +237,10 @@ async fn test_backpressure_drop_new() {
     // This should be dropped
     let result = batcher.add(create_test_event("test-3")).await;
     assert!(result.is_err());
+    assert!(matches!(
+        result.unwrap_err(),
+        langfuse_ergonomic::Error::Backpressure { .. }
+    ));
 
     let metrics = batcher.metrics();
     assert!(metrics.dropped > 0);
