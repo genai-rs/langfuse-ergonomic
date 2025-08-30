@@ -36,14 +36,14 @@ impl IdGenerator {
         let namespace = Uuid::NAMESPACE_OID;
         Uuid::new_v5(&namespace, seed.as_bytes()).to_string()
     }
-    
+
     /// Generate a deterministic ID from multiple components
     /// Useful for creating hierarchical IDs (e.g., trace -> span -> event)
     pub fn from_components(components: &[&str]) -> String {
         let combined = components.join(":");
         Self::from_seed(&combined)
     }
-    
+
     /// Generate a deterministic ID using a hash-based approach
     /// Alternative to UUID v5 for simpler use cases
     pub fn from_hash(seed: &str) -> String {
@@ -118,7 +118,7 @@ impl LangfuseClient {
 
         ingestion_api::ingestion_batch(self.configuration(), batch_request)
             .await
-            .map(|_| TraceResponse { 
+            .map(|_| TraceResponse {
                 id: trace_id,
                 base_url: self.configuration().base_path.clone(),
             })
