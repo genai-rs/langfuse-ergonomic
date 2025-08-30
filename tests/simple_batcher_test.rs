@@ -22,7 +22,7 @@ async fn test_simple_batch_200() {
         .base_url(server.url())
         .build();
 
-    let batcher = Batcher::builder().client(client).build();
+    let batcher = Batcher::builder().client(client).build().await;
 
     // Add a simple event
     use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
