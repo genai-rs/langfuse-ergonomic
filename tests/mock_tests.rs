@@ -29,63 +29,14 @@ async fn test_trace_creation_success() {
 
     let result = client
         .trace()
-        .name("mock-trace".to_string())
-        .input(json!({"test": "data"}))
-        .output(json!({"result": "success"}))
-        .user_id("test-user".to_string())
-        .session_id("test-session".to_string())
-        .tags(vec!["test".to_string(), "mock".to_string()])
+        .name("test-trace")
+        .user_id("user-123")
         .call()
         .await;
 
     mock.assert_async().await;
-    assert!(
-        result.is_ok(),
-        "Trace creation should succeed with mock server"
-    );
-}
-
-#[tokio::test]
-async fn test_validate_success() {
-    let mut server = Server::new_async().await;
-
-    let mock = server
-        .mock("GET", "/api/public/health")
-        .with_status(200)
-        .with_header("content-type", "application/json")
-        .with_body(r#"{"status": "ok"}"#)
-        .create_async()
-        .await;
-
-    let client = create_mock_client(&server);
-    let result = client.validate().await;
-
-    mock.assert_async().await;
     assert!(result.is_ok());
-    assert!(result.unwrap());
-}
-
-#[tokio::test]
-async fn test_validate_auth_error() {
-    let mut server = Server::new_async().await;
-
-    let mock = server
-        .mock("GET", "/api/public/health")
-        .with_status(401)
-        .with_header("content-type", "application/json")
-        .with_header("x-request-id", "req-123")
-        .with_body(r#"{"error": "Unauthorized"}"#)
-        .create_async()
-        .await;
-
-    let client = create_mock_client(&server);
-    let result = client.validate().await;
-
-    mock.assert_async().await;
-    assert!(result.is_err());
-    if let Err(err) = result {
-        assert!(err.to_string().contains("Invalid credentials"));
-    }
+    assert!(!result.unwrap().id.is_empty());
 }
 
 #[tokio::test]
@@ -102,19 +53,78 @@ async fn test_trace_creation_auth_error() {
 
     let client = create_mock_client(&server);
 
-    let result = client
-        .trace()
-        .name("mock-trace-fail".to_string())
-        .call()
-        .await;
+    let result = client.trace().name("test-trace").call().await;
 
     mock.assert_async().await;
-    assert!(result.is_err(), "Trace creation should fail with 401");
-
-    if let Err(error) = result {
-        // Check that we get a meaningful error
-        assert!(error.to_string().contains("401") || error.to_string().contains("Unauthorized"));
+    assert!(result.is_err());
+    if let Err(err) = result {
+        assert!(err.to_string().contains("401") || err.to_string().contains("Unauthorized"));
     }
+}
+
+#[tokio::test]
+async fn test_validate_success() {
+    let mut server = Server::new_async().await;
+
+    let mock = server
+        .mock("GET", "/api/public/health")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"status": "ok"}"#)
+        .create_async()
+        .await;
+
+    let client = create_mock_client(&server);
+
+    let result = client.validate().await;
+
+    mock.assert_async().await;
+    assert!(result.is_ok());
+    assert!(result.unwrap());
+}
+
+#[tokio::test]
+async fn test_validate_auth_error() {
+    let mut server = Server::new_async().await;
+
+    let mock = server
+        .mock("GET", "/api/public/health")
+        .with_status(401)
+        .with_header("content-type", "application/json")
+        .with_header("x-request-id", "req-12345")
+        .with_body(r#"{"error": "Invalid credentials"}"#)
+        .create_async()
+        .await;
+
+    let client = create_mock_client(&server);
+
+    let result = client.validate().await;
+
+    mock.assert_async().await;
+    assert!(result.is_err());
+    if let Err(err) = result {
+        assert!(err.to_string().contains("Invalid credentials"));
+    }
+}
+
+#[tokio::test]
+async fn test_server_error_handling() {
+    let mut server = Server::new_async().await;
+
+    let mock = server
+        .mock("POST", "/api/public/ingestion")
+        .with_status(500)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"error": "Internal server error"}"#)
+        .create_async()
+        .await;
+
+    let client = create_mock_client(&server);
+
+    let result = client.trace().name("test-trace").call().await;
+
+    mock.assert_async().await;
+    assert!(result.is_err());
 }
 
 #[tokio::test]
@@ -125,8 +135,8 @@ async fn test_rate_limiting_handling() {
         .mock("POST", "/api/public/ingestion")
         .with_status(429)
         .with_header("content-type", "application/json")
-        .with_header("retry-after", "5")
-        .with_body(r#"{"error": "Rate limit exceeded"}"#)
+        .with_header("Retry-After", "60")
+        .with_body(r#"{"error": "Too many requests"}"#)
         .create_async()
         .await;
 
@@ -172,17 +182,16 @@ async fn test_span_creation_mock() {
 
     let result = client
         .span()
-        .trace_id("mock-trace-id".to_string())
-        .name("mock-span".to_string())
-        .input(json!({"operation": "test"}))
-        .output(json!({"result": "completed"}))
-        .level("INFO".to_string())
-        .status_message("Operation completed successfully".to_string())
+        .trace_id("trace-123")
+        .name("test-span")
+        .level("INFO")
         .call()
         .await;
 
     mock.assert_async().await;
-    assert!(result.is_ok(), "Span creation should succeed");
+    assert!(result.is_ok());
+    let span_id = result.unwrap();
+    assert!(!span_id.is_empty());
 }
 
 #[tokio::test]
@@ -201,16 +210,18 @@ async fn test_generation_creation_mock() {
 
     let result = client
         .generation()
-        .trace_id("mock-trace-id".to_string())
-        .name("mock-generation".to_string())
-        .model("gpt-4".to_string())
-        .input(json!({"prompt": "What is 2+2?"}))
-        .output(json!({"completion": "2+2 equals 4"}))
+        .trace_id("trace-123")
+        .name("test-generation")
+        .model("gpt-4")
+        .input(json!({"prompt": "Hello"}))
+        .output(json!({"response": "Hi"}))
         .call()
         .await;
 
     mock.assert_async().await;
-    assert!(result.is_ok(), "Generation creation should succeed");
+    assert!(result.is_ok());
+    let gen_id = result.unwrap();
+    assert!(!gen_id.is_empty());
 }
 
 #[tokio::test]
@@ -229,17 +240,16 @@ async fn test_event_creation_mock() {
 
     let result = client
         .event()
-        .trace_id("mock-trace-id".to_string())
-        .name("mock-event".to_string())
-        .input(json!({"event_type": "user_action"}))
-        .level("WARNING".to_string())
-        .status_message("User performed unexpected action".to_string())
-        .metadata(json!({"action_id": 12345}))
+        .trace_id("trace-123")
+        .name("user-action")
+        .level("INFO")
         .call()
         .await;
 
     mock.assert_async().await;
-    assert!(result.is_ok(), "Event creation should succeed");
+    assert!(result.is_ok());
+    let event_id = result.unwrap();
+    assert!(!event_id.is_empty());
 }
 
 #[tokio::test]
@@ -256,18 +266,19 @@ async fn test_score_creation_mock() {
 
     let client = create_mock_client(&server);
 
-    // Test numeric score
     let result = client
         .score()
-        .trace_id("mock-trace-id".to_string())
-        .name("accuracy".to_string())
+        .trace_id("trace-123")
+        .name("quality")
         .value(0.95)
-        .comment("High accuracy achieved".to_string())
+        .comment("Excellent")
         .call()
         .await;
 
     mock.assert_async().await;
-    assert!(result.is_ok(), "Numeric score creation should succeed");
+    assert!(result.is_ok());
+    let score_id = result.unwrap();
+    assert!(!score_id.is_empty());
 }
 
 #[tokio::test]
@@ -285,153 +296,247 @@ async fn test_categorical_score_mock() {
     let client = create_mock_client(&server);
 
     let result = client
-        .score()
-        .trace_id("mock-trace-id".to_string())
-        .name("sentiment".to_string())
-        .string_value("positive".to_string())
-        .comment("Positive sentiment detected".to_string())
-        .call()
+        .categorical_score("trace-123", "sentiment", "positive")
         .await;
 
     mock.assert_async().await;
-    assert!(result.is_ok(), "Categorical score creation should succeed");
+    assert!(result.is_ok());
 }
 
 #[tokio::test]
-async fn test_server_error_handling() {
+async fn test_network_error_handling() {
+    // Create a client with an invalid URL
+    let client = LangfuseClient::builder()
+        .public_key("pk-lf-test")
+        .secret_key("sk-lf-test")
+        .base_url("http://localhost:19999".to_string()) // Non-existent port
+        .build();
+
+    let result = client.trace().name("test-trace").call().await;
+
+    assert!(result.is_err());
+    if let Err(err) = result {
+        // Should be a network/API error
+        let error_str = err.to_string();
+        assert!(
+            error_str.contains("connect")
+                || error_str.contains("Connection")
+                || error_str.contains("Network")
+                || error_str.contains("error sending request"),
+            "Expected network error, got: {}",
+            error_str
+        );
+    }
+}
+
+// Note: Builder validation is done at compile time via the bon crate
+// These tests would fail to compile if required fields are missing
+
+#[tokio::test]
+async fn test_client_from_env_missing_vars() {
+    // Clear the environment variables
+    std::env::remove_var("LANGFUSE_PUBLIC_KEY");
+    std::env::remove_var("LANGFUSE_SECRET_KEY");
+    std::env::remove_var("LANGFUSE_BASE_URL");
+
+    let result = LangfuseClient::from_env();
+    assert!(result.is_err());
+    if let Err(err) = result {
+        assert!(err.to_string().contains("LANGFUSE_PUBLIC_KEY"));
+    }
+}
+
+// TODO: Enable when API endpoints are clarified
+// #[tokio::test]
+#[allow(dead_code)]
+async fn test_list_traces_mock() {
     let mut server = Server::new_async().await;
 
     let mock = server
-        .mock("POST", "/api/public/ingestion")
-        .with_status(500)
+        .mock("GET", "/api/public/traces")
+        .match_query(mockito::Matcher::Any)
+        .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(r#"{"error": "Internal server error"}"#)
+        .with_body(
+            json!({
+                "data": [
+                    {
+                        "id": "trace-1",
+                        "timestamp": "2024-01-01T00:00:00Z",
+                        "name": "test-trace-1"
+                    },
+                    {
+                        "id": "trace-2",
+                        "timestamp": "2024-01-01T00:01:00Z",
+                        "name": "test-trace-2"
+                    }
+                ],
+                "meta": {
+                    "page": 1,
+                    "limit": 10,
+                    "totalItems": 2,
+                    "totalPages": 1
+                }
+            })
+            .to_string(),
+        )
+        .create_async()
+        .await;
+
+    let client = create_mock_client(&server);
+
+    let result = client.list_traces().page(1).limit(10).call().await;
+
+    mock.assert_async().await;
+    assert!(result.is_ok());
+}
+
+// TODO: Enable when API endpoints are clarified
+// #[tokio::test]
+#[allow(dead_code)]
+async fn test_dataset_create_mock() {
+    let mut server = Server::new_async().await;
+
+    let mock = server
+        .mock("POST", "/api/public/v2/datasets")
+        .with_status(201)
+        .with_header("content-type", "application/json")
+        .with_body(
+            json!({
+                "id": "dataset-123",
+                "name": "test-dataset",
+                "description": "Test dataset",
+                "createdAt": "2024-01-01T00:00:00Z"
+            })
+            .to_string(),
+        )
         .create_async()
         .await;
 
     let client = create_mock_client(&server);
 
     let result = client
-        .trace()
-        .name("server-error-trace".to_string())
+        .create_dataset()
+        .name("test-dataset")
+        .description("Test dataset")
         .call()
         .await;
 
     mock.assert_async().await;
-    assert!(result.is_err(), "Should fail with server error");
+    assert!(result.is_ok());
 }
 
-#[tokio::test]
-async fn test_network_error_handling() {
-    // Create client with invalid URL to simulate network error
-    let client = LangfuseClient::builder()
-        .public_key("pk-lf-test")
-        .secret_key("sk-lf-test")
-        .base_url("http://invalid-url-that-does-not-exist.local:12345".to_string())
-        .build();
+// TODO: Enable when API endpoints are clarified
+// #[tokio::test]
+#[allow(dead_code)]
+async fn test_dataset_get_mock() {
+    let mut server = Server::new_async().await;
+
+    let mock = server
+        .mock("GET", "/api/public/v2/datasets/test-dataset")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            json!({
+                "id": "dataset-123",
+                "name": "test-dataset",
+                "description": "Test dataset",
+                "createdAt": "2024-01-01T00:00:00Z",
+                "metadata": {}
+            })
+            .to_string(),
+        )
+        .create_async()
+        .await;
+
+    let client = create_mock_client(&server);
+
+    let result = client.get_dataset("test-dataset").await;
+
+    mock.assert_async().await;
+    assert!(result.is_ok());
+}
+
+// TODO: Enable when API endpoints are clarified
+// #[tokio::test]
+#[allow(dead_code)]
+async fn test_prompt_get_mock() {
+    let mut server = Server::new_async().await;
+
+    let mock = server
+        .mock("GET", "/api/public/v2/prompts/test-prompt")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            json!({
+                "id": "prompt-123",
+                "name": "test-prompt",
+                "version": 1,
+                "prompt": "You are a helpful assistant.",
+                "config": {},
+                "createdAt": "2024-01-01T00:00:00Z"
+            })
+            .to_string(),
+        )
+        .create_async()
+        .await;
+
+    let client = create_mock_client(&server);
+
+    let result = client.get_prompt("test-prompt", None, None).await;
+
+    mock.assert_async().await;
+    assert!(result.is_ok());
+}
+
+// TODO: Enable when API endpoints are clarified
+// #[tokio::test]
+#[allow(dead_code)]
+async fn test_prompt_list_mock() {
+    let mut server = Server::new_async().await;
+
+    let mock = server
+        .mock("GET", "/api/public/v2/prompts")
+        .match_query(mockito::Matcher::Any)
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            json!({
+                "data": [
+                    {
+                        "id": "prompt-1",
+                        "name": "greeting-prompt",
+                        "version": 1,
+                        "prompt": "Say hello"
+                    },
+                    {
+                        "id": "prompt-2",
+                        "name": "farewell-prompt",
+                        "version": 1,
+                        "prompt": "Say goodbye"
+                    }
+                ],
+                "meta": {
+                    "page": 1,
+                    "limit": 20,
+                    "totalItems": 2,
+                    "totalPages": 1
+                }
+            })
+            .to_string(),
+        )
+        .create_async()
+        .await;
+
+    let client = create_mock_client(&server);
 
     let result = client
-        .trace()
-        .name("network-error-trace".to_string())
+        .list_prompts()
+        .page(1)
+        .limit("20".to_string())
         .call()
         .await;
 
-    assert!(result.is_err(), "Should fail with network error");
-
-    if let Err(error) = result {
-        // Should be a network-related error
-        let error_string = error.to_string().to_lowercase();
-        assert!(
-            error_string.contains("network")
-                || error_string.contains("connection")
-                || error_string.contains("dns")
-                || error_string.contains("resolve")
-                || error_string.contains("timeout")
-                || error_string.contains("error sending request"),
-            "Error should be network-related: {}",
-            error
-        );
-    }
-}
-
-#[tokio::test]
-async fn test_client_builder_validation() {
-    // Test that builder works with different configurations
-    let client = LangfuseClient::builder()
-        .public_key("pk-lf-test-key")
-        .secret_key("sk-lf-test-secret")
-        .base_url("https://custom-langfuse.example.com".to_string())
-        .timeout(std::time::Duration::from_secs(30))
-        .connect_timeout(std::time::Duration::from_secs(5))
-        .user_agent("custom-agent/1.0".to_string())
-        .build();
-
-    // Just test that the client was created successfully
-    // We verify creation by checking that we can call methods on it
-    assert!(client
-        .trace()
-        .name("test".to_string())
-        .call()
-        .await
-        .is_err()); // Should fail due to fake URL, but client works
-}
-
-#[test]
-fn test_client_from_env_missing_vars() {
-    // Temporarily clear environment variables
-    std::env::remove_var("LANGFUSE_PUBLIC_KEY");
-    std::env::remove_var("LANGFUSE_SECRET_KEY");
-    std::env::remove_var("LANGFUSE_BASE_URL");
-
-    let result = LangfuseClient::from_env();
-    assert!(
-        result.is_err(),
-        "Should fail when environment variables are missing"
-    );
-
-    if let Err(error) = result {
-        let error_string = error.to_string().to_lowercase();
-        assert!(
-            error_string.contains("public_key") || error_string.contains("environment"),
-            "Error should mention missing configuration: {}",
-            error
-        );
-    }
-}
-
-/// Test helper functions for mock testing
-pub mod test_helpers {
-    use super::*;
-
-    /// Create a mock server with common successful responses
-    pub async fn create_mock_server_with_success_responses() -> mockito::ServerGuard {
-        let mut server = Server::new_async().await;
-
-        // Default success response for ingestion
-        server
-            .mock("POST", "/api/public/ingestion")
-            .with_status(207)
-            .with_header("content-type", "application/json")
-            .with_body(r#"{"successes": [], "errors": []}"#)
-            .create_async()
-            .await;
-
-        server
-    }
-
-    /// Create a mock server that simulates various error conditions
-    pub async fn create_mock_server_with_errors() -> mockito::ServerGuard {
-        let mut server = Server::new_async().await;
-
-        // Simulate different error responses
-        server
-            .mock("POST", "/api/public/ingestion")
-            .with_status(401)
-            .with_header("content-type", "application/json")
-            .with_body(r#"{"error": "Invalid API key"}"#)
-            .create_async()
-            .await;
-
-        server
-    }
+    mock.assert_async().await;
+    assert!(result.is_ok());
 }
