@@ -51,10 +51,7 @@ impl LangfuseClient {
         // Disable compression by default, enable with feature flag
         #[cfg(not(feature = "compression"))]
         {
-            client_builder = client_builder
-                .no_gzip()
-                .no_brotli()
-                .no_deflate();
+            client_builder = client_builder.no_gzip().no_brotli().no_deflate();
         }
 
         // Build client (ignore errors for now, use default client if building fails)
