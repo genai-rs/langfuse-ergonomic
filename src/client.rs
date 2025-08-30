@@ -119,16 +119,16 @@ impl LangfuseClient {
         // For now, we'll just return Ok(true)
         Ok(true)
     }
-    
+
     /// Create a batcher for efficient batch ingestion
-    /// 
+    ///
     /// The batcher automatically handles:
     /// - Batching events up to size/count limits
     /// - Automatic flushing on intervals
     /// - 207 Multi-Status response parsing
     /// - Retrying only failed events
     /// - Exponential backoff for retryable errors
-    /// 
+    ///
     /// # Example
     /// ```no_run
     /// # use langfuse_ergonomic::{LangfuseClient, BatcherConfig};
@@ -139,10 +139,7 @@ impl LangfuseClient {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn create_batcher(
-        self: Arc<Self>,
-        config: Option<BatcherConfig>,
-    ) -> Batcher {
+    pub fn create_batcher(self: Arc<Self>, config: Option<BatcherConfig>) -> Batcher {
         // Clone the Arc to avoid moving self
         let client = LangfuseClient {
             public_key: self.public_key.clone(),
@@ -158,9 +155,9 @@ impl LangfuseClient {
                 user_agent: self.configuration.user_agent.clone(),
             },
         };
-        
+
         let config = config.unwrap_or_default();
-        
+
         Batcher::builder()
             .client(client)
             .max_events(config.max_events)
