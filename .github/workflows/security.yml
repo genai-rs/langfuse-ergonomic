@@ -1,17 +1,26 @@
-name: Security (Comprehensive)
+name: Security
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
   schedule:
     # Run comprehensive security checks daily at 2 AM UTC
     - cron: '0 2 * * *'
   workflow_dispatch:  # Allow manual triggering
 
+permissions:
+  contents: read
+  security-events: write
+  checks: write
+
 jobs:
+  # Dependency vulnerability scanning
   audit:
     name: Cargo Audit
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,9 +33,11 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+  # License and dependency analysis
   deny:
     name: Cargo Deny
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -35,14 +46,48 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         
       - name: Install cargo-deny
-        run: cargo install cargo-deny --locked
-        
+        run: |
+          wget https://github.com/EmbarkStudios/cargo-deny/releases/download/0.16.2/cargo-deny-0.16.2-x86_64-unknown-linux-musl.tar.gz
+          tar -xzf cargo-deny-0.16.2-x86_64-unknown-linux-musl.tar.gz
+          sudo mv cargo-deny-0.16.2-x86_64-unknown-linux-musl/cargo-deny /usr/local/bin/
+      
       - name: Run cargo deny
         run: cargo deny check
 
+  # Secret scanning with multiple tools
+  secrets:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for scanning
+      
+      # TruffleHog scanning
+      - name: Run TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          head: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.event.after }}
+          extra_args: --only-verified
+      
+      # Gitleaks scanning
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  # CodeQL analysis (only on schedule and main branch)
   codeql:
     name: CodeQL Analysis
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Only run on schedule or main branch pushes to avoid PR overhead
+    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     permissions:
       actions: read
       contents: read
@@ -56,7 +101,10 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: 'rust'
-          config-file: ./.github/codeql/codeql-config.yml
+          # Only use config file if it exists
+          config: |
+            queries:
+              - uses: security-and-quality
           
       - name: Build
         run: cargo build --verbose
