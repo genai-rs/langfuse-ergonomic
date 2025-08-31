@@ -11,9 +11,15 @@ git_tag_enable = true
 
 # Git release body template - ensures GitHub releases have proper content
 git_release_body = """
-{{ changelog }}
+## What's Changed
 
-**Full Changelog**: {{ remote.compare_url }}
+{%- if changelog %}
+{{ changelog }}
+{%- else %}
+_No changelog available_
+{%- endif %}
+
+**Full Changelog**: https://github.com/genai-rs/langfuse-ergonomic/compare/{{ previous_version }}...{{ version }}
 """
 
 # PR settings
