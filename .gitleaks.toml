@@ -1,0 +1,39 @@
+# Gitleaks configuration for langfuse-ergonomic
+# Secret scanning configuration to prevent accidental credential commits
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allowlisted patterns"
+paths = [
+    '''Cargo\.lock''',
+    '''target/''',
+    '''\.git/''',
+    '''docs/'''
+]
+
+# Allow example/test keys that are clearly marked as such
+regexes = [
+    '''your-public-key''',
+    '''your-secret-key''',
+    '''test-key''',
+    '''example-key''',
+    '''dummy-key''',
+    '''fake-key''',
+    '''LANGFUSE_PUBLIC_KEY''',
+    '''LANGFUSE_SECRET_KEY'''
+]
+
+# Custom rules for Langfuse-specific patterns
+[[rules]]
+id = "langfuse-api-key"
+description = "Langfuse API Key"
+regex = '''(?i)(pk-lf-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}|sk-lf-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})'''
+tags = ["key", "langfuse"]
+
+[[rules]]
+id = "generic-api-key"
+description = "Generic API Key"
+regex = '''(?i)((api[_\-\s]?key|api[_\-\s]?secret|api[_\-\s]?token)[\[\]]*[\s]*[=:][\s]*['"]?[a-zA-Z0-9\-_]{32,}['"]?)'''
+tags = ["key", "api"]
