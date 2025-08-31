@@ -63,6 +63,9 @@ branches:
           - "Cargo Deny"                 # License and dependency analysis
           - "Secret Scanning"            # Combined secrets check
           
+          # Dependency maintenance (from dependencies.yml workflow)
+          - "Check Unused Dependencies"  # Keep dependencies clean
+          
           # Note: Code Coverage is informational only, not required
       
       # Enforce for admins
