@@ -26,7 +26,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        rust: [stable, beta]
+        rust: [stable, beta, "1.82"]  # 1.82 is our MSRV (matching langfuse-client-base dependency)
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
