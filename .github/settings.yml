@@ -49,21 +49,19 @@ branches:
       required_status_checks:
         strict: true  # Require branches to be up to date before merging
         contexts:
-          # Core CI checks - test suite and security
-          - "Security Audit"
+          # Core CI checks - test suite
           - "Test Suite (macos-latest / stable)"
           - "Test Suite (macos-latest / beta)"
           - "Test Suite (ubuntu-latest / stable)"
           - "Test Suite (ubuntu-latest / beta)"
           - "Test Suite (windows-latest / stable)"
           - "Test Suite (windows-latest / beta)"
-          
-          # Additional quality checks
           - "Feature Combinations"        # Ensure all feature combinations compile
-          - "Check Unused Dependencies"   # Keep dependencies clean
-          - "TruffleHog Secrets Scan"    # Prevent secret leaks
-          - "Gitleaks Secrets Scan"      # Additional secret scanning
-          - "cargo-deny"                 # License, security, and dependency checks
+          
+          # Security checks (from security.yml workflow)
+          - "Cargo Audit"                # Dependency vulnerability scanning
+          - "Cargo Deny"                 # License and dependency analysis
+          - "Secret Scanning"            # Combined secrets check
           
           # Note: Code Coverage is informational only, not required
       
