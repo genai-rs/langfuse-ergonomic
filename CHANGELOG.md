@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.3.0...v0.3.1) - 2025-09-19
+
+### Added
+
+- implement missing API features
+- add gitleaks configuration for secret scanning
+- add MSRV (1.82) testing and badge
+
+### Fixed
+
+- restore changelog in GitHub releases
+
+### Other
+
+- upgrade langfuse-client-base to v0.3
+- add Check Unused Dependencies back as required status check
+- update branch protection rules for reorganized workflows
+- reorganize GitHub workflows for better separation of concerns
+- remove workflow comparison documentation files
+- consolidate cargo-deny into CI workflow
+
 ## [0.3.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.2.1...v0.3.0) - 2025-08-30
 
 ### Added
