@@ -14,7 +14,7 @@ This is the **langfuse-ergonomic** repository - an ergonomic wrapper for the Lan
 This repository was migrated from the monorepo at timvw/langfuse-rs to a standalone repository in the genai-rs organization. Key changes:
 
 1. **Standalone Repository**: Converted from workspace member to standalone package
-2. **Dependencies**: Now depends on published langfuse-client-base crate from crates.io (v0.1)
+2. **Dependencies**: Now depends on published langfuse-client-base crate from crates.io (v0.3)
 3. **Simplified Configuration**: Removed workspace configuration from release-plz.toml
 4. **Structure**: All code moved from subdirectory to repository root
 5. **CI/CD**: Retained full test matrix as this contains manually written code
