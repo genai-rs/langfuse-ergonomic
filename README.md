@@ -134,6 +134,9 @@ cargo run --example batch_ingestion
 
 # Self-hosted configuration
 cargo run --example self_hosted
+
+# Advanced features (prompts, dataset items, observation updates)
+cargo run --example advanced_features
 ```
 
 ### Batch Processing

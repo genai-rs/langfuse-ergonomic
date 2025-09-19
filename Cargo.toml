@@ -98,6 +98,10 @@ path = "examples/self_hosted.rs"
 name = "trace_urls_byo_ids"
 path = "examples/trace_urls_byo_ids.rs"
 
+[[example]]
+name = "advanced_features"
+path = "examples/advanced_features.rs"
+
 
 [features]
 default = ["rustls"]

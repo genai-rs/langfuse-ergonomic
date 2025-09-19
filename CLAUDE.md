@@ -21,8 +21,7 @@ This repository was migrated from the monorepo at timvw/langfuse-rs to a standal
 
 ### Migration Notes
 - Repository is still technically a fork but has full permissions via organization settings
-- Observations and scores modules are temporarily disabled (commented out in lib.rs) pending API updates
-- Only traces module is currently active and tested
+- All modules are now active and tested
 
 ## Development Workflow
 
@@ -90,6 +89,7 @@ cargo run --example test_trace
 cargo run --example basic_trace
 cargo run --example trace_with_metadata
 cargo run --example multiple_traces
+cargo run --example advanced_features
 ```
 
 ### CI/CD
@@ -115,12 +115,12 @@ cargo run --example multiple_traces
   - Metrics tracking
   - Graceful shutdown
 - Dataset management
-- Prompt management (basic - get/create)
+- Prompt management (create text/chat prompts, update versions, list, get)
 
 ### Not Yet Implemented ❌
-- Advanced prompt versioning and caching
-- Full dataset item operations
-- Observation updates/deletions
+- Advanced prompt caching
+- Dataset run items API (not available in v0.2)
+- Event update operations (no IngestionEvent variant in v0.2)
 
 ## Common Tasks
 

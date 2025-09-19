@@ -459,6 +459,200 @@ impl LangfuseClient {
             .map_err(|e| crate::error::Error::Api(format!("Failed to create event: {}", e)))
     }
 
+    // ===== OBSERVATION UPDATES AND RETRIEVAL =====
+
+    /// Get a specific observation
+    pub async fn get_observation(
+        &self,
+        observation_id: impl Into<String>,
+    ) -> Result<serde_json::Value> {
+        use langfuse_client_base::apis::observations_api;
+
+        let observation_id = observation_id.into();
+
+        let observation = observations_api::observations_get(self.configuration(), &observation_id)
+            .await
+            .map_err(|e| crate::error::Error::Api(format!("Failed to get observation: {}", e)))?;
+
+        serde_json::to_value(observation).map_err(|e| {
+            crate::error::Error::Api(format!("Failed to serialize observation: {}", e))
+        })
+    }
+
+    /// Get multiple observations
+    #[builder]
+    pub async fn get_observations(
+        &self,
+        page: Option<i32>,
+        limit: Option<i32>,
+        #[builder(into)] trace_id: Option<String>,
+        #[builder(into)] parent_observation_id: Option<String>,
+        #[builder(into)] name: Option<String>,
+        #[builder(into)] user_id: Option<String>,
+        observation_type: Option<String>,
+    ) -> Result<serde_json::Value> {
+        use langfuse_client_base::apis::observations_api;
+
+        // Note: The API has more parameters but they're not all exposed in v0.2
+        // Using the actual signature from the base client
+        let observations = observations_api::observations_get_many(
+            self.configuration(),
+            page,
+            limit,
+            trace_id.as_deref(),
+            parent_observation_id.as_deref(),
+            observation_type.as_deref(),
+            user_id.as_deref(),
+            None, // observation_level
+            name.as_deref(),
+            None, // tags
+            None, // from_start_time_str
+            None, // to_start_time_str
+            None, // version
+        )
+        .await
+        .map_err(|e| crate::error::Error::Api(format!("Failed to get observations: {}", e)))?;
+
+        serde_json::to_value(observations).map_err(|e| {
+            crate::error::Error::Api(format!("Failed to serialize observations: {}", e))
+        })
+    }
+
+    /// Update an existing span
+    #[builder]
+    pub async fn update_span(
+        &self,
+        #[builder(into)] id: String,
+        #[builder(into)] trace_id: String,
+        #[builder(into)] name: Option<String>,
+        start_time: Option<DateTime<Utc>>,
+        end_time: Option<DateTime<Utc>>,
+        metadata: Option<Value>,
+        input: Option<Value>,
+        output: Option<Value>,
+        level: Option<String>,
+        status_message: Option<String>,
+        version: Option<String>,
+        #[builder(into)] parent_observation_id: Option<String>,
+    ) -> Result<String> {
+        use chrono::Utc as ChronoUtc;
+        use langfuse_client_base::models::{
+            IngestionBatchRequest, IngestionEvent, IngestionEventOneOf3, UpdateSpanBody,
+        };
+        use uuid::Uuid;
+
+        let event_body = UpdateSpanBody {
+            id: id.clone(),
+            trace_id: Some(Some(trace_id)),
+            name: Some(name),
+            start_time: Some(start_time.map(|dt| dt.to_rfc3339())),
+            end_time: Some(end_time.map(|dt| dt.to_rfc3339())),
+            metadata: Some(metadata),
+            input: Some(input),
+            output: Some(output),
+            level: level.map(|l| parse_observation_level(&l)),
+            status_message: Some(status_message),
+            version: Some(version),
+            parent_observation_id: Some(parent_observation_id),
+            environment: None,
+        };
+
+        let event = IngestionEventOneOf3 {
+            body: Box::new(event_body),
+            id: Uuid::new_v4().to_string(),
+            timestamp: ChronoUtc::now().to_rfc3339(),
+            metadata: None,
+            r#type: langfuse_client_base::models::ingestion_event_one_of_3::Type::SpanUpdate,
+        };
+
+        let batch = IngestionBatchRequest {
+            batch: vec![IngestionEvent::IngestionEventOneOf3(Box::new(event))],
+            metadata: None,
+        };
+
+        use langfuse_client_base::apis::ingestion_api;
+        ingestion_api::ingestion_batch(self.configuration(), batch)
+            .await
+            .map_err(|e| Error::Api(format!("Failed to update span: {}", e)))?;
+
+        Ok(id)
+    }
+
+    /// Update an existing generation
+    #[builder]
+    pub async fn update_generation(
+        &self,
+        #[builder(into)] id: String,
+        #[builder(into)] trace_id: String,
+        #[builder(into)] name: Option<String>,
+        start_time: Option<DateTime<Utc>>,
+        end_time: Option<DateTime<Utc>>,
+        completion_start_time: Option<DateTime<Utc>>,
+        model: Option<String>,
+        input: Option<Value>,
+        output: Option<Value>,
+        metadata: Option<Value>,
+        level: Option<String>,
+        status_message: Option<String>,
+        version: Option<String>,
+        #[builder(into)] parent_observation_id: Option<String>,
+    ) -> Result<String> {
+        use chrono::Utc as ChronoUtc;
+        use langfuse_client_base::models::{
+            IngestionBatchRequest, IngestionEvent, IngestionEventOneOf5, UpdateGenerationBody,
+        };
+        use uuid::Uuid;
+
+        // Note: In v0.2, model_parameters and usage have different types
+        // We'll leave them out for now as they require special handling
+        let event_body = UpdateGenerationBody {
+            id: id.clone(),
+            trace_id: Some(Some(trace_id)),
+            name: Some(name),
+            start_time: Some(start_time.map(|dt| dt.to_rfc3339())),
+            end_time: Some(end_time.map(|dt| dt.to_rfc3339())),
+            completion_start_time: Some(completion_start_time.map(|dt| dt.to_rfc3339())),
+            model: Some(model),
+            model_parameters: None, // Requires HashMap<String, MapValue>
+            input: Some(input),
+            output: Some(output),
+            usage: None, // Requires Box<IngestionUsage>
+            metadata: Some(metadata),
+            level: level.map(|l| parse_observation_level(&l)),
+            status_message: Some(status_message),
+            version: Some(version),
+            parent_observation_id: Some(parent_observation_id),
+            environment: None,
+            cost_details: None,
+            prompt_name: None,
+            prompt_version: None,
+            usage_details: None,
+        };
+
+        let event = IngestionEventOneOf5 {
+            body: Box::new(event_body),
+            id: Uuid::new_v4().to_string(),
+            timestamp: ChronoUtc::now().to_rfc3339(),
+            metadata: None,
+            r#type: langfuse_client_base::models::ingestion_event_one_of_5::Type::GenerationUpdate,
+        };
+
+        let batch = IngestionBatchRequest {
+            batch: vec![IngestionEvent::IngestionEventOneOf5(Box::new(event))],
+            metadata: None,
+        };
+
+        use langfuse_client_base::apis::ingestion_api;
+        ingestion_api::ingestion_batch(self.configuration(), batch)
+            .await
+            .map_err(|e| Error::Api(format!("Failed to update generation: {}", e)))?;
+
+        Ok(id)
+    }
+
+    // Note: UpdateEventBody exists in v0.2 but doesn't have a corresponding IngestionEvent variant
+    // This functionality will need to wait for a later version
+
     // ===== SCORING =====
 
     /// Create a score
@@ -720,34 +914,217 @@ impl LangfuseClient {
         })
     }
 
+    // ===== DATASET ITEM OPERATIONS =====
+
+    /// Create a new dataset item
+    #[builder]
+    pub async fn create_dataset_item(
+        &self,
+        #[builder(into)] dataset_name: String,
+        input: Option<Value>,
+        expected_output: Option<Value>,
+        metadata: Option<Value>,
+        #[builder(into)] source_trace_id: Option<String>,
+        #[builder(into)] source_observation_id: Option<String>,
+        #[builder(into)] id: Option<String>,
+        _status: Option<String>,
+    ) -> Result<serde_json::Value> {
+        use langfuse_client_base::apis::dataset_items_api;
+        use langfuse_client_base::models::CreateDatasetItemRequest;
+
+        let item_request = CreateDatasetItemRequest {
+            dataset_name,
+            input: Some(input),
+            expected_output: Some(expected_output),
+            metadata: Some(metadata),
+            source_trace_id: Some(source_trace_id),
+            source_observation_id: Some(source_observation_id),
+            id: Some(id),
+            status: None, // Status field requires DatasetStatus enum, not available in public API
+        };
+
+        let result = dataset_items_api::dataset_items_create(self.configuration(), item_request)
+            .await
+            .map_err(|e| {
+                crate::error::Error::Api(format!("Failed to create dataset item: {}", e))
+            })?;
+
+        serde_json::to_value(result).map_err(|e| {
+            crate::error::Error::Api(format!("Failed to serialize dataset item: {}", e))
+        })
+    }
+
+    /// Get a specific dataset item
+    pub async fn get_dataset_item(&self, item_id: impl Into<String>) -> Result<serde_json::Value> {
+        use langfuse_client_base::apis::dataset_items_api;
+
+        let item_id = item_id.into();
+
+        let item = dataset_items_api::dataset_items_get(self.configuration(), &item_id)
+            .await
+            .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset item: {}", e)))?;
+
+        serde_json::to_value(item).map_err(|e| {
+            crate::error::Error::Api(format!("Failed to serialize dataset item: {}", e))
+        })
+    }
+
+    /// List dataset items
+    #[builder]
+    pub async fn list_dataset_items(
+        &self,
+        #[builder(into)] dataset_name: Option<String>,
+        #[builder(into)] source_trace_id: Option<String>,
+        #[builder(into)] source_observation_id: Option<String>,
+        page: Option<i32>,
+        limit: Option<i32>,
+    ) -> Result<serde_json::Value> {
+        use langfuse_client_base::apis::dataset_items_api;
+
+        let items = dataset_items_api::dataset_items_list(
+            self.configuration(),
+            dataset_name.as_deref(),
+            source_trace_id.as_deref(),
+            source_observation_id.as_deref(),
+            page,
+            limit,
+        )
+        .await
+        .map_err(|e| crate::error::Error::Api(format!("Failed to list dataset items: {}", e)))?;
+
+        serde_json::to_value(items).map_err(|e| {
+            crate::error::Error::Api(format!("Failed to serialize dataset items: {}", e))
+        })
+    }
+
+    /// Delete a dataset item
+    pub async fn delete_dataset_item(&self, item_id: impl Into<String>) -> Result<()> {
+        use langfuse_client_base::apis::dataset_items_api;
+
+        let item_id = item_id.into();
+
+        dataset_items_api::dataset_items_delete(self.configuration(), &item_id)
+            .await
+            .map_err(|e| {
+                crate::error::Error::Api(format!("Failed to delete dataset item: {}", e))
+            })?;
+
+        Ok(())
+    }
+
+    // Note: dataset_run_items_api doesn't exist in v0.2
+    // We'll implement this when the API is available
+
     // ===== PROMPT MANAGEMENT =====
 
-    /// Create a prompt (currently using get as placeholder)
+    /// Create a new prompt or a new version of an existing prompt
     #[builder]
     pub async fn create_prompt(
         &self,
         #[builder(into)] name: String,
-        #[builder(into)] _prompt: String,
+        #[builder(into)] prompt: String,
         _is_active: Option<bool>,
-        _config: Option<Value>,
-        _labels: Option<Vec<String>>,
-        _tags: Option<Vec<String>>,
+        config: Option<Value>,
+        labels: Option<Vec<String>>,
+        tags: Option<Vec<String>>,
     ) -> Result<serde_json::Value> {
         use langfuse_client_base::apis::prompts_api;
+        use langfuse_client_base::models::CreatePromptRequest;
 
-        // TODO: Figure out the correct way to create prompts via API
-        // For now, we'll just use prompts_get to test the API structure
-        let result = prompts_api::prompts_get(self.configuration(), &name, None, None)
+        // Create a text prompt request using the OneOf1 variant
+        use langfuse_client_base::models::CreatePromptRequestOneOf1;
+
+        let prompt_request =
+            CreatePromptRequest::CreatePromptRequestOneOf1(Box::new(CreatePromptRequestOneOf1 {
+                name: name.clone(),
+                prompt,
+                config: Some(config),
+                labels: Some(labels),
+                tags: Some(tags),
+                ..Default::default()
+            }));
+
+        let result = prompts_api::prompts_create(self.configuration(), prompt_request)
+            .await
+            .map_err(|e| crate::error::Error::Api(format!("Failed to create prompt: {}", e)))?;
+
+        serde_json::to_value(result)
+            .map_err(|e| crate::error::Error::Api(format!("Failed to serialize prompt: {}", e)))
+    }
+
+    /// Create a chat prompt with messages
+    #[builder]
+    pub async fn create_chat_prompt(
+        &self,
+        #[builder(into)] name: String,
+        messages: Vec<serde_json::Value>, // Array of chat messages as JSON
+        config: Option<Value>,
+        labels: Option<Vec<String>>,
+        tags: Option<Vec<String>>,
+    ) -> Result<serde_json::Value> {
+        use langfuse_client_base::apis::prompts_api;
+        use langfuse_client_base::models::{
+            ChatMessageWithPlaceholders, CreatePromptRequest, CreatePromptRequestOneOf,
+        };
+
+        // Convert JSON messages to ChatMessageWithPlaceholders
+        // Since ChatMessageWithPlaceholders is an enum, we need to deserialize properly
+        let chat_messages: Vec<ChatMessageWithPlaceholders> = messages
+            .into_iter()
+            .map(|msg| {
+                // Try to deserialize the JSON into ChatMessageWithPlaceholders
+                serde_json::from_value(msg).unwrap_or_else(|_| {
+                    // Create a default message if parsing fails
+                    ChatMessageWithPlaceholders::default()
+                })
+            })
+            .collect();
+
+        let prompt_request =
+            CreatePromptRequest::CreatePromptRequestOneOf(Box::new(CreatePromptRequestOneOf {
+                name: name.clone(),
+                prompt: chat_messages,
+                config: Some(config),
+                labels: Some(labels),
+                tags: Some(tags),
+                ..Default::default()
+            }));
+
+        let result = prompts_api::prompts_create(self.configuration(), prompt_request)
             .await
             .map_err(|e| {
-                crate::error::Error::Api(format!(
-                    "Prompts create not yet implemented, tried get instead: {}",
-                    e
-                ))
+                crate::error::Error::Api(format!("Failed to create chat prompt: {}", e))
             })?;
 
         serde_json::to_value(result)
             .map_err(|e| crate::error::Error::Api(format!("Failed to serialize prompt: {}", e)))
+    }
+
+    /// Update labels for a specific prompt version
+    #[builder]
+    pub async fn update_prompt_version(
+        &self,
+        #[builder(into)] name: String,
+        version: i32,
+        labels: Vec<String>,
+    ) -> Result<serde_json::Value> {
+        use langfuse_client_base::apis::prompt_version_api;
+        use langfuse_client_base::models::PromptVersionUpdateRequest;
+
+        let update_request = PromptVersionUpdateRequest { new_labels: labels };
+
+        let result = prompt_version_api::prompt_version_update(
+            self.configuration(),
+            &name,
+            version,
+            update_request,
+        )
+        .await
+        .map_err(|e| crate::error::Error::Api(format!("Failed to update prompt version: {}", e)))?;
+
+        serde_json::to_value(result).map_err(|e| {
+            crate::error::Error::Api(format!("Failed to serialize prompt version: {}", e))
+        })
     }
 
     /// Get a prompt by name and version
