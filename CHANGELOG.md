@@ -116,7 +116,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
-- add migration context to***REMOVED*** ([#4](https://github.com/genai-rs/langfuse-ergonomic/pull/4))
+- add migration context to ***REMOVED*** guide ([#4](https://github.com/genai-rs/langfuse-ergonomic/pull/4))
 - convert to standalone langfuse-ergonomic repository
 - Merge pull request #7 from timvw/docs/improve-readme-badges
 - Merge pull request #6 from timvw/chore/configure-renovate-comprehensive

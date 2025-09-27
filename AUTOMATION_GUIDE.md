@@ -1,6 +1,6 @@
-# Instructions for***REMOVED***
+# Automation Context Guide
 
-This file contains important instructions and context for***REMOVED*** when working on this project.
+This file captures the background and workflow expectations for anyone (human teammates or ***REMOVED***) working on this project.
 
 ## Repository Context
 
