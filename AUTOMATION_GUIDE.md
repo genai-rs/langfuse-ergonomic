@@ -1,6 +1,6 @@
-# Instructions for Claude
+# Automation Context Guide
 
-This file contains important instructions and context for Claude when working on this project.
+This file captures the background and workflow expectations for anyone (human teammates or automation tooling) working on this project.
 
 ## Repository Context
 
