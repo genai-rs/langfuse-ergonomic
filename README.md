@@ -10,14 +10,14 @@ Ergonomic Rust client for [Langfuse](https://langfuse.com), the open-source LLM 
 
 ## Features
 
-- 🏗️ **Builder Pattern** - Intuitive API using the [Bon](https://bon-rs.com) builder pattern library
-- 🔄 **Async/Await** - Full async support with Tokio
-- 🔒 **Type Safe** - Strongly typed with compile-time guarantees
-- 🚀 **Easy Setup** - Simple configuration from environment variables
-- 📊 **Comprehensive** - Support for traces, observations, scores, and more
-- 🔁 **Batch Processing** - Automatic batching with retry logic and chunking
-- ⚡ **Production Ready** - Built-in timeouts, connection pooling, and error handling
-- 🏠 **Self-Hosted Support** - Full support for self-hosted Langfuse instances
+- **Builder pattern** - intuitive API using the [Bon](https://bon-rs.com) builder library
+- **Async/await ready** - full async support with Tokio
+- **Type safe** - strongly typed with compile-time guarantees
+- **Easy setup** - simple configuration from environment variables
+- **Comprehensive** - support for traces, observations, scores, and more
+- **Batch processing** - automatic batching with retry logic and chunking
+- **Production ready** - built-in timeouts, connection pooling, and error handling
+- **Self-hosted support** - full support for self-hosted Langfuse instances
 
 ## Installation
 
@@ -230,7 +230,7 @@ match batcher.flush().await {
 
 ## API Coverage
 
-### Implemented Features ✅
+### Implemented Features
 
 #### Traces
 - **Creation** - Full trace creation with metadata support
