@@ -47,7 +47,7 @@
 //! ```
 
 use bon::bon;
-use rand::Rng;
+use rand::{rng, Rng};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -698,7 +698,8 @@ impl Batcher {
                 let actual_delay = if config.retry_jitter {
                     #[allow(clippy::cast_possible_truncation)]
                     let jitter_range = delay.as_millis().min(u128::from(u64::MAX)) as u64 / 4; // 25% jitter
-                    let jitter = rand::thread_rng().gen_range(0..=jitter_range);
+                    let mut rng = rng();
+                    let jitter = rng.random_range(0..=jitter_range);
                     delay + Duration::from_millis(jitter)
                 } else {
                     delay
