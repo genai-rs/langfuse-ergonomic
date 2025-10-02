@@ -38,7 +38,7 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.10", features = ["v4", "v5", "serde"] }
 tokio = { version = "1.40", features = ["macros", "rt-multi-thread", "sync", "time"] }
 tracing = "0.1"  # For library logging (replacing eprintln!)
-rand = "0.8"
+rand = "0.9"
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
