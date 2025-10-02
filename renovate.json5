@@ -1,141 +1,150 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  
-  // ========================================
-  // BASE CONFIGURATION
-  // ========================================
-  "extends": [
-    "config:recommended",        // Best practices preset
-    ":dependencyDashboard",       // Create dependency dashboard issue
-    ":semanticCommitTypeAll(chore)", // Use 'chore:' prefix for all commits
-    ":rebaseStalePrs",           // Rebase PRs when they get out of date
-    ":prConcurrentLimit10"       // Limit to 10 concurrent PRs
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
+    ':dependencyDashboard',
+    ':semanticCommitTypeAll(chore)',
+    ':rebaseStalePrs',
+    ':prConcurrentLimit10',
   ],
-  
-  // ========================================
-  // SCHEDULE & TIMING
-  // ========================================
-  "timezone": "UTC",
-  "schedule": [
-    "after 2am and before 6am on monday" // Weekly updates
+  timezone: 'UTC',
+  schedule: [
+    'after 2am and before 6am on monday',
   ],
-  
-  // ========================================
-  // MANAGERS
-  // ========================================
-  "enabledManagers": [
-    "cargo",          // Rust dependencies
-    "github-actions"  // GitHub Actions versions
+  enabledManagers: [
+    'cargo',
+    'github-actions',
   ],
-  
-  // ========================================
-  // PR CONFIGURATION
-  // ========================================
-  "labels": ["dependencies"],
-  "commitMessagePrefix": "chore(deps):",
-  "prBodyTemplate": "This PR updates dependencies. See the [Dependency Dashboard](../../issues) for details.",
-  "rangeStrategy": "auto",
-  
-  // No ignored paths - this repo doesn't have generated code
-  
-  // ========================================
-  // PACKAGE RULES
-  // ========================================
-  "packageRules": [
-    // === Rust Dependencies ===
+  labels: [
+    'dependencies',
+  ],
+  commitMessagePrefix: 'chore(deps):',
+  prBodyTemplate: 'This PR updates dependencies. See the [Dependency Dashboard](../../issues) for details.',
+  rangeStrategy: 'auto',
+  packageRules: [
     {
-      "description": "Group all Rust patch updates",
-      "matchManagers": ["cargo"],
-      "matchUpdateTypes": ["patch"],
-      "groupName": "rust patch updates",
-      "automerge": true
-    },
-    {
-      "description": "Group all Rust minor updates",
-      "matchManagers": ["cargo"],
-      "matchUpdateTypes": ["minor"],
-      "groupName": "rust minor updates",
-      "automerge": true
-    },
-    {
-      "description": "Rust major updates - require manual review",
-      "matchManagers": ["cargo"],
-      "matchUpdateTypes": ["major"],
-      "labels": ["dependencies", "breaking"],
-      "automerge": false
-    },
-    
-    // === GitHub Actions ===
-    {
-      "description": "Group all GitHub Actions updates",
-      "matchManagers": ["github-actions"],
-      "groupName": "github-actions",
-      "automerge": true
-    },
-    
-    // === Security Updates ===
-    {
-      "description": "Security updates - merge immediately",
-      "matchUpdateTypes": ["security"],
-      "labels": ["security", "dependencies"],
-      "automerge": true,
-      "prPriority": 10,
-      "schedule": ["at any time"], // Don't wait for schedule
-      "minimumReleaseAge": "0 days"
-    },
-    
-    // === Core Dependencies (require careful review) ===
-    {
-      "description": "Core dependencies - manual review required",
-      "matchPackageNames": [
-        "serde",
-        "reqwest",
-        "tokio",
-        "bon",
-        "langfuse-client-base"
+      matchCategories: [
+        'rust',
       ],
-      "labels": ["dependencies", "core"],
-      "automerge": false,
-      "assignees": ["timvw"]
+      enabled: true,
+      rangeStrategy: 'update-lockfile',
     },
-    
-    // === Dev Dependencies ===
     {
-      "description": "Dev dependencies - auto-merge all",
-      "matchDepTypes": ["devDependencies"],
-      "automerge": true,
-      "labels": ["dependencies", "dev"]
+      description: 'Group all Rust patch updates',
+      matchManagers: [
+        'cargo',
+      ],
+      matchUpdateTypes: [
+        'patch',
+      ],
+      groupName: 'rust patch updates',
+      automerge: true,
     },
-    
-    // === Langfuse Base Client ===
     {
-      "description": "Langfuse base client - manual review",
-      "matchPackageNames": ["langfuse-client-base"],
-      "labels": ["dependencies", "langfuse-base"],
-      "automerge": false,
-      "assignees": ["timvw"],
-      "prBodyNotes": [
-        "⚠️ **Langfuse Base Client Update**",
-        "This updates the underlying OpenAPI-generated client.",
-        "Please review for API compatibility changes."
-      ]
-    }
+      description: 'Group all Rust minor updates',
+      matchManagers: [
+        'cargo',
+      ],
+      matchUpdateTypes: [
+        'minor',
+      ],
+      groupName: 'rust minor updates',
+      automerge: true,
+    },
+    {
+      description: 'Rust major updates - require manual review',
+      matchManagers: [
+        'cargo',
+      ],
+      matchUpdateTypes: [
+        'major',
+      ],
+      labels: [
+        'dependencies',
+        'breaking',
+      ],
+      automerge: false,
+    },
+    {
+      description: 'Group all GitHub Actions updates',
+      matchManagers: [
+        'github-actions',
+      ],
+      groupName: 'github-actions',
+      automerge: true,
+    },
+    {
+      description: 'Security updates - merge immediately',
+      matchUpdateTypes: [
+        'security',
+      ],
+      labels: [
+        'security',
+        'dependencies',
+      ],
+      automerge: true,
+      prPriority: 10,
+      schedule: [
+        'at any time',
+      ],
+      minimumReleaseAge: '0 days',
+    },
+    {
+      description: 'Core dependencies - manual review required',
+      matchPackageNames: [
+        'serde',
+        'reqwest',
+        'tokio',
+        'bon',
+        'langfuse-client-base',
+      ],
+      labels: [
+        'dependencies',
+        'core',
+      ],
+      automerge: false,
+      assignees: [
+        'timvw',
+      ],
+    },
+    {
+      description: 'Dev dependencies - auto-merge all',
+      matchDepTypes: [
+        'devDependencies',
+      ],
+      automerge: true,
+      labels: [
+        'dependencies',
+        'dev',
+      ],
+    },
+    {
+      description: 'Langfuse base client - manual review',
+      matchPackageNames: [
+        'langfuse-client-base',
+      ],
+      labels: [
+        'dependencies',
+        'langfuse-base',
+      ],
+      automerge: false,
+      assignees: [
+        'timvw',
+      ],
+      prBodyNotes: [
+        '⚠️ **Langfuse Base Client Update**',
+        'This updates the underlying OpenAPI-generated client.',
+        'Please review for API compatibility changes.',
+      ],
+    },
   ],
-  
-  // ========================================
-  // VULNERABILITY ALERTS
-  // ========================================
-  "vulnerabilityAlerts": {
-    "enabled": true,
-    "labels": ["security"],
-    "assignees": ["timvw"]
+  vulnerabilityAlerts: {
+    enabled: true,
+    labels: [
+      'security',
+    ],
+    assignees: [
+      'timvw',
+    ],
   },
-  
-  // ========================================
-  // RUST-SPECIFIC SETTINGS
-  // ========================================
-  "rust": {
-    "enabled": true,
-    "rangeStrategy": "update-lockfile"  // Update Cargo.lock while keeping flexible Cargo.toml ranges
-  }
 }
