@@ -190,52 +190,43 @@ impl IngestionResponse {
 }
 
 /// Helper to map API errors to appropriate error types based on status code
-pub fn map_api_error<E: std::fmt::Display>(err: E) -> Error {
-    let error_str = err.to_string();
+pub fn map_api_error<T>(err: langfuse_client_base::apis::Error<T>) -> Error {
+    use langfuse_client_base::apis::Error as ApiError;
 
-    // Try to extract status code from error message
-    if error_str.contains("401")
-        || error_str.contains("Unauthorized")
-        || error_str.contains("403")
-        || error_str.contains("Forbidden")
-    {
-        Error::Auth {
-            message: error_str,
-            request_id: None,
+    match err {
+        ApiError::Reqwest(e) => Error::Network(e),
+        ApiError::Serde(e) => Error::Serialization(e),
+        ApiError::Io(e) => Error::Api(format!("IO error: {}", e)),
+        ApiError::ResponseError(response) => {
+            let status = response.status.as_u16();
+            let message = if response.content.is_empty() {
+                format!("status {}", status)
+            } else {
+                response.content.clone()
+            };
+
+            match status {
+                401 | 403 => Error::Auth {
+                    message,
+                    request_id: None,
+                },
+                429 => Error::RateLimit {
+                    retry_after: None,
+                    request_id: None,
+                },
+                400..=499 => Error::Client {
+                    status,
+                    message,
+                    request_id: None,
+                },
+                500..=599 => Error::Server {
+                    status,
+                    message,
+                    request_id: None,
+                },
+                _ => Error::Api(message),
+            }
         }
-    } else if error_str.contains("429") || error_str.contains("Too Many Requests") {
-        Error::RateLimit {
-            retry_after: None,
-            request_id: None,
-        }
-    } else if error_str.contains("500")
-        || error_str.contains("Internal Server Error")
-        || error_str.contains("502")
-        || error_str.contains("Bad Gateway")
-        || error_str.contains("503")
-        || error_str.contains("Service Unavailable")
-        || error_str.contains("504")
-        || error_str.contains("Gateway Timeout")
-    {
-        Error::Server {
-            status: 500,
-            message: error_str,
-            request_id: None,
-        }
-    } else if error_str.contains("400")
-        || error_str.contains("Bad Request")
-        || error_str.contains("404")
-        || error_str.contains("Not Found")
-        || error_str.contains("422")
-        || error_str.contains("Unprocessable Entity")
-    {
-        Error::Client {
-            status: 400,
-            message: error_str,
-            request_id: None,
-        }
-    } else {
-        Error::Api(error_str)
     }
 }
 
