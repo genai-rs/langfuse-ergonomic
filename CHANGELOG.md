@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.4.0...v0.4.1) - 2025-10-03
+
+### Added
+
+- replace JSON values with strongly-typed API responses
+
+### Fixed
+
+- update README to use comments for equivalent imports example
+- mark duplicate import example as ignored in doc test
+
+### Other
+
+- run cargo fmt
+
 ## [0.4.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.3.0...v0.4.0) - 2025-10-03
 
 ### Added
