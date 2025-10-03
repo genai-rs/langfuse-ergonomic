@@ -1,11 +1,13 @@
 //! Integration tests for langfuse-ergonomic
 
-use langfuse_ergonomic::LangfuseClient;
+use langfuse_ergonomic::{ClientBuilder, LangfuseClient};
 use serde_json::json;
 
 /// Helper to create a client from environment variables
 fn create_test_client() -> LangfuseClient {
-    LangfuseClient::from_env().expect("Failed to create client from environment")
+    ClientBuilder::from_env()
+        .and_then(|builder| builder.build())
+        .expect("Failed to create client from environment")
 }
 
 #[tokio::test]

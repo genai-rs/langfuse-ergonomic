@@ -1,6 +1,6 @@
 //! Example demonstrating trace fetching functionality
 
-use langfuse_ergonomic::LangfuseClient;
+use langfuse_ergonomic::ClientBuilder;
 use serde_json::json;
 
 #[tokio::main]
@@ -8,7 +8,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
     // Create client from environment variables
-    let client = LangfuseClient::from_env()?;
+    let client = ClientBuilder::from_env()?.build()?;
 
     println!("🔍 Trace Fetching Example");
     println!("========================");

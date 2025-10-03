@@ -1,6 +1,6 @@
 //! Example showing multiple related traces in a session
 
-use langfuse_ergonomic::LangfuseClient;
+use langfuse_ergonomic::ClientBuilder;
 use serde_json::json;
 use uuid::Uuid;
 
@@ -8,7 +8,7 @@ use uuid::Uuid;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
 
-    let client = LangfuseClient::from_env()?;
+    let client = ClientBuilder::from_env()?.build()?;
     println!("Connected to Langfuse");
 
     // Create a session ID to link multiple traces

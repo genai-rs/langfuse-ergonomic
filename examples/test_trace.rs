@@ -1,4 +1,4 @@
-use langfuse_ergonomic::LangfuseClient;
+use langfuse_ergonomic::ClientBuilder;
 use serde_json::json;
 
 #[tokio::main]
@@ -8,7 +8,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create client from environment variables
     println!("Creating Langfuse client from environment...");
-    let client = LangfuseClient::from_env()?;
+    let client = ClientBuilder::from_env()?.build()?;
 
     println!("✅ Client created successfully");
 

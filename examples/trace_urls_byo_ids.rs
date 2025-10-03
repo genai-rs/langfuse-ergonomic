@@ -6,7 +6,7 @@
 //! - Generate reproducible IDs from seeds
 //! - Create hierarchical ID structures
 
-use langfuse_ergonomic::{IdGenerator, LangfuseClient};
+use langfuse_ergonomic::{ClientBuilder, IdGenerator};
 use serde_json::json;
 
 #[tokio::main]
@@ -14,7 +14,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize from environment variables
     dotenvy::dotenv().ok();
 
-    let client = LangfuseClient::from_env()?;
+    let client = ClientBuilder::from_env()?.build()?;
 
     println!("🔗 Demonstrating Trace URLs and custom IDs...\n");
 

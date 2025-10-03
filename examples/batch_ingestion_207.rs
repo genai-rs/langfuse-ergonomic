@@ -8,7 +8,7 @@
 //! - Graceful shutdown with guarantees
 
 use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
-use langfuse_ergonomic::{BackpressurePolicy, Batcher, LangfuseClient};
+use langfuse_ergonomic::{BackpressurePolicy, Batcher, ClientBuilder};
 use serde_json::json;
 use std::time::Duration;
 
@@ -17,7 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize from environment variables
     dotenvy::dotenv().ok();
 
-    let client = LangfuseClient::from_env()?;
+    let client = ClientBuilder::from_env()?.build()?;
 
     println!("🚀 Starting batch ingestion example with advanced features...\n");
 
@@ -219,7 +219,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🎯 Testing backpressure handling...");
     println!("  Creating a new batcher with DropNew policy and small queue...");
 
-    let client2 = LangfuseClient::from_env()?;
+    let client2 = ClientBuilder::from_env()?.build()?;
     let backpressure_batcher = Batcher::builder()
         .client(client2)
         .max_queue_size(3)

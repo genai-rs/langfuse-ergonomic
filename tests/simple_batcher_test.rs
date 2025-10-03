@@ -1,6 +1,6 @@
 //! Simple test to debug batching issues
 
-use langfuse_ergonomic::{Batcher, LangfuseClient};
+use langfuse_ergonomic::{Batcher, ClientBuilder};
 use mockito::Server;
 
 #[tokio::test]
@@ -16,7 +16,7 @@ async fn test_simple_batch_200() {
         .create_async()
         .await;
 
-    let client = LangfuseClient::builder()
+    let client = ClientBuilder::new()
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
