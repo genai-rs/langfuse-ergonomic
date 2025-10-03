@@ -230,6 +230,10 @@ pub struct Batcher {
     task_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
 }
 
+/// Builder type used once the required client has been provided via [`BatcherBuilder::client`].
+pub type BatcherBuilderWithClient =
+    BatcherBuilder<batcher_builder::SetClient<batcher_builder::Empty>>;
+
 #[bon]
 impl Batcher {
     /// Create a new batcher with custom configuration

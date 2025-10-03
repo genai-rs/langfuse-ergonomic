@@ -116,9 +116,7 @@ impl LangfuseClient {
         use langfuse_client_base::apis::ingestion_api;
         use langfuse_client_base::models::IngestionBatchRequest;
 
-        let batch_request = IngestionBatchRequest::builder()
-            .batch(events)
-            .build();
+        let batch_request = IngestionBatchRequest::builder().batch(events).build();
 
         ingestion_api::ingestion_batch()
             .configuration(self.configuration())
@@ -263,7 +261,9 @@ impl LangfuseClient {
             .call()
             .await
             .map(|_| ())
-            .map_err(|e| crate::error::Error::Api(format!("Failed to delete trace '{}': {}", trace_id, e)))
+            .map_err(|e| {
+                crate::error::Error::Api(format!("Failed to delete trace '{}': {}", trace_id, e))
+            })
     }
 
     /// Delete multiple traces
@@ -282,7 +282,9 @@ impl LangfuseClient {
             .call()
             .await
             .map(|_| ())
-            .map_err(|e| crate::error::Error::Api(format!("Failed to delete {} traces: {}", trace_count, e)))
+            .map_err(|e| {
+                crate::error::Error::Api(format!("Failed to delete {} traces: {}", trace_count, e))
+            })
     }
 
     // ===== OBSERVATIONS (SPANS, GENERATIONS, EVENTS) =====
@@ -592,7 +594,9 @@ impl LangfuseClient {
         #[builder(into)] parent_observation_id: Option<String>,
     ) -> Result<String> {
         use chrono::Utc as ChronoUtc;
-        use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf5, UpdateGenerationBody};
+        use langfuse_client_base::models::{
+            IngestionEvent, IngestionEventOneOf5, UpdateGenerationBody,
+        };
         use uuid::Uuid;
 
         // Note: In v0.2, model_parameters and usage have different types
@@ -1000,7 +1004,9 @@ impl LangfuseClient {
             .maybe_limit(limit)
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to list dataset items: {}", e)))?;
+            .map_err(|e| {
+                crate::error::Error::Api(format!("Failed to list dataset items: {}", e))
+            })?;
 
         serde_json::to_value(items).map_err(|e| {
             crate::error::Error::Api(format!("Failed to serialize dataset items: {}", e))
@@ -1139,7 +1145,9 @@ impl LangfuseClient {
             .prompt_version_update_request(update_request)
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to update prompt version: {}", e)))?;
+            .map_err(|e| {
+                crate::error::Error::Api(format!("Failed to update prompt version: {}", e))
+            })?;
 
         serde_json::to_value(result).map_err(|e| {
             crate::error::Error::Api(format!("Failed to serialize prompt version: {}", e))
