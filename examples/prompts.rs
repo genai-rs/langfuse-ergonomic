@@ -30,10 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
     {
         Ok(prompt) => {
-            println!(
-                " Prompt result: {}",
-                serde_json::to_string_pretty(&prompt)?
-            );
+            println!(" Prompt result: {}", serde_json::to_string_pretty(&prompt)?);
         }
         Err(e) => {
             println!("  Prompt creation (placeholder): {}", e);
@@ -79,10 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n4. Listing all prompts...");
     match client.list_prompts().call().await {
         Ok(prompts) => {
-            println!(
-                " All prompts: {}",
-                serde_json::to_string_pretty(&prompts)?
-            );
+            println!(" All prompts: {}", serde_json::to_string_pretty(&prompts)?);
         }
         Err(e) => {
             println!("  Could not list all prompts: {}", e);
