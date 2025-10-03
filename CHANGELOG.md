@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.3.0...v0.4.0) - 2025-10-03
+
+### Added
+
+- expose env builder and client batcher helper
+
+### Fixed
+
+- align example formatting for CI
+- update jitter rng for rand 0.9
+
+### Other
+
+- let release-plz retrigger CI runs
+- mark codecov statuses as informational
+- remove emojis from documentation and scripts
+- migrate to dedicated client builder
+- introduce dedicated client builder
+- adopt langfuse-client-base builders
+- *(deps)* Update Rust crate thiserror to v2
+- *(deps)* Update Rust crate rand to 0.9
+- *(deps)* migrate config renovate.json5
+- replace README emoji with plain text
+- *(deps)* Update github-actions to v5
+- align renovate config with library defaults
+- rename Claude guide to automation guide
+
 ## [0.3.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.2.1...v0.3.0) - 2025-08-30
 
 ### Added
