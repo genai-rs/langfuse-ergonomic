@@ -40,14 +40,14 @@ langfuse-ergonomic = { version = "*", features = ["compression"] }
 ## Quick Start
 
 ```rust
-use langfuse_ergonomic::{ClientBuilder, LangfuseClient};
+use langfuse_ergonomic::{ClientBuilder, LangfuseClient, Traces};
 use serde_json::json;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create client from environment variables
     let client = ClientBuilder::from_env()?.build()?;
-    
+
     // Create a trace
     let trace = client.trace()
         .name("my-application")
@@ -57,16 +57,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .tags(["production", "chat"])
         .call()
         .await?;
-    
+
     println!("Created trace: {}", trace.id);
 
-    // Fetch and list traces
+    // Fetch and list traces - returns strongly-typed structs
     let fetched_trace = client.get_trace(&trace.id).await?;
-    let traces = client.list_traces()
+    let traces: Traces = client.list_traces()
         .limit(10)
         .user_id("user-123")
         .call()
         .await?;
+
+    // Access trace data with type safety
+    for trace in &traces.data {
+        println!("Trace ID: {}, Name: {:?}", trace.id, trace.name);
+    }
 
     // Create a dataset
     let dataset = client.create_dataset()
@@ -74,10 +79,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .description("Example dataset")
         .call()
         .await?;
-    
+
     Ok(())
 }
 ```
+
+## Type Safety
+
+All API methods return strongly-typed structs instead of JSON values. Types are auto-generated from the Langfuse OpenAPI specification and re-exported for convenience:
+
+```rust
+use langfuse_ergonomic::{Traces, Dataset, Prompt, ObservationsView};
+
+// These are equivalent:
+use langfuse_ergonomic::Traces;
+use langfuse_client_base::models::Traces;
+```
+
+Benefits:
+- ✅ Compile-time type checking
+- ✅ IDE autocomplete for all fields
+- ✅ No runtime JSON parsing errors
+- ✅ Full API documentation on types
 
 ## Configuration
 
