@@ -186,20 +186,17 @@ impl LangfuseClient {
     }
 
     /// Get a trace by ID
-    pub async fn get_trace(&self, trace_id: impl Into<String>) -> Result<serde_json::Value> {
+    pub async fn get_trace(&self, trace_id: impl Into<String>) -> Result<langfuse_client_base::models::TraceWithFullDetails> {
         use langfuse_client_base::apis::trace_api;
 
         let trace_id = trace_id.into();
 
-        let trace = trace_api::trace_get()
+        trace_api::trace_get()
             .configuration(self.configuration())
             .trace_id(trace_id.as_str())
             .call()
             .await
-            .map_err(crate::error::map_api_error)?;
-
-        serde_json::to_value(trace)
-            .map_err(|e| crate::error::Error::Api(format!("Failed to serialize trace: {}", e)))
+            .map_err(crate::error::map_api_error)
     }
 
     /// List traces with optional filters
@@ -217,7 +214,7 @@ impl LangfuseClient {
         #[builder(into)] to_timestamp: Option<String>,
         #[builder(into)] order_by: Option<String>,
         #[builder(into)] tags: Option<String>,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<langfuse_client_base::models::Traces> {
         use langfuse_client_base::apis::trace_api;
 
         let user_id_ref = user_id.as_deref();
@@ -228,7 +225,7 @@ impl LangfuseClient {
         let order_by_ref = order_by.as_deref();
         let tags_vec = tags.map(|t| vec![t]);
 
-        let traces = trace_api::trace_list()
+        trace_api::trace_list()
             .configuration(self.configuration())
             .maybe_page(page)
             .maybe_limit(limit)
@@ -243,10 +240,7 @@ impl LangfuseClient {
             .maybe_tags(tags_vec)
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to list traces: {}", e)))?;
-
-        serde_json::to_value(traces)
-            .map_err(|e| crate::error::Error::Api(format!("Failed to serialize traces: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to list traces: {}", e)))
     }
 
     /// Delete a trace
@@ -465,21 +459,17 @@ impl LangfuseClient {
     pub async fn get_observation(
         &self,
         observation_id: impl Into<String>,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<langfuse_client_base::models::ObservationsView> {
         use langfuse_client_base::apis::observations_api;
 
         let observation_id = observation_id.into();
 
-        let observation = observations_api::observations_get()
+        observations_api::observations_get()
             .configuration(self.configuration())
             .observation_id(observation_id.as_str())
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to get observation: {}", e)))?;
-
-        serde_json::to_value(observation).map_err(|e| {
-            crate::error::Error::Api(format!("Failed to serialize observation: {}", e))
-        })
+            .map_err(|e| crate::error::Error::Api(format!("Failed to get observation: {}", e)))
     }
 
     /// Get multiple observations
@@ -493,7 +483,7 @@ impl LangfuseClient {
         #[builder(into)] name: Option<String>,
         #[builder(into)] user_id: Option<String>,
         observation_type: Option<String>,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<langfuse_client_base::models::ObservationsViews> {
         use langfuse_client_base::apis::observations_api;
 
         // Note: The API has more parameters but they're not all exposed in v0.2
@@ -504,7 +494,7 @@ impl LangfuseClient {
         let user_id_ref = user_id.as_deref();
         let name_ref = name.as_deref();
 
-        let observations = observations_api::observations_get_many()
+        observations_api::observations_get_many()
             .configuration(self.configuration())
             .maybe_page(page)
             .maybe_limit(limit)
@@ -515,11 +505,7 @@ impl LangfuseClient {
             .maybe_name(name_ref)
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to get observations: {}", e)))?;
-
-        serde_json::to_value(observations).map_err(|e| {
-            crate::error::Error::Api(format!("Failed to serialize observations: {}", e))
-        })
+            .map_err(|e| crate::error::Error::Api(format!("Failed to get observations: {}", e)))
     }
 
     /// Update an existing span
@@ -793,7 +779,7 @@ impl LangfuseClient {
         #[builder(into)] name: String,
         #[builder(into)] description: Option<String>,
         metadata: Option<Value>,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<langfuse_client_base::models::Dataset> {
         use langfuse_client_base::apis::datasets_api;
         use langfuse_client_base::models::CreateDatasetRequest;
 
@@ -803,32 +789,26 @@ impl LangfuseClient {
             metadata: metadata.map(Some),
         };
 
-        let dataset = datasets_api::datasets_create()
+        datasets_api::datasets_create()
             .configuration(self.configuration())
             .create_dataset_request(request)
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to create dataset: {}", e)))?;
-
-        serde_json::to_value(dataset)
-            .map_err(|e| crate::error::Error::Api(format!("Failed to serialize dataset: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to create dataset: {}", e)))
     }
 
     /// Get a dataset by name
-    pub async fn get_dataset(&self, dataset_name: impl Into<String>) -> Result<serde_json::Value> {
+    pub async fn get_dataset(&self, dataset_name: impl Into<String>) -> Result<langfuse_client_base::models::Dataset> {
         use langfuse_client_base::apis::datasets_api;
 
         let dataset_name = dataset_name.into();
 
-        let dataset = datasets_api::datasets_get()
+        datasets_api::datasets_get()
             .configuration(self.configuration())
             .dataset_name(dataset_name.as_str())
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset: {}", e)))?;
-
-        serde_json::to_value(dataset)
-            .map_err(|e| crate::error::Error::Api(format!("Failed to serialize dataset: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset: {}", e)))
     }
 
     /// List datasets with pagination
@@ -837,19 +817,16 @@ impl LangfuseClient {
         &self,
         page: Option<i32>,
         limit: Option<i32>,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<langfuse_client_base::models::PaginatedDatasets> {
         use langfuse_client_base::apis::datasets_api;
 
-        let datasets = datasets_api::datasets_list()
+        datasets_api::datasets_list()
             .configuration(self.configuration())
             .maybe_page(page)
             .maybe_limit(limit)
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to list datasets: {}", e)))?;
-
-        serde_json::to_value(datasets)
-            .map_err(|e| crate::error::Error::Api(format!("Failed to serialize datasets: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to list datasets: {}", e)))
     }
 
     /// Delete a dataset run
@@ -878,44 +855,36 @@ impl LangfuseClient {
         &self,
         dataset_name: impl Into<String>,
         run_name: impl Into<String>,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<langfuse_client_base::models::DatasetRunWithItems> {
         use langfuse_client_base::apis::datasets_api;
 
         let dataset_name = dataset_name.into();
         let run_name = run_name.into();
 
-        let run = datasets_api::datasets_get_run()
+        datasets_api::datasets_get_run()
             .configuration(self.configuration())
             .dataset_name(dataset_name.as_str())
             .run_name(run_name.as_str())
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset run: {}", e)))?;
-
-        serde_json::to_value(run).map_err(|e| {
-            crate::error::Error::Api(format!("Failed to serialize dataset run: {}", e))
-        })
+            .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset run: {}", e)))
     }
 
     /// Get all runs for a dataset
     pub async fn get_dataset_runs(
         &self,
         dataset_name: impl Into<String>,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<langfuse_client_base::models::PaginatedDatasetRuns> {
         use langfuse_client_base::apis::datasets_api;
 
         let dataset_name = dataset_name.into();
 
-        let runs = datasets_api::datasets_get_runs()
+        datasets_api::datasets_get_runs()
             .configuration(self.configuration())
             .dataset_name(dataset_name.as_str())
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset runs: {}", e)))?;
-
-        serde_json::to_value(runs).map_err(|e| {
-            crate::error::Error::Api(format!("Failed to serialize dataset runs: {}", e))
-        })
+            .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset runs: {}", e)))
     }
 
     // ===== DATASET ITEM OPERATIONS =====
@@ -932,7 +901,7 @@ impl LangfuseClient {
         #[builder(into)] source_observation_id: Option<String>,
         #[builder(into)] id: Option<String>,
         _status: Option<String>,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<langfuse_client_base::models::DatasetItem> {
         use langfuse_client_base::apis::dataset_items_api;
         use langfuse_client_base::models::CreateDatasetItemRequest;
 
@@ -947,36 +916,28 @@ impl LangfuseClient {
             status: None, // Status field requires DatasetStatus enum, not available in public API
         };
 
-        let result = dataset_items_api::dataset_items_create()
+        dataset_items_api::dataset_items_create()
             .configuration(self.configuration())
             .create_dataset_item_request(item_request)
             .call()
             .await
             .map_err(|e| {
                 crate::error::Error::Api(format!("Failed to create dataset item: {}", e))
-            })?;
-
-        serde_json::to_value(result).map_err(|e| {
-            crate::error::Error::Api(format!("Failed to serialize dataset item: {}", e))
-        })
+            })
     }
 
     /// Get a specific dataset item
-    pub async fn get_dataset_item(&self, item_id: impl Into<String>) -> Result<serde_json::Value> {
+    pub async fn get_dataset_item(&self, item_id: impl Into<String>) -> Result<langfuse_client_base::models::DatasetItem> {
         use langfuse_client_base::apis::dataset_items_api;
 
         let item_id = item_id.into();
 
-        let item = dataset_items_api::dataset_items_get()
+        dataset_items_api::dataset_items_get()
             .configuration(self.configuration())
             .id(item_id.as_str())
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset item: {}", e)))?;
-
-        serde_json::to_value(item).map_err(|e| {
-            crate::error::Error::Api(format!("Failed to serialize dataset item: {}", e))
-        })
+            .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset item: {}", e)))
     }
 
     /// List dataset items
@@ -988,14 +949,14 @@ impl LangfuseClient {
         #[builder(into)] source_observation_id: Option<String>,
         page: Option<i32>,
         limit: Option<i32>,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<langfuse_client_base::models::PaginatedDatasetItems> {
         use langfuse_client_base::apis::dataset_items_api;
 
         let dataset_name_ref = dataset_name.as_deref();
         let source_trace_ref = source_trace_id.as_deref();
         let source_observation_ref = source_observation_id.as_deref();
 
-        let items = dataset_items_api::dataset_items_list()
+        dataset_items_api::dataset_items_list()
             .configuration(self.configuration())
             .maybe_dataset_name(dataset_name_ref)
             .maybe_source_trace_id(source_trace_ref)
@@ -1006,11 +967,7 @@ impl LangfuseClient {
             .await
             .map_err(|e| {
                 crate::error::Error::Api(format!("Failed to list dataset items: {}", e))
-            })?;
-
-        serde_json::to_value(items).map_err(|e| {
-            crate::error::Error::Api(format!("Failed to serialize dataset items: {}", e))
-        })
+            })
     }
 
     /// Delete a dataset item
@@ -1046,7 +1003,7 @@ impl LangfuseClient {
         config: Option<Value>,
         labels: Option<Vec<String>>,
         tags: Option<Vec<String>>,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<langfuse_client_base::models::Prompt> {
         use langfuse_client_base::apis::prompts_api;
         use langfuse_client_base::models::CreatePromptRequest;
 
@@ -1063,15 +1020,12 @@ impl LangfuseClient {
                 ..Default::default()
             }));
 
-        let result = prompts_api::prompts_create()
+        prompts_api::prompts_create()
             .configuration(self.configuration())
             .create_prompt_request(prompt_request)
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to create prompt: {}", e)))?;
-
-        serde_json::to_value(result)
-            .map_err(|e| crate::error::Error::Api(format!("Failed to serialize prompt: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to create prompt: {}", e)))
     }
 
     /// Create a chat prompt with messages
@@ -1083,7 +1037,7 @@ impl LangfuseClient {
         config: Option<Value>,
         labels: Option<Vec<String>>,
         tags: Option<Vec<String>>,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<langfuse_client_base::models::Prompt> {
         use langfuse_client_base::apis::prompts_api;
         use langfuse_client_base::models::{
             ChatMessageWithPlaceholders, CreatePromptRequest, CreatePromptRequestOneOf,
@@ -1112,17 +1066,14 @@ impl LangfuseClient {
                 ..Default::default()
             }));
 
-        let result = prompts_api::prompts_create()
+        prompts_api::prompts_create()
             .configuration(self.configuration())
             .create_prompt_request(prompt_request)
             .call()
             .await
             .map_err(|e| {
                 crate::error::Error::Api(format!("Failed to create chat prompt: {}", e))
-            })?;
-
-        serde_json::to_value(result)
-            .map_err(|e| crate::error::Error::Api(format!("Failed to serialize prompt: {}", e)))
+            })
     }
 
     /// Update labels for a specific prompt version
@@ -1132,13 +1083,13 @@ impl LangfuseClient {
         #[builder(into)] name: String,
         version: i32,
         labels: Vec<String>,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<langfuse_client_base::models::Prompt> {
         use langfuse_client_base::apis::prompt_version_api;
         use langfuse_client_base::models::PromptVersionUpdateRequest;
 
         let update_request = PromptVersionUpdateRequest { new_labels: labels };
 
-        let result = prompt_version_api::prompt_version_update()
+        prompt_version_api::prompt_version_update()
             .configuration(self.configuration())
             .name(name.as_str())
             .version(version)
@@ -1147,11 +1098,7 @@ impl LangfuseClient {
             .await
             .map_err(|e| {
                 crate::error::Error::Api(format!("Failed to update prompt version: {}", e))
-            })?;
-
-        serde_json::to_value(result).map_err(|e| {
-            crate::error::Error::Api(format!("Failed to serialize prompt version: {}", e))
-        })
+            })
     }
 
     /// Get a prompt by name and version
@@ -1160,22 +1107,19 @@ impl LangfuseClient {
         prompt_name: impl Into<String>,
         version: Option<i32>,
         label: Option<&str>,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<langfuse_client_base::models::Prompt> {
         use langfuse_client_base::apis::prompts_api;
 
         let prompt_name = prompt_name.into();
 
-        let prompt = prompts_api::prompts_get()
+        prompts_api::prompts_get()
             .configuration(self.configuration())
             .prompt_name(prompt_name.as_str())
             .maybe_version(version)
             .maybe_label(label)
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to get prompt: {}", e)))?;
-
-        serde_json::to_value(prompt)
-            .map_err(|e| crate::error::Error::Api(format!("Failed to serialize prompt: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to get prompt: {}", e)))
     }
 
     /// List prompts with filters
@@ -1187,7 +1131,7 @@ impl LangfuseClient {
         #[builder(into)] label: Option<String>,
         page: Option<i32>,
         limit: Option<String>,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<langfuse_client_base::models::PromptMetaListResponse> {
         use langfuse_client_base::apis::prompts_api;
 
         let name_ref = name.as_deref();
@@ -1195,7 +1139,7 @@ impl LangfuseClient {
         let label_ref = label.as_deref();
         let limit_num = limit.and_then(|value| value.parse::<i32>().ok());
 
-        let prompts = prompts_api::prompts_list()
+        prompts_api::prompts_list()
             .configuration(self.configuration())
             .maybe_name(name_ref)
             .maybe_tag(tag_ref)
@@ -1204,9 +1148,6 @@ impl LangfuseClient {
             .maybe_limit(limit_num)
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to list prompts: {}", e)))?;
-
-        serde_json::to_value(prompts)
-            .map_err(|e| crate::error::Error::Api(format!("Failed to serialize prompts: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to list prompts: {}", e)))
     }
 }

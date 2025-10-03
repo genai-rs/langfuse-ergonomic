@@ -37,8 +37,46 @@
 //!     .await?;
 //!
 //! println!("Created trace: {}", trace.id);
+//!
+//! // List traces with strongly-typed response
+//! let traces = client.list_traces().limit(10).call().await?;
+//! for trace in &traces.data {
+//!     println!("Trace ID: {}, Name: {:?}", trace.id, trace.name);
+//! }
 //! # Ok(())
 //! # }
+//! ```
+//!
+//! ## Type Safety
+//!
+//! All API methods return strongly-typed structs instead of JSON values:
+//!
+//! ```no_run
+//! # use langfuse_ergonomic::{ClientBuilder, Traces, Dataset, Prompt};
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! # let client = ClientBuilder::from_env()?.build()?;
+//! // Traces are strongly typed
+//! let traces: Traces = client.list_traces().call().await?;
+//! println!("Found {} traces", traces.data.len());
+//!
+//! // Datasets are strongly typed
+//! let dataset: Dataset = client.get_dataset("my-dataset").await?;
+//! println!("Dataset: {}", dataset.name);
+//!
+//! // Prompts are strongly typed
+//! let prompt: Prompt = client.get_prompt("my-prompt", None, None).await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! **Note:** This crate re-exports types from `langfuse-client-base`, which are auto-generated
+//! from the Langfuse OpenAPI specification. This ensures type accuracy and allows direct access
+//! to all fields and their documentation. You can import types from either crate:
+//!
+//! ```rust
+//! // Both imports are equivalent
+//! use langfuse_ergonomic::Traces;
+//! use langfuse_client_base::models::Traces;
 //! ```
 //!
 //! ## Configuration
@@ -132,8 +170,30 @@ pub use client::{ClientBuilder, LangfuseClient};
 pub use error::{Error, EventError, IngestionResponse, Result};
 pub use traces::{IdGenerator, TraceResponse};
 
-// Re-export frequently used types from langfuse-client-base to reduce direct imports
+// Re-export types from langfuse-client-base for convenience
+//
+// These types are auto-generated from the Langfuse OpenAPI specification and provide
+// strongly-typed access to all API responses. Re-exporting them here allows users to
+// import everything they need from a single crate without depending directly on
+// langfuse-client-base.
+//
+// Users can import from either crate:
+//   use langfuse_ergonomic::Traces;
+//   use langfuse_client_base::models::Traces;  // equivalent
+//
+// Type categories:
+// - Trace types: Trace, TraceBody, TraceWithDetails, TraceWithFullDetails, Traces
+// - Observation types: ObservationsView, ObservationsViews, ObservationLevel
+// - Dataset types: Dataset, DatasetItem, DatasetRunWithItems, PaginatedDatasets,
+//                  PaginatedDatasetItems, PaginatedDatasetRuns
+// - Prompt types: Prompt, PromptMetaListResponse
+// - Event/Ingestion types: CreateEventBody, CreateGenerationBody, CreateSpanBody,
+//                          IngestionEvent, IngestionBatchRequest
+// - Utility types: ScoreDataType
 pub use langfuse_client_base::models::{
-    CreateEventBody, CreateGenerationBody, CreateSpanBody, IngestionBatchRequest, IngestionEvent,
-    ObservationLevel, ScoreDataType, TraceBody,
+    CreateEventBody, CreateGenerationBody, CreateSpanBody, Dataset, DatasetItem,
+    DatasetRunWithItems, IngestionBatchRequest, IngestionEvent, ObservationLevel,
+    ObservationsView, ObservationsViews, PaginatedDatasetItems, PaginatedDatasetRuns,
+    PaginatedDatasets, Prompt, PromptMetaListResponse, ScoreDataType, Trace, TraceBody,
+    TraceWithDetails, TraceWithFullDetails, Traces,
 };
