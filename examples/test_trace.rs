@@ -10,7 +10,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Creating Langfuse client from environment...");
     let client = ClientBuilder::from_env()?.build()?;
 
-    println!("✅ Client created successfully");
+    println!(" Client created successfully");
 
     // Create a simple trace
     println!("Creating trace...");
@@ -40,9 +40,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    println!("✅ Trace created successfully!");
+    println!(" Trace created successfully!");
     println!("   Trace ID: {}", trace_response.id);
-    println!("\n🎉 Check your Langfuse dashboard at https://cloud.langfuse.com");
+    println!("\n Check your Langfuse dashboard at https://cloud.langfuse.com");
     println!("   You should see a trace named 'test-trace-from-rust'");
 
     Ok(())

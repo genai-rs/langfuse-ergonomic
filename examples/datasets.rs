@@ -10,7 +10,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create client from environment variables
     let client = ClientBuilder::from_env()?.build()?;
 
-    println!("🗄️  Dataset Management Example");
+    println!("  Dataset Management Example");
     println!("=============================");
 
     // Create a dataset
@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     println!(
-        "✅ Created dataset: {}",
+        " Created dataset: {}",
         serde_json::to_string_pretty(&dataset)?
     );
 
@@ -35,19 +35,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n2. Listing datasets...");
     let datasets = client.list_datasets().page(1).limit(10).call().await?;
 
-    println!("📋 Datasets: {}", serde_json::to_string_pretty(&datasets)?);
+    println!(" Datasets: {}", serde_json::to_string_pretty(&datasets)?);
 
     // Get a specific dataset
     println!("\n3. Getting specific dataset...");
     match client.get_dataset("example-dataset").await {
         Ok(dataset) => {
             println!(
-                "🎯 Dataset details: {}",
+                " Dataset details: {}",
                 serde_json::to_string_pretty(&dataset)?
             );
         }
         Err(e) => {
-            println!("⚠️  Could not retrieve dataset: {}", e);
+            println!("  Could not retrieve dataset: {}", e);
         }
     }
 
@@ -55,13 +55,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n4. Getting dataset runs...");
     match client.get_dataset_runs("example-dataset").await {
         Ok(runs) => {
-            println!("🏃 Dataset runs: {}", serde_json::to_string_pretty(&runs)?);
+            println!(" Dataset runs: {}", serde_json::to_string_pretty(&runs)?);
         }
         Err(e) => {
-            println!("⚠️  Could not retrieve dataset runs: {}", e);
+            println!("  Could not retrieve dataset runs: {}", e);
         }
     }
 
-    println!("\n✨ Dataset management example completed!");
+    println!("\n Dataset management example completed!");
     Ok(())
 }

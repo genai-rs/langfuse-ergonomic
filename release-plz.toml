@@ -30,14 +30,14 @@ pr_name = "chore: release version {{version}}"
 # PR body template - ensures PR descriptions show the changelog
 pr_body = """
 {%- for release in releases -%}
-## 📦 {{ release.package }} {{ release.previous_version }} → {{ release.next_version }}
+##  {{ release.package }} {{ release.previous_version }}  {{ release.next_version }}
 
-### 🔗 Compare Changes
+###  Compare Changes
 [**View all changes since v{{ release.previous_version }}**](https://github.com/genai-rs/langfuse-ergonomic/compare/v{{ release.previous_version }}...HEAD)
 
 {%- if release.changelog %}
 
-### 📋 Changelog
+###  Changelog
 
 {{ release.changelog }}
 {%- else %}

@@ -16,10 +16,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let client = ClientBuilder::from_env()?.build()?;
 
-    println!("🔗 Demonstrating Trace URLs and custom IDs...\n");
+    println!(" Demonstrating Trace URLs and custom IDs...\n");
 
     // Example 1: Create a trace with auto-generated ID and get its URL
-    println!("1️⃣ Creating trace with auto-generated ID:");
+    println!("1 Creating trace with auto-generated ID:");
     let response = client
         .trace()
         .name("Auto ID Trace")
@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Example 2: Create a trace with a custom ID
-    println!("2️⃣ Creating trace with custom ID:");
+    println!("2 Creating trace with custom ID:");
     let custom_id = "my-custom-trace-12345";
     let response = client
         .trace()
@@ -53,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Example 3: Generate deterministic IDs from seeds
-    println!("3️⃣ Generating deterministic IDs from seeds:");
+    println!("3 Generating deterministic IDs from seeds:");
 
     let seed = "user-123:session-456:request-789";
     let deterministic_id = IdGenerator::from_seed(seed);
@@ -85,7 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Example 4: Hierarchical IDs for related observations
-    println!("4️⃣ Creating hierarchical IDs for related observations:");
+    println!("4 Creating hierarchical IDs for related observations:");
 
     let base_seed = "workflow-execution-2024";
     let trace_id = IdGenerator::from_components(&[base_seed, "trace"]);
@@ -117,7 +117,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    println!("   └─ Span 1 ID: {}", span1);
+    println!("    Span 1 ID: {}", span1);
 
     let span2 = client
         .span()
@@ -129,11 +129,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    println!("      └─ Span 2 ID: {}", span2);
+    println!("       Span 2 ID: {}", span2);
     println!();
 
     // Example 5: Hash-based IDs for simple cases
-    println!("5️⃣ Using hash-based IDs:");
+    println!("5 Using hash-based IDs:");
 
     let hash_seed = "simple-seed-123";
     let hash_id = IdGenerator::from_hash(hash_seed);
@@ -157,7 +157,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Example 6: Idempotent trace creation
-    println!("6️⃣ Demonstrating idempotent trace creation:");
+    println!("6 Demonstrating idempotent trace creation:");
 
     let idempotent_seed = format!("daily-report:{}", chrono::Utc::now().format("%Y-%m-%d"));
     let idempotent_id = IdGenerator::from_seed(&idempotent_seed);
@@ -194,8 +194,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Same URL: {}", response1.url() == response2.url());
     println!();
 
-    println!("✅ All examples completed successfully!");
-    println!("\n📝 Summary:");
+    println!(" All examples completed successfully!");
+    println!("\n Summary:");
     println!("   - Traces automatically provide their Langfuse URLs via .url()");
     println!("   - Custom IDs enable deterministic and idempotent trace creation");
     println!("   - Seed-based IDs ensure reproducibility across runs");

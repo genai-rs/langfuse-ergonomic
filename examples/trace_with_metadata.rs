@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    println!("✅ Created trace with full metadata");
+    println!(" Created trace with full metadata");
     println!("   Trace ID: {}", trace.id);
     println!("   View at: https://cloud.langfuse.com/trace/{}", trace.id);
 

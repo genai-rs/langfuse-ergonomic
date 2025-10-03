@@ -159,11 +159,11 @@ async fn test_api_feature() {
 
 ```
 langfuse-ergonomic/
-├── src/                    # Hand-written ergonomic API
-├── examples/               # Usage examples  
-├── scripts/                # Build and setup scripts
-├── tests/                  # Integration tests
-└── .github/workflows/      # CI/CD configuration
+ src/                    # Hand-written ergonomic API
+ examples/               # Usage examples  
+ scripts/                # Build and setup scripts
+ tests/                  # Integration tests
+ .github/workflows/      # CI/CD configuration
 ```
 
 The project depends on `langfuse-client-base` from crates.io, which contains the auto-generated OpenAPI client.
