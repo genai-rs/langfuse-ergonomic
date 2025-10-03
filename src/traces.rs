@@ -109,6 +109,25 @@ impl IdGenerator {
 
 #[bon]
 impl LangfuseClient {
+    async fn ingest_events(
+        &self,
+        events: Vec<langfuse_client_base::models::IngestionEvent>,
+    ) -> Result<langfuse_client_base::models::IngestionResponse> {
+        use langfuse_client_base::apis::ingestion_api;
+        use langfuse_client_base::models::IngestionBatchRequest;
+
+        let batch_request = IngestionBatchRequest::builder()
+            .batch(events)
+            .build();
+
+        ingestion_api::ingestion_batch()
+            .configuration(self.configuration())
+            .ingestion_batch_request(batch_request)
+            .call()
+            .await
+            .map_err(crate::error::map_api_error)
+    }
+
     /// Create a new trace
     #[builder]
     pub async fn trace(
@@ -126,9 +145,9 @@ impl LangfuseClient {
         #[builder(into)] version: Option<String>,
         public: Option<bool>,
     ) -> Result<TraceResponse> {
-        use langfuse_client_base::apis::ingestion_api;
         use langfuse_client_base::models::{
-            IngestionBatchRequest, IngestionEvent, IngestionEventOneOf, TraceBody,
+            ingestion_event_one_of::Type as TraceEventType, IngestionEvent, IngestionEventOneOf,
+            TraceBody,
         };
 
         let trace_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -136,46 +155,36 @@ impl LangfuseClient {
             .unwrap_or_else(Utc::now)
             .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
 
-        let trace_body = TraceBody {
-            id: Some(Some(trace_id.clone())),
-            timestamp: Some(Some(timestamp.clone())),
-            name: name.map(Some),
-            user_id: user_id.map(Some),
-            input: input.map(Some),
-            output: output.map(Some),
-            session_id: session_id.map(Some),
-            release: release.map(Some),
-            version: version.map(Some),
-            metadata: metadata.map(Some),
-            tags: if tags.is_empty() {
-                None
-            } else {
-                Some(Some(tags))
-            },
-            environment: None,
-            public: public.map(Some),
-        };
+        let tags_option = if tags.is_empty() { None } else { Some(tags) };
 
-        let event = IngestionEventOneOf {
-            body: Box::new(trace_body),
-            id: Uuid::new_v4().to_string(),
-            timestamp: timestamp.clone(),
-            metadata: None,
-            r#type: langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
-        };
+        let trace_body = TraceBody::builder()
+            .id(Some(trace_id.clone()))
+            .timestamp(Some(timestamp.clone()))
+            .maybe_name(name.map(Some))
+            .maybe_user_id(user_id.map(Some))
+            .maybe_input(input.map(Some))
+            .maybe_output(output.map(Some))
+            .maybe_session_id(session_id.map(Some))
+            .maybe_release(release.map(Some))
+            .maybe_version(version.map(Some))
+            .maybe_metadata(metadata.map(Some))
+            .maybe_tags(tags_option.map(Some))
+            .maybe_public(public.map(Some))
+            .build();
 
-        let batch_request = IngestionBatchRequest {
-            batch: vec![IngestionEvent::IngestionEventOneOf(Box::new(event))],
-            metadata: None,
-        };
+        let event = IngestionEventOneOf::builder()
+            .body(Box::new(trace_body))
+            .id(Uuid::new_v4().to_string())
+            .timestamp(timestamp.clone())
+            .r#type(TraceEventType::TraceCreate)
+            .build();
 
-        ingestion_api::ingestion_batch(self.configuration(), batch_request)
+        self.ingest_events(vec![IngestionEvent::IngestionEventOneOf(Box::new(event))])
             .await
             .map(|_| TraceResponse {
                 id: trace_id,
                 base_url: self.configuration().base_path.clone(),
             })
-            .map_err(crate::error::map_api_error)
     }
 
     /// Get a trace by ID
@@ -184,7 +193,10 @@ impl LangfuseClient {
 
         let trace_id = trace_id.into();
 
-        let trace = trace_api::trace_get(self.configuration(), &trace_id)
+        let trace = trace_api::trace_get()
+            .configuration(self.configuration())
+            .trace_id(trace_id.as_str())
+            .call()
             .await
             .map_err(crate::error::map_api_error)?;
 
@@ -210,24 +222,30 @@ impl LangfuseClient {
     ) -> Result<serde_json::Value> {
         use langfuse_client_base::apis::trace_api;
 
-        let traces = trace_api::trace_list(
-            self.configuration(),
-            page,
-            limit,
-            user_id.as_deref(),
-            name.as_deref(),
-            session_id.as_deref(),
-            version, // Option<String>
-            release, // Option<String>
-            order_by.as_deref(),
-            None, // tags as Vec<String> - additional parameter
-            from_timestamp.as_deref(),
-            to_timestamp.as_deref(),
-            None, // user_ids as Vec<String> - additional parameter
-            tags.as_deref(),
-        )
-        .await
-        .map_err(|e| crate::error::Error::Api(format!("Failed to list traces: {}", e)))?;
+        let user_id_ref = user_id.as_deref();
+        let name_ref = name.as_deref();
+        let session_id_ref = session_id.as_deref();
+        let version_ref = version.as_deref();
+        let release_ref = release.as_deref();
+        let order_by_ref = order_by.as_deref();
+        let tags_vec = tags.map(|t| vec![t]);
+
+        let traces = trace_api::trace_list()
+            .configuration(self.configuration())
+            .maybe_page(page)
+            .maybe_limit(limit)
+            .maybe_user_id(user_id_ref)
+            .maybe_name(name_ref)
+            .maybe_session_id(session_id_ref)
+            .maybe_version(version_ref)
+            .maybe_release(release_ref)
+            .maybe_order_by(order_by_ref)
+            .maybe_from_timestamp(from_timestamp)
+            .maybe_to_timestamp(to_timestamp)
+            .maybe_tags(tags_vec)
+            .call()
+            .await
+            .map_err(|e| crate::error::Error::Api(format!("Failed to list traces: {}", e)))?;
 
         serde_json::to_value(traces)
             .map_err(|e| crate::error::Error::Api(format!("Failed to serialize traces: {}", e)))
@@ -239,9 +257,12 @@ impl LangfuseClient {
 
         let trace_id = trace_id.into();
 
-        trace_api::trace_delete(self.configuration(), &trace_id)
+        trace_api::trace_delete()
+            .configuration(self.configuration())
+            .trace_id(trace_id.as_str())
+            .call()
             .await
-            .map(|_| ()) // Ignore the response body, just return success
+            .map(|_| ())
             .map_err(|e| crate::error::Error::Api(format!("Failed to delete trace '{}': {}", trace_id, e)))
     }
 
@@ -251,13 +272,16 @@ impl LangfuseClient {
         use langfuse_client_base::models::TraceDeleteMultipleRequest;
 
         let trace_count = trace_ids.len();
-        let request = TraceDeleteMultipleRequest {
-            trace_ids, // Remove the Some() wrapper
-        };
+        let request = TraceDeleteMultipleRequest::builder()
+            .trace_ids(trace_ids)
+            .build();
 
-        trace_api::trace_delete_multiple(self.configuration(), request)
+        trace_api::trace_delete_multiple()
+            .configuration(self.configuration())
+            .trace_delete_multiple_request(request)
+            .call()
             .await
-            .map(|_| ()) // Ignore the response body, just return success
+            .map(|_| ())
             .map_err(|e| crate::error::Error::Api(format!("Failed to delete {} traces: {}", trace_count, e)))
     }
 
@@ -279,47 +303,40 @@ impl LangfuseClient {
         start_time: Option<DateTime<Utc>>,
         end_time: Option<DateTime<Utc>>,
     ) -> Result<String> {
-        use langfuse_client_base::apis::ingestion_api;
         use langfuse_client_base::models::{
-            CreateSpanBody, IngestionBatchRequest, IngestionEvent, IngestionEventOneOf2,
+            ingestion_event_one_of_2::Type as SpanEventType, CreateSpanBody, IngestionEvent,
+            IngestionEventOneOf2,
         };
 
         let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
         let timestamp = start_time
             .unwrap_or_else(Utc::now)
             .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let level = level.map(|l| parse_observation_level(&l));
+        let end_time_str = end_time.map(|t| t.to_rfc3339_opts(chrono::SecondsFormat::Millis, true));
 
-        let span_body = CreateSpanBody {
-            id: Some(Some(observation_id.clone())),
-            trace_id: Some(Some(trace_id)),
-            name: name.map(Some),
-            start_time: Some(Some(timestamp.clone())),
-            end_time: end_time
-                .map(|t| Some(t.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))),
-            input: input.map(Some),
-            output: output.map(Some),
-            level: level.map(|l| parse_observation_level(&l)),
-            status_message: status_message.map(Some),
-            parent_observation_id: parent_observation_id.map(Some),
-            version: None,
-            metadata: metadata.map(Some),
-            environment: None,
-        };
+        let span_body = CreateSpanBody::builder()
+            .id(Some(observation_id.clone()))
+            .trace_id(Some(trace_id))
+            .start_time(Some(timestamp.clone()))
+            .maybe_end_time(end_time_str.map(Some))
+            .maybe_name(name.map(Some))
+            .maybe_parent_observation_id(parent_observation_id.map(Some))
+            .maybe_input(input.map(Some))
+            .maybe_output(output.map(Some))
+            .maybe_level(level)
+            .maybe_status_message(status_message.map(Some))
+            .maybe_metadata(metadata.map(Some))
+            .build();
 
-        let event = IngestionEventOneOf2 {
-            body: Box::new(span_body),
-            id: Uuid::new_v4().to_string(),
-            timestamp: timestamp.clone(),
-            metadata: None,
-            r#type: langfuse_client_base::models::ingestion_event_one_of_2::Type::SpanCreate,
-        };
+        let event = IngestionEventOneOf2::builder()
+            .body(Box::new(span_body))
+            .id(Uuid::new_v4().to_string())
+            .timestamp(timestamp.clone())
+            .r#type(SpanEventType::SpanCreate)
+            .build();
 
-        let batch_request = IngestionBatchRequest {
-            batch: vec![IngestionEvent::IngestionEventOneOf2(Box::new(event))],
-            metadata: None,
-        };
-
-        ingestion_api::ingestion_batch(self.configuration(), batch_request)
+        self.ingest_events(vec![IngestionEvent::IngestionEventOneOf2(Box::new(event))])
             .await
             .map(|_| observation_id)
             .map_err(|e| crate::error::Error::Api(format!("Failed to create span: {}", e)))
@@ -346,9 +363,9 @@ impl LangfuseClient {
         _completion_tokens: Option<i32>,
         _total_tokens: Option<i32>,
     ) -> Result<String> {
-        use langfuse_client_base::apis::ingestion_api;
         use langfuse_client_base::models::{
-            CreateGenerationBody, IngestionBatchRequest, IngestionEvent, IngestionEventOneOf4,
+            ingestion_event_one_of_4::Type as GenerationEventType, CreateGenerationBody,
+            IngestionEvent, IngestionEventOneOf4,
         };
 
         let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -356,45 +373,32 @@ impl LangfuseClient {
             .unwrap_or_else(Utc::now)
             .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
 
-        let generation_body = CreateGenerationBody {
-            id: Some(Some(observation_id.clone())),
-            trace_id: Some(Some(trace_id)),
-            name: name.map(Some),
-            start_time: Some(Some(timestamp.clone())),
-            completion_start_time: None,
-            end_time: end_time
-                .map(|t| Some(t.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))),
-            model: model.map(Some),
-            model_parameters: None, // TODO: Convert JSON to HashMap if needed
-            input: input.map(Some),
-            output: output.map(Some),
-            usage: None, // TODO: Add usage tracking if needed
-            usage_details: None,
-            cost_details: None,
-            metadata: metadata.map(Some),
-            level: level.map(|l| parse_observation_level(&l)),
-            status_message: status_message.map(Some),
-            parent_observation_id: parent_observation_id.map(Some),
-            version: None,
-            prompt_name: None,
-            prompt_version: None,
-            environment: None,
-        };
+        let level = level.map(|l| parse_observation_level(&l));
+        let end_time_str = end_time.map(|t| t.to_rfc3339_opts(chrono::SecondsFormat::Millis, true));
 
-        let event = IngestionEventOneOf4 {
-            body: Box::new(generation_body),
-            id: Uuid::new_v4().to_string(),
-            timestamp: timestamp.clone(),
-            metadata: None,
-            r#type: langfuse_client_base::models::ingestion_event_one_of_4::Type::GenerationCreate,
-        };
+        let generation_body = CreateGenerationBody::builder()
+            .id(Some(observation_id.clone()))
+            .trace_id(Some(trace_id))
+            .start_time(Some(timestamp.clone()))
+            .maybe_name(name.map(Some))
+            .maybe_end_time(end_time_str.map(Some))
+            .maybe_model(model.map(Some))
+            .maybe_input(input.map(Some))
+            .maybe_output(output.map(Some))
+            .maybe_metadata(metadata.map(Some))
+            .maybe_level(level)
+            .maybe_status_message(status_message.map(Some))
+            .maybe_parent_observation_id(parent_observation_id.map(Some))
+            .build();
 
-        let batch_request = IngestionBatchRequest {
-            batch: vec![IngestionEvent::IngestionEventOneOf4(Box::new(event))],
-            metadata: None,
-        };
+        let event = IngestionEventOneOf4::builder()
+            .body(Box::new(generation_body))
+            .id(Uuid::new_v4().to_string())
+            .timestamp(timestamp.clone())
+            .r#type(GenerationEventType::GenerationCreate)
+            .build();
 
-        ingestion_api::ingestion_batch(self.configuration(), batch_request)
+        self.ingest_events(vec![IngestionEvent::IngestionEventOneOf4(Box::new(event))])
             .await
             .map(|_| observation_id)
             .map_err(|e| crate::error::Error::Api(format!("Failed to create generation: {}", e)))
@@ -415,9 +419,9 @@ impl LangfuseClient {
         #[builder(into)] status_message: Option<String>,
         start_time: Option<DateTime<Utc>>,
     ) -> Result<String> {
-        use langfuse_client_base::apis::ingestion_api;
         use langfuse_client_base::models::{
-            CreateEventBody, IngestionBatchRequest, IngestionEvent, IngestionEventOneOf6,
+            ingestion_event_one_of_6::Type as EventEventType, CreateEventBody, IngestionEvent,
+            IngestionEventOneOf6,
         };
 
         let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -425,35 +429,29 @@ impl LangfuseClient {
             .unwrap_or_else(Utc::now)
             .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
 
-        let event_body = CreateEventBody {
-            id: Some(Some(observation_id.clone())),
-            trace_id: Some(Some(trace_id)),
-            name: name.map(Some),
-            start_time: Some(Some(timestamp.clone())),
-            input: input.map(Some),
-            output: output.map(Some),
-            level: level.map(|l| parse_observation_level(&l)),
-            status_message: status_message.map(Some),
-            parent_observation_id: parent_observation_id.map(Some),
-            version: None,
-            metadata: metadata.map(Some),
-            environment: None,
-        };
+        let level = level.map(|l| parse_observation_level(&l));
 
-        let event = IngestionEventOneOf6 {
-            body: Box::new(event_body),
-            id: Uuid::new_v4().to_string(),
-            timestamp: timestamp.clone(),
-            metadata: None,
-            r#type: langfuse_client_base::models::ingestion_event_one_of_6::Type::EventCreate,
-        };
+        let event_body = CreateEventBody::builder()
+            .id(Some(observation_id.clone()))
+            .trace_id(Some(trace_id))
+            .start_time(Some(timestamp.clone()))
+            .maybe_name(name.map(Some))
+            .maybe_input(input.map(Some))
+            .maybe_output(output.map(Some))
+            .maybe_level(level)
+            .maybe_status_message(status_message.map(Some))
+            .maybe_parent_observation_id(parent_observation_id.map(Some))
+            .maybe_metadata(metadata.map(Some))
+            .build();
 
-        let batch_request = IngestionBatchRequest {
-            batch: vec![IngestionEvent::IngestionEventOneOf6(Box::new(event))],
-            metadata: None,
-        };
+        let event = IngestionEventOneOf6::builder()
+            .body(Box::new(event_body))
+            .id(Uuid::new_v4().to_string())
+            .timestamp(timestamp.clone())
+            .r#type(EventEventType::EventCreate)
+            .build();
 
-        ingestion_api::ingestion_batch(self.configuration(), batch_request)
+        self.ingest_events(vec![IngestionEvent::IngestionEventOneOf6(Box::new(event))])
             .await
             .map(|_| observation_id)
             .map_err(|e| crate::error::Error::Api(format!("Failed to create event: {}", e)))
@@ -470,7 +468,10 @@ impl LangfuseClient {
 
         let observation_id = observation_id.into();
 
-        let observation = observations_api::observations_get(self.configuration(), &observation_id)
+        let observation = observations_api::observations_get()
+            .configuration(self.configuration())
+            .observation_id(observation_id.as_str())
+            .call()
             .await
             .map_err(|e| crate::error::Error::Api(format!("Failed to get observation: {}", e)))?;
 
@@ -495,23 +496,24 @@ impl LangfuseClient {
 
         // Note: The API has more parameters but they're not all exposed in v0.2
         // Using the actual signature from the base client
-        let observations = observations_api::observations_get_many(
-            self.configuration(),
-            page,
-            limit,
-            trace_id.as_deref(),
-            parent_observation_id.as_deref(),
-            observation_type.as_deref(),
-            user_id.as_deref(),
-            None, // observation_level
-            name.as_deref(),
-            None, // tags
-            None, // from_start_time_str
-            None, // to_start_time_str
-            None, // version
-        )
-        .await
-        .map_err(|e| crate::error::Error::Api(format!("Failed to get observations: {}", e)))?;
+        let trace_id_ref = trace_id.as_deref();
+        let parent_ref = parent_observation_id.as_deref();
+        let type_ref = observation_type.as_deref();
+        let user_id_ref = user_id.as_deref();
+        let name_ref = name.as_deref();
+
+        let observations = observations_api::observations_get_many()
+            .configuration(self.configuration())
+            .maybe_page(page)
+            .maybe_limit(limit)
+            .maybe_trace_id(trace_id_ref)
+            .maybe_parent_observation_id(parent_ref)
+            .maybe_type(type_ref)
+            .maybe_user_id(user_id_ref)
+            .maybe_name(name_ref)
+            .call()
+            .await
+            .map_err(|e| crate::error::Error::Api(format!("Failed to get observations: {}", e)))?;
 
         serde_json::to_value(observations).map_err(|e| {
             crate::error::Error::Api(format!("Failed to serialize observations: {}", e))
@@ -536,9 +538,7 @@ impl LangfuseClient {
         #[builder(into)] parent_observation_id: Option<String>,
     ) -> Result<String> {
         use chrono::Utc as ChronoUtc;
-        use langfuse_client_base::models::{
-            IngestionBatchRequest, IngestionEvent, IngestionEventOneOf3, UpdateSpanBody,
-        };
+        use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf3, UpdateSpanBody};
         use uuid::Uuid;
 
         let event_body = UpdateSpanBody {
@@ -565,13 +565,7 @@ impl LangfuseClient {
             r#type: langfuse_client_base::models::ingestion_event_one_of_3::Type::SpanUpdate,
         };
 
-        let batch = IngestionBatchRequest {
-            batch: vec![IngestionEvent::IngestionEventOneOf3(Box::new(event))],
-            metadata: None,
-        };
-
-        use langfuse_client_base::apis::ingestion_api;
-        ingestion_api::ingestion_batch(self.configuration(), batch)
+        self.ingest_events(vec![IngestionEvent::IngestionEventOneOf3(Box::new(event))])
             .await
             .map_err(|e| Error::Api(format!("Failed to update span: {}", e)))?;
 
@@ -598,9 +592,7 @@ impl LangfuseClient {
         #[builder(into)] parent_observation_id: Option<String>,
     ) -> Result<String> {
         use chrono::Utc as ChronoUtc;
-        use langfuse_client_base::models::{
-            IngestionBatchRequest, IngestionEvent, IngestionEventOneOf5, UpdateGenerationBody,
-        };
+        use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf5, UpdateGenerationBody};
         use uuid::Uuid;
 
         // Note: In v0.2, model_parameters and usage have different types
@@ -637,13 +629,7 @@ impl LangfuseClient {
             r#type: langfuse_client_base::models::ingestion_event_one_of_5::Type::GenerationUpdate,
         };
 
-        let batch = IngestionBatchRequest {
-            batch: vec![IngestionEvent::IngestionEventOneOf5(Box::new(event))],
-            metadata: None,
-        };
-
-        use langfuse_client_base::apis::ingestion_api;
-        ingestion_api::ingestion_batch(self.configuration(), batch)
+        self.ingest_events(vec![IngestionEvent::IngestionEventOneOf5(Box::new(event))])
             .await
             .map_err(|e| Error::Api(format!("Failed to update generation: {}", e)))?;
 
@@ -674,10 +660,8 @@ impl LangfuseClient {
             ));
         }
 
-        use langfuse_client_base::apis::ingestion_api;
         use langfuse_client_base::models::{
-            CreateScoreValue, IngestionBatchRequest, IngestionEvent, IngestionEventOneOf1,
-            ScoreBody, ScoreDataType,
+            CreateScoreValue, IngestionEvent, IngestionEventOneOf1, ScoreBody, ScoreDataType,
         };
 
         let score_id = Uuid::new_v4().to_string();
@@ -720,12 +704,7 @@ impl LangfuseClient {
             r#type: langfuse_client_base::models::ingestion_event_one_of_1::Type::ScoreCreate,
         };
 
-        let batch_request = IngestionBatchRequest {
-            batch: vec![IngestionEvent::IngestionEventOneOf1(Box::new(event))],
-            metadata: None,
-        };
-
-        ingestion_api::ingestion_batch(self.configuration(), batch_request)
+        self.ingest_events(vec![IngestionEvent::IngestionEventOneOf1(Box::new(event))])
             .await
             .map(|_| score_id)
             .map_err(|e| crate::error::Error::Api(format!("Failed to create score: {}", e)))
@@ -820,7 +799,10 @@ impl LangfuseClient {
             metadata: metadata.map(Some),
         };
 
-        let dataset = datasets_api::datasets_create(self.configuration(), request)
+        let dataset = datasets_api::datasets_create()
+            .configuration(self.configuration())
+            .create_dataset_request(request)
+            .call()
             .await
             .map_err(|e| crate::error::Error::Api(format!("Failed to create dataset: {}", e)))?;
 
@@ -834,7 +816,10 @@ impl LangfuseClient {
 
         let dataset_name = dataset_name.into();
 
-        let dataset = datasets_api::datasets_get(self.configuration(), &dataset_name)
+        let dataset = datasets_api::datasets_get()
+            .configuration(self.configuration())
+            .dataset_name(dataset_name.as_str())
+            .call()
             .await
             .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset: {}", e)))?;
 
@@ -851,7 +836,11 @@ impl LangfuseClient {
     ) -> Result<serde_json::Value> {
         use langfuse_client_base::apis::datasets_api;
 
-        let datasets = datasets_api::datasets_list(self.configuration(), page, limit)
+        let datasets = datasets_api::datasets_list()
+            .configuration(self.configuration())
+            .maybe_page(page)
+            .maybe_limit(limit)
+            .call()
             .await
             .map_err(|e| crate::error::Error::Api(format!("Failed to list datasets: {}", e)))?;
 
@@ -870,9 +859,13 @@ impl LangfuseClient {
         let dataset_name = dataset_name.into();
         let run_name = run_name.into();
 
-        datasets_api::datasets_delete_run(self.configuration(), &dataset_name, &run_name)
+        datasets_api::datasets_delete_run()
+            .configuration(self.configuration())
+            .dataset_name(dataset_name.as_str())
+            .run_name(run_name.as_str())
+            .call()
             .await
-            .map(|_| ()) // Ignore the response body, just return success
+            .map(|_| ())
             .map_err(|e| crate::error::Error::Api(format!("Failed to delete dataset run: {}", e)))
     }
 
@@ -887,7 +880,11 @@ impl LangfuseClient {
         let dataset_name = dataset_name.into();
         let run_name = run_name.into();
 
-        let run = datasets_api::datasets_get_run(self.configuration(), &dataset_name, &run_name)
+        let run = datasets_api::datasets_get_run()
+            .configuration(self.configuration())
+            .dataset_name(dataset_name.as_str())
+            .run_name(run_name.as_str())
+            .call()
             .await
             .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset run: {}", e)))?;
 
@@ -905,7 +902,10 @@ impl LangfuseClient {
 
         let dataset_name = dataset_name.into();
 
-        let runs = datasets_api::datasets_get_runs(self.configuration(), &dataset_name, None, None)
+        let runs = datasets_api::datasets_get_runs()
+            .configuration(self.configuration())
+            .dataset_name(dataset_name.as_str())
+            .call()
             .await
             .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset runs: {}", e)))?;
 
@@ -943,7 +943,10 @@ impl LangfuseClient {
             status: None, // Status field requires DatasetStatus enum, not available in public API
         };
 
-        let result = dataset_items_api::dataset_items_create(self.configuration(), item_request)
+        let result = dataset_items_api::dataset_items_create()
+            .configuration(self.configuration())
+            .create_dataset_item_request(item_request)
+            .call()
             .await
             .map_err(|e| {
                 crate::error::Error::Api(format!("Failed to create dataset item: {}", e))
@@ -960,7 +963,10 @@ impl LangfuseClient {
 
         let item_id = item_id.into();
 
-        let item = dataset_items_api::dataset_items_get(self.configuration(), &item_id)
+        let item = dataset_items_api::dataset_items_get()
+            .configuration(self.configuration())
+            .id(item_id.as_str())
+            .call()
             .await
             .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset item: {}", e)))?;
 
@@ -981,16 +987,20 @@ impl LangfuseClient {
     ) -> Result<serde_json::Value> {
         use langfuse_client_base::apis::dataset_items_api;
 
-        let items = dataset_items_api::dataset_items_list(
-            self.configuration(),
-            dataset_name.as_deref(),
-            source_trace_id.as_deref(),
-            source_observation_id.as_deref(),
-            page,
-            limit,
-        )
-        .await
-        .map_err(|e| crate::error::Error::Api(format!("Failed to list dataset items: {}", e)))?;
+        let dataset_name_ref = dataset_name.as_deref();
+        let source_trace_ref = source_trace_id.as_deref();
+        let source_observation_ref = source_observation_id.as_deref();
+
+        let items = dataset_items_api::dataset_items_list()
+            .configuration(self.configuration())
+            .maybe_dataset_name(dataset_name_ref)
+            .maybe_source_trace_id(source_trace_ref)
+            .maybe_source_observation_id(source_observation_ref)
+            .maybe_page(page)
+            .maybe_limit(limit)
+            .call()
+            .await
+            .map_err(|e| crate::error::Error::Api(format!("Failed to list dataset items: {}", e)))?;
 
         serde_json::to_value(items).map_err(|e| {
             crate::error::Error::Api(format!("Failed to serialize dataset items: {}", e))
@@ -1003,7 +1013,10 @@ impl LangfuseClient {
 
         let item_id = item_id.into();
 
-        dataset_items_api::dataset_items_delete(self.configuration(), &item_id)
+        dataset_items_api::dataset_items_delete()
+            .configuration(self.configuration())
+            .id(item_id.as_str())
+            .call()
             .await
             .map_err(|e| {
                 crate::error::Error::Api(format!("Failed to delete dataset item: {}", e))
@@ -1044,7 +1057,10 @@ impl LangfuseClient {
                 ..Default::default()
             }));
 
-        let result = prompts_api::prompts_create(self.configuration(), prompt_request)
+        let result = prompts_api::prompts_create()
+            .configuration(self.configuration())
+            .create_prompt_request(prompt_request)
+            .call()
             .await
             .map_err(|e| crate::error::Error::Api(format!("Failed to create prompt: {}", e)))?;
 
@@ -1090,7 +1106,10 @@ impl LangfuseClient {
                 ..Default::default()
             }));
 
-        let result = prompts_api::prompts_create(self.configuration(), prompt_request)
+        let result = prompts_api::prompts_create()
+            .configuration(self.configuration())
+            .create_prompt_request(prompt_request)
+            .call()
             .await
             .map_err(|e| {
                 crate::error::Error::Api(format!("Failed to create chat prompt: {}", e))
@@ -1113,14 +1132,14 @@ impl LangfuseClient {
 
         let update_request = PromptVersionUpdateRequest { new_labels: labels };
 
-        let result = prompt_version_api::prompt_version_update(
-            self.configuration(),
-            &name,
-            version,
-            update_request,
-        )
-        .await
-        .map_err(|e| crate::error::Error::Api(format!("Failed to update prompt version: {}", e)))?;
+        let result = prompt_version_api::prompt_version_update()
+            .configuration(self.configuration())
+            .name(name.as_str())
+            .version(version)
+            .prompt_version_update_request(update_request)
+            .call()
+            .await
+            .map_err(|e| crate::error::Error::Api(format!("Failed to update prompt version: {}", e)))?;
 
         serde_json::to_value(result).map_err(|e| {
             crate::error::Error::Api(format!("Failed to serialize prompt version: {}", e))
@@ -1138,7 +1157,12 @@ impl LangfuseClient {
 
         let prompt_name = prompt_name.into();
 
-        let prompt = prompts_api::prompts_get(self.configuration(), &prompt_name, version, label)
+        let prompt = prompts_api::prompts_get()
+            .configuration(self.configuration())
+            .prompt_name(prompt_name.as_str())
+            .maybe_version(version)
+            .maybe_label(label)
+            .call()
             .await
             .map_err(|e| crate::error::Error::Api(format!("Failed to get prompt: {}", e)))?;
 
@@ -1153,24 +1177,26 @@ impl LangfuseClient {
         #[builder(into)] name: Option<String>,
         #[builder(into)] tag: Option<String>,
         #[builder(into)] label: Option<String>,
-        version: Option<i32>,
         page: Option<i32>,
         limit: Option<String>,
     ) -> Result<serde_json::Value> {
         use langfuse_client_base::apis::prompts_api;
 
-        let prompts = prompts_api::prompts_list(
-            self.configuration(),
-            name.as_deref(),
-            tag.as_deref(),
-            label.as_deref(),
-            version,
-            page,
-            limit,
-            None, // Additional parameter
-        )
-        .await
-        .map_err(|e| crate::error::Error::Api(format!("Failed to list prompts: {}", e)))?;
+        let name_ref = name.as_deref();
+        let tag_ref = tag.as_deref();
+        let label_ref = label.as_deref();
+        let limit_num = limit.and_then(|value| value.parse::<i32>().ok());
+
+        let prompts = prompts_api::prompts_list()
+            .configuration(self.configuration())
+            .maybe_name(name_ref)
+            .maybe_tag(tag_ref)
+            .maybe_label(label_ref)
+            .maybe_page(page)
+            .maybe_limit(limit_num)
+            .call()
+            .await
+            .map_err(|e| crate::error::Error::Api(format!("Failed to list prompts: {}", e)))?;
 
         serde_json::to_value(prompts)
             .map_err(|e| crate::error::Error::Api(format!("Failed to serialize prompts: {}", e)))
