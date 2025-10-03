@@ -10,7 +10,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create client from environment variables
     let client = ClientBuilder::from_env()?.build()?;
 
-    println!("💬 Prompt Management Example");
+    println!(" Prompt Management Example");
     println!("============================");
 
     // Note: Create functionality is currently a placeholder
@@ -31,12 +31,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         Ok(prompt) => {
             println!(
-                "✅ Prompt result: {}",
+                " Prompt result: {}",
                 serde_json::to_string_pretty(&prompt)?
             );
         }
         Err(e) => {
-            println!("⚠️  Prompt creation (placeholder): {}", e);
+            println!("  Prompt creation (placeholder): {}", e);
         }
     }
 
@@ -45,12 +45,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match client.get_prompt("example-prompt", None, None).await {
         Ok(prompt) => {
             println!(
-                "🎯 Retrieved prompt: {}",
+                " Retrieved prompt: {}",
                 serde_json::to_string_pretty(&prompt)?
             );
         }
         Err(e) => {
-            println!("⚠️  Could not retrieve prompt: {}", e);
+            println!("  Could not retrieve prompt: {}", e);
         }
     }
 
@@ -66,12 +66,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         Ok(prompts) => {
             println!(
-                "📋 Listed prompts: {}",
+                " Listed prompts: {}",
                 serde_json::to_string_pretty(&prompts)?
             );
         }
         Err(e) => {
-            println!("⚠️  Could not list prompts: {}", e);
+            println!("  Could not list prompts: {}", e);
         }
     }
 
@@ -80,17 +80,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match client.list_prompts().call().await {
         Ok(prompts) => {
             println!(
-                "📋 All prompts: {}",
+                " All prompts: {}",
                 serde_json::to_string_pretty(&prompts)?
             );
         }
         Err(e) => {
-            println!("⚠️  Could not list all prompts: {}", e);
+            println!("  Could not list all prompts: {}", e);
         }
     }
 
-    println!("\n✨ Prompt management example completed!");
-    println!("📝 Note: Prompt creation is currently using a placeholder implementation.");
+    println!("\n Prompt management example completed!");
+    println!(" Note: Prompt creation is currently using a placeholder implementation.");
     println!("   The actual create functionality depends on the correct API implementation.");
 
     Ok(())

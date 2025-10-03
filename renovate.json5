@@ -132,7 +132,7 @@
         'timvw',
       ],
       prBodyNotes: [
-        '⚠️ **Langfuse Base Client Update**',
+        ' **Langfuse Base Client Update**',
         'This updates the underlying OpenAPI-generated client.',
         'Please review for API compatibility changes.',
       ],

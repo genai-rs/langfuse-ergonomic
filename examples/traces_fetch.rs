@@ -10,7 +10,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create client from environment variables
     let client = ClientBuilder::from_env()?.build()?;
 
-    println!("🔍 Trace Fetching Example");
+    println!(" Trace Fetching Example");
     println!("========================");
 
     // First, create a trace to work with
@@ -29,19 +29,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    println!("✅ Created trace with ID: {}", trace.id);
+    println!(" Created trace with ID: {}", trace.id);
 
     // Get the specific trace
     println!("\n2. Fetching the trace by ID...");
     match client.get_trace(&trace.id).await {
         Ok(fetched_trace) => {
             println!(
-                "🎯 Fetched trace: {}",
+                " Fetched trace: {}",
                 serde_json::to_string_pretty(&fetched_trace)?
             );
         }
         Err(e) => {
-            println!("⚠️  Could not fetch trace: {}", e);
+            println!("  Could not fetch trace: {}", e);
         }
     }
 
@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     println!(
-        "📋 Listed traces: {}",
+        " Listed traces: {}",
         serde_json::to_string_pretty(&traces)?
     );
 
@@ -71,7 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     println!(
-        "🕒 Recent traces: {}",
+        " Recent traces: {}",
         serde_json::to_string_pretty(&recent_traces)?
     );
 
@@ -83,6 +83,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         trace.id
     );
 
-    println!("\n✨ Trace fetching example completed!");
+    println!("\n Trace fetching example completed!");
     Ok(())
 }

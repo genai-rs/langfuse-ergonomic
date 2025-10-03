@@ -18,7 +18,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Safe to log: session_id is a trace organization identifier, not an authentication secret
     // codeql[rust/cleartext-logging] - False positive: session_id is not a secret
-    println!("📝 Creating conversation session: {}", session_id);
+    println!(" Creating conversation session: {}", session_id);
 
     // First trace: User asks a question
     let trace1 = client
@@ -92,7 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("  Message 3: {}", trace3.id);
 
-    println!("\n✅ Created conversation with 3 messages");
+    println!("\n Created conversation with 3 messages");
     println!("   Session ID: {}", session_id);
     println!(
         "   View session at: https://cloud.langfuse.com/sessions/{}",

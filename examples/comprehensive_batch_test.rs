@@ -11,12 +11,12 @@ async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     tracing_subscriber::fmt::init();
 
-    println!("🚀 Starting comprehensive batch test");
+    println!(" Starting comprehensive batch test");
     println!("{}", "=".repeat(50));
 
     // Create client from environment variables
     let client = ClientBuilder::from_env()?.build()?;
-    println!("✅ Connected to Langfuse");
+    println!(" Connected to Langfuse");
 
     // Create a batcher with specific configuration to test various scenarios
     let batcher = Batcher::builder()
@@ -31,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
         .build()
         .await;
 
-    println!("📊 Batcher configured with:");
+    println!(" Batcher configured with:");
     println!("  - Max events per batch: 10");
     println!("  - Max bytes per batch: 50,000");
     println!("  - Flush interval: 2 seconds");
@@ -42,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Get initial metrics
     let initial_metrics = batcher.metrics();
-    println!("\n📈 Initial metrics:");
+    println!("\n Initial metrics:");
     println!("  - Events queued: {}", initial_metrics.queued);
     println!("  - Events flushed: {}", initial_metrics.flushed);
     println!("  - Events failed: {}", initial_metrics.failed);
@@ -58,9 +58,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Safe to log: these are trace organization identifiers, not secrets
     // codeql[rust/cleartext-logging] - False positive: session_id is not a secret
-    println!("📁 Session ID: {}", session_id);
+    println!(" Session ID: {}", session_id);
     // codeql[rust/cleartext-logging] - False positive: user_id is not a secret
-    println!("👤 User ID: {}\n", user_id);
+    println!(" User ID: {}\n", user_id);
 
     // Create multiple traces to test batching
     let mut trace_ids = Vec::new();
@@ -155,12 +155,12 @@ async fn main() -> anyhow::Result<()> {
 
         // Print progress for every 5 traces
         if (i + 1) % 5 == 0 {
-            println!("  ✅ Added {} traces (latest: {})", i + 1, trace_type);
+            println!("   Added {} traces (latest: {})", i + 1, trace_type);
 
             // Check metrics periodically
             let current_metrics = batcher.metrics();
             println!(
-                "     📊 Current: queued={}, flushed={}",
+                "      Current: queued={}, flushed={}",
                 current_metrics.queued, current_metrics.flushed
             );
         }
@@ -172,7 +172,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     println!("\n{}", "=".repeat(50));
-    println!("📊 Checking metrics after adding all events...");
+    println!(" Checking metrics after adding all events...");
 
     let after_add_metrics = batcher.metrics();
     println!("  - Total events queued: {}", after_add_metrics.queued);
@@ -182,11 +182,11 @@ async fn main() -> anyhow::Result<()> {
     println!("  - Total retries: {}", after_add_metrics.retries);
 
     // Wait for automatic flush
-    println!("\n⏳ Waiting for automatic flush (3 seconds)...");
+    println!("\n Waiting for automatic flush (3 seconds)...");
     tokio::time::sleep(Duration::from_secs(4)).await;
 
     let after_auto_flush_metrics = batcher.metrics();
-    println!("📊 Metrics after automatic flush:");
+    println!(" Metrics after automatic flush:");
     println!(
         "  - Total events queued: {}",
         after_auto_flush_metrics.queued
@@ -197,14 +197,14 @@ async fn main() -> anyhow::Result<()> {
     println!("  - Total retries: {}", after_auto_flush_metrics.retries);
 
     // Manual flush to ensure all events are sent
-    println!("\n🔄 Performing manual flush...");
+    println!("\n Performing manual flush...");
     let flush_response = batcher.flush().await?;
-    println!("✅ Manual flush complete:");
+    println!(" Manual flush complete:");
     println!("  - Succeeded: {}", flush_response.success_count);
     println!("  - Failed: {}", flush_response.failure_count);
 
     if !flush_response.failures.is_empty() {
-        println!("⚠️  Failures detected:");
+        println!("  Failures detected:");
         for failure in &flush_response.failures {
             println!(
                 "    - Event {}: {} (retryable: {})",
@@ -214,7 +214,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Test adding more events to see if buffer continues working
-    println!("\n📝 Adding 5 more traces to test continued operation...");
+    println!("\n Adding 5 more traces to test continued operation...");
     for i in 25..30 {
         let trace_id = Uuid::new_v4().to_string();
         let trace_event = IngestionEvent::IngestionEventOneOf(Box::new(IngestionEventOneOf {
@@ -246,18 +246,18 @@ async fn main() -> anyhow::Result<()> {
         }));
         batcher.add(trace_event).await?;
     }
-    println!("  ✅ Added 5 additional traces");
+    println!("   Added 5 additional traces");
 
     // Get final metrics before shutdown (shutdown consumes the batcher)
     let final_metrics = batcher.metrics();
 
     // Graceful shutdown
-    println!("\n🛑 Shutting down batcher...");
+    println!("\n Shutting down batcher...");
     let shutdown_response = batcher.shutdown().await?;
-    println!("✅ Shutdown complete:");
+    println!(" Shutdown complete:");
     println!("  - Total succeeded: {}", shutdown_response.success_count);
     println!("  - Total failed: {}", shutdown_response.failure_count);
-    println!("\n📊 Final metrics summary:");
+    println!("\n Final metrics summary:");
     println!("  - Total events queued: {}", final_metrics.queued);
     println!("  - Total events flushed: {}", final_metrics.flushed);
     println!("  - Total events failed: {}", final_metrics.failed);
@@ -279,8 +279,8 @@ async fn main() -> anyhow::Result<()> {
     }
 
     println!("\n{}", "=".repeat(50));
-    println!("🎉 Test complete!");
-    println!("\n📌 View results at:");
+    println!(" Test complete!");
+    println!("\n View results at:");
     println!(
         "   Session: https://cloud.langfuse.com/sessions/{}",
         session_id
@@ -295,7 +295,7 @@ async fn main() -> anyhow::Result<()> {
             trace_ids[trace_ids.len() - 1]
         );
     }
-    println!("\n💡 Login with:");
+    println!("\n Login with:");
     println!("   Email: langfuse@timvw.be");
     println!("   URL: https://cloud.langfuse.com");
 
