@@ -91,9 +91,9 @@ All API methods return strongly-typed structs instead of JSON values. Types are 
 ```rust
 use langfuse_ergonomic::{Traces, Dataset, Prompt, ObservationsView};
 
-// These are equivalent:
-use langfuse_ergonomic::Traces;
-use langfuse_client_base::models::Traces;
+// You can also import directly from the base crate (both are equivalent):
+// use langfuse_ergonomic::Traces;
+// use langfuse_client_base::models::Traces;
 ```
 
 Benefits:
