@@ -19,12 +19,12 @@
 //! ## Quick Start
 //!
 //! ```no_run
-//! use langfuse_ergonomic::LangfuseClient;
+//! use langfuse_ergonomic::{ClientBuilder, LangfuseClient};
 //! use serde_json::json;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! // Create client from environment variables
-//! let client = LangfuseClient::from_env()?;
+//! let client = ClientBuilder::from_env()?.build()?;
 //!
 //! // Create a trace
 //! let trace = client.trace()
@@ -54,10 +54,10 @@
 //! Or configure explicitly:
 //!
 //! ```no_run
-//! # use langfuse_ergonomic::LangfuseClient;
+//! # use langfuse_ergonomic::ClientBuilder;
 //! # use std::time::Duration;
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let client = LangfuseClient::builder()
+//! let client = ClientBuilder::new()
 //!     .public_key("pk-lf-...")
 //!     .secret_key("sk-lf-...")
 //!     .base_url("https://cloud.langfuse.com".to_string())
@@ -72,11 +72,11 @@
 //! The client supports efficient batch processing with automatic chunking and retry logic:
 //!
 //! ```no_run
-//! use langfuse_ergonomic::{Batcher, BackpressurePolicy, LangfuseClient};
+//! use langfuse_ergonomic::{Batcher, BackpressurePolicy, ClientBuilder};
 //! use std::time::Duration;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let client = LangfuseClient::from_env()?;
+//! let client = ClientBuilder::from_env()?.build()?;
 //!
 //! // Create a batcher with custom configuration
 //! let batcher = Batcher::builder()

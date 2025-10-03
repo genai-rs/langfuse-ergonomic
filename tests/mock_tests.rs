@@ -1,12 +1,12 @@
 //! Mock tests for offline development and testing without API credentials
 
-use langfuse_ergonomic::LangfuseClient;
+use langfuse_ergonomic::{ClientBuilder, LangfuseClient};
 use mockito::Server;
 use serde_json::json;
 
 /// Helper to create a mock client pointing to a mockito server
 fn create_mock_client(mock_server: &Server) -> LangfuseClient {
-    LangfuseClient::builder()
+    ClientBuilder::new()
         .public_key("pk-lf-test")
         .secret_key("sk-lf-test")
         .base_url(mock_server.url())
@@ -307,7 +307,7 @@ async fn test_categorical_score_mock() {
 #[tokio::test]
 async fn test_network_error_handling() {
     // Create a client with an invalid URL
-    let client = LangfuseClient::builder()
+    let client = ClientBuilder::new()
         .public_key("pk-lf-test")
         .secret_key("sk-lf-test")
         .base_url("http://localhost:19999".to_string()) // Non-existent port
@@ -341,7 +341,7 @@ async fn test_client_from_env_missing_vars() {
     std::env::remove_var("LANGFUSE_SECRET_KEY");
     std::env::remove_var("LANGFUSE_BASE_URL");
 
-    let result = LangfuseClient::from_env();
+    let result = ClientBuilder::from_env().and_then(|builder| builder.build());
     assert!(result.is_err());
     if let Err(err) = result {
         assert!(err.to_string().contains("LANGFUSE_PUBLIC_KEY"));

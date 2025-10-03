@@ -1,7 +1,7 @@
 //! Example showing how to connect to a self-hosted Langfuse instance
 
 use chrono::Utc;
-use langfuse_ergonomic::LangfuseClient;
+use langfuse_ergonomic::ClientBuilder;
 use std::time::Duration;
 
 #[tokio::main]
@@ -10,7 +10,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     // Example 1: Connect to self-hosted instance with custom configuration
-    let client = LangfuseClient::builder()
+    let client = ClientBuilder::new()
         .public_key("your-public-key")
         .secret_key("your-secret-key")
         .base_url("https://langfuse.your-domain.com".to_string()) // Your self-hosted URL
@@ -32,14 +32,16 @@ async fn main() -> anyhow::Result<()> {
     // LANGFUSE_SECRET_KEY=your-secret-key
     // LANGFUSE_BASE_URL=https://langfuse.your-domain.com
 
-    let env_client = LangfuseClient::from_env().or_else(|e| {
-        println!("Failed to create client from env: {}", e);
-        println!("Using default cloud instance for demo");
-        LangfuseClient::builder()
-            .public_key("demo-public-key")
-            .secret_key("demo-secret-key")
-            .build()
-    })?;
+    let env_client = ClientBuilder::from_env()
+        .and_then(|builder| builder.build())
+        .or_else(|e| {
+            println!("Failed to create client from env: {}", e);
+            println!("Using default cloud instance for demo");
+            ClientBuilder::new()
+                .public_key("demo-public-key")
+                .secret_key("demo-secret-key")
+                .build()
+        })?;
 
     // Create a trace to test the connection
     let trace_response = env_client

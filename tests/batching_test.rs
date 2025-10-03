@@ -1,7 +1,7 @@
 //! Comprehensive tests for batching functionality
 
 use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
-use langfuse_ergonomic::{BackpressurePolicy, Batcher, LangfuseClient};
+use langfuse_ergonomic::{BackpressurePolicy, Batcher, ClientBuilder};
 use mockito::Server;
 use std::time::Duration;
 
@@ -53,7 +53,7 @@ async fn test_207_mixed_response() {
         .create_async()
         .await;
 
-    let client = LangfuseClient::builder()
+    let client = ClientBuilder::new()
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
@@ -124,7 +124,7 @@ async fn test_retry_after_header() {
         .create_async()
         .await;
 
-    let client = LangfuseClient::builder()
+    let client = ClientBuilder::new()
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
@@ -173,7 +173,7 @@ async fn test_413_payload_too_large() {
         .create_async()
         .await;
 
-    let client = LangfuseClient::builder()
+    let client = ClientBuilder::new()
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
@@ -197,7 +197,7 @@ async fn test_413_payload_too_large() {
 async fn test_413_single_event_too_large() {
     let server = Server::new_async().await;
 
-    let client = LangfuseClient::builder()
+    let client = ClientBuilder::new()
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
@@ -228,7 +228,7 @@ async fn test_413_single_event_too_large() {
 async fn test_backpressure_drop_new() {
     let server = Server::new_async().await;
 
-    let client = LangfuseClient::builder()
+    let client = ClientBuilder::new()
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
@@ -271,7 +271,7 @@ async fn test_concurrent_flush_protection() {
         .create_async()
         .await;
 
-    let client = LangfuseClient::builder()
+    let client = ClientBuilder::new()
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
@@ -307,7 +307,7 @@ async fn test_shutdown_idempotency() {
         .create_async()
         .await;
 
-    let client = LangfuseClient::builder()
+    let client = ClientBuilder::new()
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
@@ -352,7 +352,7 @@ async fn test_metrics_tracking() {
         .create_async()
         .await;
 
-    let client = LangfuseClient::builder()
+    let client = ClientBuilder::new()
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
@@ -394,7 +394,7 @@ async fn test_auto_flush_on_size() {
         .create_async()
         .await;
 
-    let client = LangfuseClient::builder()
+    let client = ClientBuilder::new()
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())

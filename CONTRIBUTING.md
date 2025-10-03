@@ -140,7 +140,9 @@ For features that require API calls, add integration tests that can run with rea
 #[tokio::test]
 async fn test_api_feature() {
     dotenv::dotenv().ok();
-    let client = LangfuseClient::from_env().unwrap();
+    let client = langfuse_ergonomic::ClientBuilder::from_env()
+        .and_then(|builder| builder.build())
+        .unwrap();
     // Your test
 }
 ```

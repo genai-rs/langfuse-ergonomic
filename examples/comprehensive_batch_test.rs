@@ -2,7 +2,7 @@
 
 use chrono::Utc;
 use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
-use langfuse_ergonomic::{BackpressurePolicy, Batcher, LangfuseClient};
+use langfuse_ergonomic::{BackpressurePolicy, Batcher, ClientBuilder};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -15,7 +15,7 @@ async fn main() -> anyhow::Result<()> {
     println!("{}", "=".repeat(50));
 
     // Create client from environment variables
-    let client = LangfuseClient::from_env()?;
+    let client = ClientBuilder::from_env()?.build()?;
     println!("✅ Connected to Langfuse");
 
     // Create a batcher with specific configuration to test various scenarios

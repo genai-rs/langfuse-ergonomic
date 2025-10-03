@@ -26,16 +26,6 @@ pub struct LangfuseClient {
 }
 
 impl LangfuseClient {
-    /// Create a new Langfuse client from environment variables
-    ///
-    /// Reads from:
-    /// - `LANGFUSE_PUBLIC_KEY`: Required public key
-    /// - `LANGFUSE_SECRET_KEY`: Required secret key  
-    /// - `LANGFUSE_BASE_URL`: Optional base URL (defaults to <https://cloud.langfuse.com>)
-    pub fn from_env() -> Result<Self> {
-        ClientBuilder::from_env()?.build()
-    }
-
     /// Get the underlying API configuration
     pub fn configuration(&self) -> &Configuration {
         &self.configuration
@@ -91,10 +81,10 @@ impl LangfuseClient {
     ///
     /// # Example
     /// ```no_run
-    /// # use langfuse_ergonomic::{LangfuseClient, BatcherConfig};
+    /// # use langfuse_ergonomic::{ClientBuilder, LangfuseClient, BatcherConfig};
     /// # use std::sync::Arc;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = Arc::new(LangfuseClient::from_env()?);
+    /// let client = Arc::new(ClientBuilder::from_env()?.build()?);
     /// let batcher = client.create_batcher(None).await;
     /// # Ok(())
     /// # }
@@ -137,11 +127,6 @@ impl LangfuseClient {
     /// Start building a [`Batcher`] anchored to this client.
     pub fn batcher(&self) -> crate::batcher::BatcherBuilderWithClient {
         crate::batcher::Batcher::builder().client(self.clone())
-    }
-
-    /// Create a new client builder that can be customized before calling [`ClientBuilder::build`].
-    pub fn builder() -> ClientBuilder {
-        ClientBuilder::new()
     }
 
     fn build_internal(
