@@ -7,11 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.4.1](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.4.0...v0.4.1) - 2025-10-03
+## [0.5.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.4.0...v0.5.0) - 2025-10-03
 
-### Added
+### Changed
 
-- replace JSON values with strongly-typed API responses
+- **BREAKING**: replace JSON values with strongly-typed API responses for all read methods
+  - `list_traces()` now returns `langfuse_client_base::models::Traces`
+  - `get_trace()` now returns `langfuse_client_base::models::TraceWithFullDetails`
+  - `get_observations()` now returns `langfuse_client_base::models::ObservationsViews`
+  - `get_observation()` now returns `langfuse_client_base::models::ObservationsView`
+  - `create_dataset()`, `get_dataset()`, `list_datasets()` now return typed `Dataset` structs
+  - `get_dataset_run()`, `get_dataset_runs()` now return typed dataset run structs
+  - `create_dataset_item()`, `get_dataset_item()`, `list_dataset_items()` now return typed item structs
+  - `get_prompt()`, `list_prompts()` now return typed prompt structs
 
 ### Fixed
 
