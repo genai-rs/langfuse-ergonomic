@@ -73,9 +73,10 @@
 //! from the Langfuse OpenAPI specification. This ensures type accuracy and allows direct access
 //! to all fields and their documentation. You can import types from either crate:
 //!
-//! ```rust
-//! // Both imports are equivalent
+//! ```rust,ignore
+//! // Both imports are equivalent:
 //! use langfuse_ergonomic::Traces;
+//! // or
 //! use langfuse_client_base::models::Traces;
 //! ```
 //!
