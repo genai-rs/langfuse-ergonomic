@@ -56,10 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    println!(
-        " Listed traces: {}",
-        serde_json::to_string_pretty(&traces)?
-    );
+    println!(" Listed traces: {}", serde_json::to_string_pretty(&traces)?);
 
     // List recent traces
     println!("\n4. Listing recent traces...");
