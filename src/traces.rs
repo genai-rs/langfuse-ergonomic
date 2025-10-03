@@ -186,7 +186,10 @@ impl LangfuseClient {
     }
 
     /// Get a trace by ID
-    pub async fn get_trace(&self, trace_id: impl Into<String>) -> Result<langfuse_client_base::models::TraceWithFullDetails> {
+    pub async fn get_trace(
+        &self,
+        trace_id: impl Into<String>,
+    ) -> Result<langfuse_client_base::models::TraceWithFullDetails> {
         use langfuse_client_base::apis::trace_api;
 
         let trace_id = trace_id.into();
@@ -798,7 +801,10 @@ impl LangfuseClient {
     }
 
     /// Get a dataset by name
-    pub async fn get_dataset(&self, dataset_name: impl Into<String>) -> Result<langfuse_client_base::models::Dataset> {
+    pub async fn get_dataset(
+        &self,
+        dataset_name: impl Into<String>,
+    ) -> Result<langfuse_client_base::models::Dataset> {
         use langfuse_client_base::apis::datasets_api;
 
         let dataset_name = dataset_name.into();
@@ -921,13 +927,14 @@ impl LangfuseClient {
             .create_dataset_item_request(item_request)
             .call()
             .await
-            .map_err(|e| {
-                crate::error::Error::Api(format!("Failed to create dataset item: {}", e))
-            })
+            .map_err(|e| crate::error::Error::Api(format!("Failed to create dataset item: {}", e)))
     }
 
     /// Get a specific dataset item
-    pub async fn get_dataset_item(&self, item_id: impl Into<String>) -> Result<langfuse_client_base::models::DatasetItem> {
+    pub async fn get_dataset_item(
+        &self,
+        item_id: impl Into<String>,
+    ) -> Result<langfuse_client_base::models::DatasetItem> {
         use langfuse_client_base::apis::dataset_items_api;
 
         let item_id = item_id.into();
@@ -965,9 +972,7 @@ impl LangfuseClient {
             .maybe_limit(limit)
             .call()
             .await
-            .map_err(|e| {
-                crate::error::Error::Api(format!("Failed to list dataset items: {}", e))
-            })
+            .map_err(|e| crate::error::Error::Api(format!("Failed to list dataset items: {}", e)))
     }
 
     /// Delete a dataset item
@@ -1071,9 +1076,7 @@ impl LangfuseClient {
             .create_prompt_request(prompt_request)
             .call()
             .await
-            .map_err(|e| {
-                crate::error::Error::Api(format!("Failed to create chat prompt: {}", e))
-            })
+            .map_err(|e| crate::error::Error::Api(format!("Failed to create chat prompt: {}", e)))
     }
 
     /// Update labels for a specific prompt version
