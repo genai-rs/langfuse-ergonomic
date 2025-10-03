@@ -99,7 +99,7 @@ cargo run --example advanced_features
 
 ## Current Implementation Status
 
-### Implemented ✅
+### Implemented 
 - Basic trace creation with builder pattern
 - Environment-based configuration
 - Trace metadata, tags, input/output
@@ -117,7 +117,7 @@ cargo run --example advanced_features
 - Dataset management
 - Prompt management (create text/chat prompts, update versions, list, get)
 
-### Not Yet Implemented ❌
+### Not Yet Implemented 
 - Advanced prompt caching
 - Dataset run items API (not available in v0.2)
 - Event update operations (no IngestionEvent variant in v0.2)

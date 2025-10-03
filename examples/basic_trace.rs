@@ -10,7 +10,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create client from environment variables
     let client = ClientBuilder::from_env()?.build()?;
-    println!("✅ Connected to Langfuse");
+    println!(" Connected to Langfuse");
 
     // Create a minimal trace
     let trace = client.trace().name("minimal-trace").call().await?;
