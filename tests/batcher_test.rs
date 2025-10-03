@@ -12,6 +12,7 @@ fn create_mock_client(server: &Server) -> LangfuseClient {
         .secret_key("sk-test")
         .base_url(server.url())
         .build()
+        .expect("mock credentials should be valid")
 }
 
 #[tokio::test]

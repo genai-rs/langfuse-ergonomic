@@ -101,7 +101,7 @@ let client = LangfuseClient::builder()
     .timeout(Duration::from_secs(30))        // Custom timeout
     .connect_timeout(Duration::from_secs(5)) // Connection timeout
     .user_agent("my-app/1.0.0")              // Custom user agent
-    .build();
+    .build()?;
 ```
 
 ## Examples
