@@ -1,7 +1,7 @@
 //! Example demonstrating advanced features like prompt management, dataset items, and observation updates
 
 use anyhow::Result;
-use langfuse_ergonomic::LangfuseClient;
+use langfuse_ergonomic::ClientBuilder;
 use serde_json::json;
 use uuid::Uuid;
 
@@ -9,7 +9,7 @@ use uuid::Uuid;
 async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
 
-    let client = LangfuseClient::from_env()?;
+    let client = ClientBuilder::from_env()?.build()?;
 
     // ===== PROMPT MANAGEMENT =====
     println!("Testing Prompt Management...");

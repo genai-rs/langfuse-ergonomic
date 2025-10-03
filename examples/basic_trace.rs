@@ -1,6 +1,6 @@
 //! Basic example showing minimal trace creation
 
-use langfuse_ergonomic::LangfuseClient;
+use langfuse_ergonomic::ClientBuilder;
 use serde_json::json;
 
 #[tokio::main]
@@ -9,7 +9,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
 
     // Create client from environment variables
-    let client = LangfuseClient::from_env()?;
+    let client = ClientBuilder::from_env()?.build()?;
     println!("✅ Connected to Langfuse");
 
     // Create a minimal trace

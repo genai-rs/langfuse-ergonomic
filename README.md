@@ -40,13 +40,13 @@ langfuse-ergonomic = { version = "*", features = ["compression"] }
 ## Quick Start
 
 ```rust
-use langfuse_ergonomic::LangfuseClient;
+use langfuse_ergonomic::{ClientBuilder, LangfuseClient};
 use serde_json::json;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create client from environment variables
-    let client = LangfuseClient::from_env()?;
+    let client = ClientBuilder::from_env()?.build()?;
     
     // Create a trace
     let trace = client.trace()
@@ -92,9 +92,10 @@ LANGFUSE_BASE_URL=https://cloud.langfuse.com  # Optional
 Or configure explicitly with advanced options:
 
 ```rust
+use langfuse_ergonomic::ClientBuilder;
 use std::time::Duration;
 
-let client = LangfuseClient::builder()
+let client = ClientBuilder::new()
     .public_key("pk-lf-...")
     .secret_key("sk-lf-...")
     .base_url("https://cloud.langfuse.com")
@@ -153,10 +154,10 @@ The client supports efficient batch processing with automatic chunking, retry lo
 - **Max queue size**: 10,000 events
 
 ```rust
-use langfuse_ergonomic::{Batcher, BackpressurePolicy, LangfuseClient};
+use langfuse_ergonomic::{Batcher, BackpressurePolicy, ClientBuilder, LangfuseClient};
 use std::time::Duration;
 
-let client = LangfuseClient::from_env()?;
+let client = ClientBuilder::from_env()?.build()?;
 
 // Create a batcher with custom configuration
 let batcher = Batcher::builder()

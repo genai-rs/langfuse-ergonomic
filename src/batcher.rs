@@ -17,11 +17,11 @@
 //! ## Example
 //!
 //! ```no_run
-//! use langfuse_ergonomic::{Batcher, BackpressurePolicy, LangfuseClient};
+//! use langfuse_ergonomic::{Batcher, BackpressurePolicy, ClientBuilder};
 //! use std::time::Duration;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let client = LangfuseClient::from_env()?;
+//! let client = ClientBuilder::from_env()?.build()?;
 //!
 //! // Create with defaults
 //! let batcher = Batcher::builder()
@@ -31,7 +31,7 @@
 //!
 //! // Or customize configuration
 //! let batcher = Batcher::builder()
-//!     .client(LangfuseClient::from_env()?)
+//!     .client(ClientBuilder::from_env()?.build()?)
 //!     .max_events(50)
 //!     .max_bytes(2_000_000)
 //!     .backpressure_policy(BackpressurePolicy::DropNew)

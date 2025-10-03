@@ -1,13 +1,13 @@
 //! Tests for batching and 207 Multi-Status handling
 
-use langfuse_ergonomic::{Batcher, BatcherConfig, LangfuseClient};
+use langfuse_ergonomic::{Batcher, BatcherConfig, ClientBuilder, LangfuseClient};
 use mockito::Server;
 use serde_json::json;
 use std::time::Duration;
 
 /// Helper to create a mock client for testing
 fn create_mock_client(server: &Server) -> LangfuseClient {
-    LangfuseClient::builder()
+    ClientBuilder::new()
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())

@@ -1,6 +1,6 @@
 //! Tests for Trace URLs and BYO IDs functionality
 
-use langfuse_ergonomic::{IdGenerator, LangfuseClient};
+use langfuse_ergonomic::{ClientBuilder, IdGenerator};
 use mockito::Server;
 
 #[test]
@@ -154,7 +154,7 @@ async fn test_trace_with_custom_id() {
         .create_async()
         .await;
 
-    let client = LangfuseClient::builder()
+    let client = ClientBuilder::new()
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
@@ -194,7 +194,7 @@ async fn test_trace_with_seed_based_id() {
         .create_async()
         .await;
 
-    let client = LangfuseClient::builder()
+    let client = ClientBuilder::new()
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
@@ -238,7 +238,7 @@ async fn test_hierarchical_observations() {
         .create_async()
         .await;
 
-    let client = LangfuseClient::builder()
+    let client = ClientBuilder::new()
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())

@@ -1,12 +1,12 @@
 //! Example demonstrating observation tracking (spans, generations, events)
 
-use langfuse_ergonomic::LangfuseClient;
+use langfuse_ergonomic::ClientBuilder;
 use serde_json::json;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize client from environment variables
-    let client = LangfuseClient::from_env()?;
+    let client = ClientBuilder::from_env()?.build()?;
 
     // Create a trace to group our observations
     let trace = client

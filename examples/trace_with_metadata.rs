@@ -1,13 +1,13 @@
 //! Example showing trace creation with full metadata
 
-use langfuse_ergonomic::LangfuseClient;
+use langfuse_ergonomic::ClientBuilder;
 use serde_json::json;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
 
-    let client = LangfuseClient::from_env()?;
+    let client = ClientBuilder::from_env()?.build()?;
     println!("Connected to Langfuse");
 
     // Create a trace with all available metadata fields

@@ -2,7 +2,7 @@
 
 use chrono::Utc;
 use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
-use langfuse_ergonomic::{Batcher, LangfuseClient};
+use langfuse_ergonomic::{Batcher, ClientBuilder};
 use uuid::Uuid;
 
 #[tokio::main]
@@ -11,7 +11,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     // Create client from environment variables
-    let client = LangfuseClient::from_env()?;
+    let client = ClientBuilder::from_env()?.build()?;
 
     // Create a batcher with custom configuration
     let batcher = Batcher::builder()
