@@ -20,7 +20,8 @@ async fn test_simple_batch_200() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
-        .build();
+        .build()
+        .expect("mock credentials should be valid");
 
     let batcher = Batcher::builder().client(client).build().await;
 
