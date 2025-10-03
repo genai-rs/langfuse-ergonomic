@@ -1,8 +1,7 @@
 //! Main client for interacting with the Langfuse API
 
 use crate::batcher::{Batcher, BatcherConfig};
-use crate::error::Result;
-use bon::bon;
+use crate::error::{Error, Result};
 use langfuse_client_base::apis::configuration::Configuration;
 use std::sync::Arc;
 use std::time::Duration;
@@ -26,74 +25,7 @@ pub struct LangfuseClient {
     pub(crate) configuration: Configuration,
 }
 
-/// Builder returned by [`LangfuseClient::builder_from_env`], with credentials preloaded from
-/// environment variables and the optional base URL applied when present.
-pub type LangfuseClientEnvBuilder = LangfuseClientBuilder<
-    String,
-    String,
-    langfuse_client_builder::SetBaseUrl<
-        langfuse_client_builder::SetSecretKey<
-            langfuse_client_builder::SetPublicKey<langfuse_client_builder::Empty>,
-        >,
-    >,
->;
-
-#[bon]
 impl LangfuseClient {
-    /// Create a new Langfuse client with the given credentials  
-    #[builder]
-    pub fn builder(
-        public_key: impl Into<String>,
-        secret_key: impl Into<String>,
-        #[builder(default = String::from("https://cloud.langfuse.com"))] base_url: String,
-        timeout: Option<Duration>,
-        connect_timeout: Option<Duration>,
-        user_agent: Option<String>,
-    ) -> Self {
-        let public_key = public_key.into();
-        let secret_key = secret_key.into();
-
-        // Build HTTP client with sensible defaults
-        #[allow(unused_mut)]
-        let mut client_builder = reqwest::Client::builder()
-            .timeout(timeout.unwrap_or(DEFAULT_TIMEOUT))
-            .connect_timeout(connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT))
-            .pool_max_idle_per_host(10)
-            .pool_idle_timeout(Duration::from_secs(90));
-
-        // Disable compression by default, enable with feature flag
-        #[cfg(not(feature = "compression"))]
-        {
-            client_builder = client_builder.no_gzip().no_brotli().no_deflate();
-        }
-
-        // Build client (ignore errors for now, use default client if building fails)
-        let client = client_builder
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
-
-        // Construct User-Agent with SDK info
-        let default_user_agent = format!("{}/{} (Rust)", SDK_NAME, SDK_VERSION);
-        let final_user_agent = user_agent.unwrap_or(default_user_agent);
-
-        let configuration = Configuration {
-            base_path: base_url.clone(),
-            basic_auth: Some((public_key.clone(), Some(secret_key.clone()))),
-            api_key: None,
-            oauth_access_token: None,
-            bearer_access_token: None,
-            client,
-            user_agent: Some(final_user_agent),
-        };
-
-        Self {
-            public_key,
-            secret_key,
-            base_url,
-            configuration,
-        }
-    }
-
     /// Create a new Langfuse client from environment variables
     ///
     /// Reads from:
@@ -101,35 +33,7 @@ impl LangfuseClient {
     /// - `LANGFUSE_SECRET_KEY`: Required secret key  
     /// - `LANGFUSE_BASE_URL`: Optional base URL (defaults to <https://cloud.langfuse.com>)
     pub fn from_env() -> Result<Self> {
-        Ok(Self::builder_from_env()?.build())
-    }
-
-    /// Create a Langfuse client builder with credentials sourced from environment variables.
-    ///
-    /// This mirrors the behaviour of [`from_env`](Self::from_env) but returns the builder so
-    /// additional configuration (timeouts, user agent, etc.) can be applied before calling
-    /// [`LangfuseClientEnvBuilder::build`].
-    pub fn builder_from_env() -> Result<LangfuseClientEnvBuilder> {
-        use std::env;
-
-        let public_key = env::var("LANGFUSE_PUBLIC_KEY").map_err(|_| {
-            crate::error::Error::Configuration(
-                "LANGFUSE_PUBLIC_KEY environment variable not set".to_string(),
-            )
-        })?;
-
-        let secret_key = env::var("LANGFUSE_SECRET_KEY").map_err(|_| {
-            crate::error::Error::Configuration(
-                "LANGFUSE_SECRET_KEY environment variable not set".to_string(),
-            )
-        })?;
-
-        let base_url = env::var("LANGFUSE_BASE_URL").ok();
-
-        Ok(Self::builder()
-            .public_key(public_key)
-            .secret_key(secret_key)
-            .maybe_base_url(base_url))
+        ClientBuilder::from_env()?.build()
     }
 
     /// Get the underlying API configuration
@@ -233,5 +137,160 @@ impl LangfuseClient {
     /// Start building a [`Batcher`] anchored to this client.
     pub fn batcher(&self) -> crate::batcher::BatcherBuilderWithClient {
         crate::batcher::Batcher::builder().client(self.clone())
+    }
+
+    /// Create a new client builder that can be customized before calling [`ClientBuilder::build`].
+    pub fn builder() -> ClientBuilder {
+        ClientBuilder::new()
+    }
+
+    fn build_internal(
+        public_key: String,
+        secret_key: String,
+        base_url: String,
+        timeout: Option<Duration>,
+        connect_timeout: Option<Duration>,
+        user_agent: Option<String>,
+    ) -> Self {
+        #[allow(unused_mut)]
+        let mut client_builder = reqwest::Client::builder()
+            .timeout(timeout.unwrap_or(DEFAULT_TIMEOUT))
+            .connect_timeout(connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT))
+            .pool_max_idle_per_host(10)
+            .pool_idle_timeout(Duration::from_secs(90));
+
+        #[cfg(not(feature = "compression"))]
+        {
+            client_builder = client_builder.no_gzip().no_brotli().no_deflate();
+        }
+
+        let client = client_builder
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+
+        let default_user_agent = format!("{}/{} (Rust)", SDK_NAME, SDK_VERSION);
+        let final_user_agent = user_agent.unwrap_or(default_user_agent);
+
+        let configuration = Configuration {
+            base_path: base_url.clone(),
+            basic_auth: Some((public_key.clone(), Some(secret_key.clone()))),
+            api_key: None,
+            oauth_access_token: None,
+            bearer_access_token: None,
+            client,
+            user_agent: Some(final_user_agent),
+        };
+
+        Self {
+            public_key,
+            secret_key,
+            base_url,
+            configuration,
+        }
+    }
+}
+
+/// Builder for [`LangfuseClient`], mirroring the style of `opentelemetry-langfuse`.
+#[derive(Default, Debug, Clone)]
+pub struct ClientBuilder {
+    public_key: Option<String>,
+    secret_key: Option<String>,
+    base_url: Option<String>,
+    timeout: Option<Duration>,
+    connect_timeout: Option<Duration>,
+    user_agent: Option<String>,
+}
+
+impl ClientBuilder {
+    /// Start a new builder without credentials. Use [`ClientBuilder::public_key`] and
+    /// [`ClientBuilder::secret_key`] to provide them before calling [`ClientBuilder::build`].
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create a builder pre-populated from environment variables.
+    pub fn from_env() -> Result<Self> {
+        use std::env;
+
+        let public_key = env::var("LANGFUSE_PUBLIC_KEY").map_err(|_| {
+            Error::Configuration("LANGFUSE_PUBLIC_KEY environment variable not set".to_string())
+        })?;
+
+        let secret_key = env::var("LANGFUSE_SECRET_KEY").map_err(|_| {
+            Error::Configuration("LANGFUSE_SECRET_KEY environment variable not set".to_string())
+        })?;
+
+        let base_url = env::var("LANGFUSE_BASE_URL").ok();
+
+        Ok(Self {
+            public_key: Some(public_key),
+            secret_key: Some(secret_key),
+            base_url,
+            ..Self::default()
+        })
+    }
+
+    /// Set the public key used for authentication.
+    #[must_use]
+    pub fn public_key(mut self, value: impl Into<String>) -> Self {
+        self.public_key = Some(value.into());
+        self
+    }
+
+    /// Set the secret key used for authentication.
+    #[must_use]
+    pub fn secret_key(mut self, value: impl Into<String>) -> Self {
+        self.secret_key = Some(value.into());
+        self
+    }
+
+    /// Override the Langfuse base URL (defaults to `https://cloud.langfuse.com`).
+    #[must_use]
+    pub fn base_url(mut self, value: impl Into<String>) -> Self {
+        self.base_url = Some(value.into());
+        self
+    }
+
+    /// Override the request timeout (defaults to 60 seconds).
+    #[must_use]
+    pub fn timeout(mut self, value: Duration) -> Self {
+        self.timeout = Some(value);
+        self
+    }
+
+    /// Override the connection timeout (defaults to 10 seconds).
+    #[must_use]
+    pub fn connect_timeout(mut self, value: Duration) -> Self {
+        self.connect_timeout = Some(value);
+        self
+    }
+
+    /// Override the user agent string.
+    #[must_use]
+    pub fn user_agent(mut self, value: impl Into<String>) -> Self {
+        self.user_agent = Some(value.into());
+        self
+    }
+
+    /// Build a [`LangfuseClient`] using the configured options.
+    pub fn build(self) -> Result<LangfuseClient> {
+        let public_key = self
+            .public_key
+            .ok_or_else(|| Error::Configuration("Langfuse public key is required".to_string()))?;
+        let secret_key = self
+            .secret_key
+            .ok_or_else(|| Error::Configuration("Langfuse secret key is required".to_string()))?;
+        let base_url = self
+            .base_url
+            .unwrap_or_else(|| "https://cloud.langfuse.com".to_string());
+
+        Ok(LangfuseClient::build_internal(
+            public_key,
+            secret_key,
+            base_url,
+            self.timeout,
+            self.connect_timeout,
+            self.user_agent,
+        ))
     }
 }

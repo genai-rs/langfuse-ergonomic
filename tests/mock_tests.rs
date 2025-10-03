@@ -11,6 +11,7 @@ fn create_mock_client(mock_server: &Server) -> LangfuseClient {
         .secret_key("sk-lf-test")
         .base_url(mock_server.url())
         .build()
+        .expect("mock credentials should be valid")
 }
 
 #[tokio::test]
@@ -310,7 +311,8 @@ async fn test_network_error_handling() {
         .public_key("pk-lf-test")
         .secret_key("sk-lf-test")
         .base_url("http://localhost:19999".to_string()) // Non-existent port
-        .build();
+        .build()
+        .expect("mock builder should produce client");
 
     let result = client.trace().name("test-trace").call().await;
 

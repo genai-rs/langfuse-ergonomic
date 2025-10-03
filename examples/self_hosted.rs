@@ -17,7 +17,7 @@ async fn main() -> anyhow::Result<()> {
         .timeout(Duration::from_secs(30)) // Custom timeout for slower connections
         .connect_timeout(Duration::from_secs(5)) // Custom connection timeout
         .user_agent("my-app/1.0.0".to_string()) // Custom user agent
-        .build();
+        .build()?;
 
     // Validate the connection
     match client.validate().await {
@@ -32,20 +32,14 @@ async fn main() -> anyhow::Result<()> {
     // LANGFUSE_SECRET_KEY=your-secret-key
     // LANGFUSE_BASE_URL=https://langfuse.your-domain.com
 
-    let env_client = match LangfuseClient::from_env() {
-        Ok(client) => {
-            println!("Successfully created client from environment variables");
-            client
-        }
-        Err(e) => {
-            println!("Failed to create client from env: {}", e);
-            println!("Using default cloud instance for demo");
-            LangfuseClient::builder()
-                .public_key("demo-public-key")
-                .secret_key("demo-secret-key")
-                .build()
-        }
-    };
+    let env_client = LangfuseClient::from_env().or_else(|e| {
+        println!("Failed to create client from env: {}", e);
+        println!("Using default cloud instance for demo");
+        LangfuseClient::builder()
+            .public_key("demo-public-key")
+            .secret_key("demo-secret-key")
+            .build()
+    })?;
 
     // Create a trace to test the connection
     let trace_response = env_client

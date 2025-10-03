@@ -57,7 +57,8 @@ async fn test_207_mixed_response() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
-        .build();
+        .build()
+        .expect("mock credentials should be valid");
 
     let batcher = Batcher::builder()
         .client(client)
@@ -127,7 +128,8 @@ async fn test_retry_after_header() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
-        .build();
+        .build()
+        .expect("mock credentials should be valid");
 
     let batcher = Batcher::builder()
         .client(client)
@@ -175,7 +177,8 @@ async fn test_413_payload_too_large() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
-        .build();
+        .build()
+        .expect("mock credentials should be valid");
 
     let batcher = Batcher::builder().client(client).build().await;
 
@@ -198,7 +201,8 @@ async fn test_413_single_event_too_large() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
-        .build();
+        .build()
+        .expect("mock credentials should be valid");
 
     let batcher = Batcher::builder()
         .client(client)
@@ -228,7 +232,8 @@ async fn test_backpressure_drop_new() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
-        .build();
+        .build()
+        .expect("mock credentials should be valid");
 
     let batcher = Batcher::builder()
         .client(client)
@@ -270,7 +275,8 @@ async fn test_concurrent_flush_protection() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
-        .build();
+        .build()
+        .expect("mock credentials should be valid");
 
     let batcher = Batcher::builder().client(client).build().await;
 
@@ -305,7 +311,8 @@ async fn test_shutdown_idempotency() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
-        .build();
+        .build()
+        .expect("mock credentials should be valid");
 
     let batcher = Batcher::builder().client(client).build().await;
 
@@ -349,7 +356,8 @@ async fn test_metrics_tracking() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
-        .build();
+        .build()
+        .expect("mock credentials should be valid");
 
     let batcher = Batcher::builder().client(client).build().await;
 
@@ -390,7 +398,8 @@ async fn test_auto_flush_on_size() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
-        .build();
+        .build()
+        .expect("mock credentials should be valid");
 
     let batcher = Batcher::builder()
         .client(client)

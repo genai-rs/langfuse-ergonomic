@@ -54,15 +54,17 @@
 //! Or configure explicitly:
 //!
 //! ```no_run
-//! use langfuse_ergonomic::LangfuseClient;
-//! use std::time::Duration;
-//!
+//! # use langfuse_ergonomic::LangfuseClient;
+//! # use std::time::Duration;
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let client = LangfuseClient::builder()
 //!     .public_key("pk-lf-...")
 //!     .secret_key("sk-lf-...")
 //!     .base_url("https://cloud.langfuse.com".to_string())
 //!     .timeout(Duration::from_secs(30))
-//!     .build();
+//!     .build()?;
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## Batch Processing
@@ -126,7 +128,7 @@ pub use batcher::{
     BackpressurePolicy, BatchEvent, Batcher, BatcherBuilderWithClient, BatcherConfig,
     BatcherMetrics, BatcherMetricsSnapshot,
 };
-pub use client::LangfuseClient;
+pub use client::{ClientBuilder, LangfuseClient};
 pub use error::{Error, EventError, IngestionResponse, Result};
 pub use traces::{IdGenerator, TraceResponse};
 

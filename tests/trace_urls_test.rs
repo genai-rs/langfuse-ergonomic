@@ -158,7 +158,8 @@ async fn test_trace_with_custom_id() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
-        .build();
+        .build()
+        .expect("mock credentials should be valid");
 
     // Create trace with custom ID
     let custom_id = "my-custom-trace-id";
@@ -197,7 +198,8 @@ async fn test_trace_with_seed_based_id() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
-        .build();
+        .build()
+        .expect("mock credentials should be valid");
 
     // Generate deterministic ID from seed
     let seed = "test-seed-for-trace";
@@ -240,7 +242,8 @@ async fn test_hierarchical_observations() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
-        .build();
+        .build()
+        .expect("mock credentials should be valid");
 
     // Create hierarchical IDs
     let base_seed = "workflow-123";
