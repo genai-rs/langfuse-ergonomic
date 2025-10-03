@@ -18,12 +18,25 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Main client for interacting with the Langfuse API
+#[derive(Clone)]
 pub struct LangfuseClient {
     pub(crate) public_key: String,
     pub(crate) secret_key: String,
     pub(crate) base_url: String,
     pub(crate) configuration: Configuration,
 }
+
+/// Builder returned by [`LangfuseClient::builder_from_env`], with credentials preloaded from
+/// environment variables and the optional base URL applied when present.
+pub type LangfuseClientEnvBuilder = LangfuseClientBuilder<
+    String,
+    String,
+    langfuse_client_builder::SetBaseUrl<
+        langfuse_client_builder::SetSecretKey<
+            langfuse_client_builder::SetPublicKey<langfuse_client_builder::Empty>,
+        >,
+    >,
+>;
 
 #[bon]
 impl LangfuseClient {
@@ -88,6 +101,15 @@ impl LangfuseClient {
     /// - `LANGFUSE_SECRET_KEY`: Required secret key  
     /// - `LANGFUSE_BASE_URL`: Optional base URL (defaults to <https://cloud.langfuse.com>)
     pub fn from_env() -> Result<Self> {
+        Ok(Self::builder_from_env()?.build())
+    }
+
+    /// Create a Langfuse client builder with credentials sourced from environment variables.
+    ///
+    /// This mirrors the behaviour of [`from_env`](Self::from_env) but returns the builder so
+    /// additional configuration (timeouts, user agent, etc.) can be applied before calling
+    /// [`LangfuseClientEnvBuilder::build`].
+    pub fn builder_from_env() -> Result<LangfuseClientEnvBuilder> {
         use std::env;
 
         let public_key = env::var("LANGFUSE_PUBLIC_KEY").map_err(|_| {
@@ -102,14 +124,12 @@ impl LangfuseClient {
             )
         })?;
 
-        let base_url = env::var("LANGFUSE_BASE_URL")
-            .unwrap_or_else(|_| "https://cloud.langfuse.com".to_string());
+        let base_url = env::var("LANGFUSE_BASE_URL").ok();
 
         Ok(Self::builder()
             .public_key(public_key)
             .secret_key(secret_key)
-            .base_url(base_url)
-            .build())
+            .maybe_base_url(base_url))
     }
 
     /// Get the underlying API configuration
@@ -208,5 +228,10 @@ impl LangfuseClient {
             .fail_fast(config.fail_fast)
             .build()
             .await
+    }
+
+    /// Start building a [`Batcher`] anchored to this client.
+    pub fn batcher(&self) -> crate::batcher::BatcherBuilderWithClient {
+        crate::batcher::Batcher::builder().client(self.clone())
     }
 }

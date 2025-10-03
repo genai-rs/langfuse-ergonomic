@@ -123,7 +123,8 @@ pub mod traces;
 
 // Re-export commonly used types at the crate root for convenience
 pub use batcher::{
-    BackpressurePolicy, BatchEvent, Batcher, BatcherConfig, BatcherMetrics, BatcherMetricsSnapshot,
+    BackpressurePolicy, BatchEvent, Batcher, BatcherBuilderWithClient, BatcherConfig,
+    BatcherMetrics, BatcherMetricsSnapshot,
 };
 pub use client::LangfuseClient;
 pub use error::{Error, EventError, IngestionResponse, Result};
