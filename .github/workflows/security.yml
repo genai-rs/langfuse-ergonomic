@@ -98,7 +98,7 @@ jobs:
         uses: actions/checkout@v5
         
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: 'rust'
           # Only use config file if it exists
@@ -110,4 +110,4 @@ jobs:
         run: cargo build --verbose
         
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
