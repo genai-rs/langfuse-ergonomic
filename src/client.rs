@@ -45,7 +45,7 @@ impl LangfuseClient {
             .timeout(Duration::from_secs(5))
             .send()
             .await
-            .map_err(Error::Network)?;
+            .map_err(Error::Middleware)?;
 
         // Check if we got a successful response
         match response.status() {
@@ -136,22 +136,29 @@ impl LangfuseClient {
         timeout: Option<Duration>,
         connect_timeout: Option<Duration>,
         user_agent: Option<String>,
+        http_client: Option<reqwest_middleware::ClientWithMiddleware>,
     ) -> Self {
-        #[allow(unused_mut)]
-        let mut client_builder = reqwest::Client::builder()
-            .timeout(timeout.unwrap_or(DEFAULT_TIMEOUT))
-            .connect_timeout(connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT))
-            .pool_max_idle_per_host(10)
-            .pool_idle_timeout(Duration::from_secs(90));
+        // Use provided client or build a default one
+        let client = http_client.unwrap_or_else(|| {
+            #[allow(unused_mut)]
+            let mut client_builder = reqwest::Client::builder()
+                .timeout(timeout.unwrap_or(DEFAULT_TIMEOUT))
+                .connect_timeout(connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT))
+                .pool_max_idle_per_host(10)
+                .pool_idle_timeout(Duration::from_secs(90));
 
-        #[cfg(not(feature = "compression"))]
-        {
-            client_builder = client_builder.no_gzip().no_brotli().no_deflate();
-        }
+            #[cfg(not(feature = "compression"))]
+            {
+                client_builder = client_builder.no_gzip().no_brotli().no_deflate();
+            }
 
-        let client = client_builder
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
+            let reqwest_client = client_builder
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new());
+
+            // Wrap with middleware support
+            reqwest_middleware::ClientBuilder::new(reqwest_client).build()
+        });
 
         let default_user_agent = format!("{}/{} (Rust)", SDK_NAME, SDK_VERSION);
         let final_user_agent = user_agent.unwrap_or(default_user_agent);
@@ -184,6 +191,7 @@ pub struct ClientBuilder {
     timeout: Option<Duration>,
     connect_timeout: Option<Duration>,
     user_agent: Option<String>,
+    http_client: Option<reqwest_middleware::ClientWithMiddleware>,
 }
 
 impl ClientBuilder {
@@ -257,6 +265,32 @@ impl ClientBuilder {
         self
     }
 
+    /// Set a custom HTTP client with middleware.
+    ///
+    /// This allows you to provide a pre-configured `ClientWithMiddleware` with
+    /// custom settings like retry policies, connection pooling, logging, etc.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use reqwest_middleware::ClientBuilder;
+    /// use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
+    ///
+    /// let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
+    /// let client = ClientBuilder::new(reqwest::Client::new())
+    ///     .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+    ///     .build();
+    ///
+    /// let langfuse_client = langfuse_ergonomic::ClientBuilder::from_env()?
+    ///     .http_client(client)
+    ///     .build()?;
+    /// ```
+    #[must_use]
+    pub fn http_client(mut self, client: reqwest_middleware::ClientWithMiddleware) -> Self {
+        self.http_client = Some(client);
+        self
+    }
+
     /// Build a [`LangfuseClient`] using the configured options.
     pub fn build(self) -> Result<LangfuseClient> {
         let public_key = self
@@ -276,6 +310,7 @@ impl ClientBuilder {
             self.timeout,
             self.connect_timeout,
             self.user_agent,
+            self.http_client,
         ))
     }
 }
