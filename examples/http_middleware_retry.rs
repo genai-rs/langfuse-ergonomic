@@ -50,10 +50,10 @@ async fn main() -> Result<()> {
         .await
     {
         Ok(trace) => {
-            println!("\n✅ Success! Trace created: {}", trace.id);
+            println!("\nSuccess! Trace created: {}", trace.id);
         }
         Err(e) => {
-            eprintln!("\n❌ Error after retries: {e}");
+            eprintln!("\nError after retries: {e}");
         }
     }
 
@@ -99,10 +99,10 @@ async fn main() -> Result<()> {
         .await
     {
         Ok(trace) => {
-            println!("\n✅ Success! Trace created: {}", trace.id);
+            println!("\nSuccess! Trace created: {}", trace.id);
         }
         Err(e) => {
-            eprintln!("\n❌ Error after retries: {e}");
+            eprintln!("\nError after retries: {e}");
         }
     }
 
@@ -110,9 +110,9 @@ async fn main() -> Result<()> {
     println!("\n3. Validating client credentials\n");
 
     match client.validate().await {
-        Ok(true) => println!("✅ Credentials validated successfully!"),
-        Ok(false) => println!("❌ Credentials validation failed"),
-        Err(e) => eprintln!("❌ Error validating credentials: {e}"),
+        Ok(true) => println!("Credentials validated successfully!"),
+        Ok(false) => println!("Credentials validation failed"),
+        Err(e) => eprintln!("Error validating credentials: {e}"),
     }
 
     println!("\n=== Example Complete ===");
