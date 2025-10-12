@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.5.0...v0.6.0) - 2025-10-12
+
+### Other
+
+- Remove emojis from example code
+- Add reqwest-middleware support to langfuse-ergonomic
+- *(deps)* Update github/codeql-action action to v4
+
 ## [0.5.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.4.0...v0.5.0) - 2025-10-03
 
 ### Changed
