@@ -778,7 +778,7 @@ impl Batcher {
             .json(&batch)
             .send()
             .await
-            .map_err(Error::Network)?;
+            .map_err(Error::Middleware)?;
 
         let status = response.status();
         let request_id = response
