@@ -24,6 +24,9 @@ pub enum Error {
     #[error("Network error: {0}")]
     Network(#[from] reqwest::Error),
 
+    #[error("Middleware error: {0}")]
+    Middleware(#[from] reqwest_middleware::Error),
+
     /// Authentication failure
     #[error("Authentication failed: {message}")]
     Auth {
@@ -115,6 +118,7 @@ impl Error {
     pub fn is_retryable(&self) -> bool {
         match self {
             Error::Network(_) => true,
+            Error::Middleware(_) => true,
             Error::RateLimit { .. } => true,
             Error::Server { .. } => true,
             Error::PartialFailure { .. } => true,
@@ -195,6 +199,7 @@ pub fn map_api_error<T>(err: langfuse_client_base::apis::Error<T>) -> Error {
 
     match err {
         ApiError::Reqwest(e) => Error::Network(e),
+        ApiError::ReqwestMiddleware(e) => Error::Middleware(e),
         ApiError::Serde(e) => Error::Serialization(e),
         ApiError::Io(e) => Error::Api(format!("IO error: {}", e)),
         ApiError::ResponseError(response) => {
