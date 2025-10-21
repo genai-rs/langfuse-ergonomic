@@ -27,7 +27,7 @@
         'rust',
       ],
       enabled: true,
-      rangeStrategy: 'update-lockfile',
+      rangeStrategy: 'bump',
     },
     {
       description: 'Group all Rust patch updates',
