@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/langfuse-ergonomic.svg)](https://crates.io/crates/langfuse-ergonomic)
 [![Documentation](https://docs.rs/langfuse-ergonomic/badge.svg)](https://docs.rs/langfuse-ergonomic)
 [![CI](https://github.com/genai-rs/langfuse-ergonomic/workflows/CI/badge.svg)](https://github.com/genai-rs/langfuse-ergonomic/actions)
-[![MSRV](https://img.shields.io/badge/MSRV-1.82-blue)](https://blog.rust-lang.org/2024/10/17/Rust-1.82.0.html)
+[![MSRV](https://img.shields.io/badge/MSRV-1.83-blue)](https://blog.rust-lang.org/2024/11/28/Rust-1.83.0.html)
 [![License](https://img.shields.io/crates/l/langfuse-ergonomic)](./LICENSE-MIT)
 
 Ergonomic Rust client for [Langfuse](https://langfuse.com), the open-source LLM observability platform.
