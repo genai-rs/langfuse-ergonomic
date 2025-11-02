@@ -27,7 +27,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        rust: [stable, beta, "1.82"]  # 1.82 is our MSRV (matching langfuse-client-base dependency)
+        rust: [stable, beta, "1.83"]  # 1.83 is our MSRV (ICU crates require 1.83+)
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
