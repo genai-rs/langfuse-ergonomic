@@ -236,6 +236,22 @@ pub type BatcherBuilderWithClient =
 
 #[bon]
 impl Batcher {
+    /// Extract a stable identifier from any ingestion event variant Langfuse supports.
+    fn extract_event_id(event: &IngestionEvent) -> String {
+        match event {
+            IngestionEvent::IngestionEventOneOf(e) => e.id.clone(),
+            IngestionEvent::IngestionEventOneOf1(e) => e.id.clone(),
+            IngestionEvent::IngestionEventOneOf2(e) => e.id.clone(),
+            IngestionEvent::IngestionEventOneOf3(e) => e.id.clone(),
+            IngestionEvent::IngestionEventOneOf4(e) => e.id.clone(),
+            IngestionEvent::IngestionEventOneOf5(e) => e.id.clone(),
+            IngestionEvent::IngestionEventOneOf6(e) => e.id.clone(),
+            IngestionEvent::IngestionEventOneOf7(e) => e.id.clone(),
+            IngestionEvent::IngestionEventOneOf8(e) => e.id.clone(),
+            IngestionEvent::IngestionEventOneOf9(e) => e.id.clone(),
+        }
+    }
+
     /// Create a new batcher with custom configuration
     #[builder]
     pub async fn new(
@@ -371,16 +387,7 @@ impl Batcher {
             return Err(Error::Api("Batcher is shutting down".to_string()));
         }
 
-        let id = match &event {
-            IngestionEvent::IngestionEventOneOf(e) => e.id.clone(),
-            IngestionEvent::IngestionEventOneOf1(e) => e.id.clone(),
-            IngestionEvent::IngestionEventOneOf2(e) => e.id.clone(),
-            IngestionEvent::IngestionEventOneOf3(e) => e.id.clone(),
-            IngestionEvent::IngestionEventOneOf4(e) => e.id.clone(),
-            IngestionEvent::IngestionEventOneOf5(e) => e.id.clone(),
-            IngestionEvent::IngestionEventOneOf6(e) => e.id.clone(),
-            _ => uuid::Uuid::new_v4().to_string(),
-        };
+        let id = Self::extract_event_id(&event);
 
         let batch_event = BatchEvent::new(event, id.clone())?;
 
@@ -751,20 +758,7 @@ impl Batcher {
         events: &[BatchEvent],
     ) -> Result<IngestionResponse> {
         // Get event IDs for tracking
-        let event_ids: Vec<String> = batch
-            .batch
-            .iter()
-            .map(|event| match event {
-                IngestionEvent::IngestionEventOneOf(e) => e.id.clone(),
-                IngestionEvent::IngestionEventOneOf1(e) => e.id.clone(),
-                IngestionEvent::IngestionEventOneOf2(e) => e.id.clone(),
-                IngestionEvent::IngestionEventOneOf3(e) => e.id.clone(),
-                IngestionEvent::IngestionEventOneOf4(e) => e.id.clone(),
-                IngestionEvent::IngestionEventOneOf5(e) => e.id.clone(),
-                IngestionEvent::IngestionEventOneOf6(e) => e.id.clone(),
-                _ => uuid::Uuid::new_v4().to_string(),
-            })
-            .collect();
+        let event_ids: Vec<String> = batch.batch.iter().map(Self::extract_event_id).collect();
 
         // Use the raw response API to get status code
         let response = client

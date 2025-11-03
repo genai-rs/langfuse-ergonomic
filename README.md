@@ -279,6 +279,21 @@ match batcher.flush().await {
 - **Rating scores** - Star ratings and scales
 - Trace-level and observation-level scoring
 - Score metadata and comments
+- Annotation queue linkage for human-review workflows
+
+Attach scores to annotation queues when triaging human review tasks:
+
+```rust
+let score_id = client
+    .score()
+    .trace_id(&trace.id)
+    .name("manual_review_verdict")
+    .queue_id("annotation-queue-123")
+    .string_value("needs_follow_up")
+    .comment("Flagged during human review")
+    .call()
+    .await?;
+```
 
 #### Dataset Management
 - **Creation** - Create datasets with metadata
