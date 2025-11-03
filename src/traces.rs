@@ -644,6 +644,7 @@ impl LangfuseClient {
         value: Option<f64>,
         #[builder(into)] string_value: Option<String>,
         #[builder(into)] comment: Option<String>,
+        #[builder(into)] queue_id: Option<String>,
         metadata: Option<Value>,
     ) -> Result<String> {
         // Validate that either value or string_value is set
@@ -674,6 +675,7 @@ impl LangfuseClient {
             id: Some(Some(score_id.clone())),
             trace_id: Some(Some(trace_id)),
             name,
+            queue_id: queue_id.map(Some),
             value: score_value,
             observation_id: observation_id.map(Some),
             comment: comment.map(Some),

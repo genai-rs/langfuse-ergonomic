@@ -34,6 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .score()
         .trace_id(&trace.id)
         .name("response_quality")
+        .queue_id("annotation-queue-1") // Optional: link to annotation queue workflows
         .value(0.85)
         .comment("Good response with code example")
         .metadata(json!({
