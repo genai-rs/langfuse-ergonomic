@@ -77,9 +77,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         let event = IngestionEvent::IngestionEventOneOf(Box::new(IngestionEventOneOf::new(
-            trace,
             format!("event-{}", i),
             chrono::Utc::now().to_rfc3339(),
+            trace,
             langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
         )));
 
@@ -140,9 +140,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         let event = IngestionEvent::IngestionEventOneOf(Box::new(IngestionEventOneOf::new(
-            trace,
             format!("event-{}", i),
             chrono::Utc::now().to_rfc3339(),
+            trace,
             langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
         )));
         batcher.add(event).await?;
@@ -235,9 +235,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         let event = IngestionEvent::IngestionEventOneOf(Box::new(IngestionEventOneOf::new(
-            trace,
             format!("event-{}", i),
             chrono::Utc::now().to_rfc3339(),
+            trace,
             langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
         )));
         match backpressure_batcher.add(event).await {

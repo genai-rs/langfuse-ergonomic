@@ -24,9 +24,9 @@ fn create_test_event(id: &str) -> IngestionEvent {
     };
 
     IngestionEvent::IngestionEventOneOf(Box::new(IngestionEventOneOf::new(
-        trace_body,
         id.to_string(),
         chrono::Utc::now().to_rfc3339(),
+        trace_body,
         langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
     )))
 }

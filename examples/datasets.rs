@@ -23,6 +23,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "created_by": "example",
             "purpose": "testing"
         }))
+        .input_schema(json!({
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string"},
+                "context": {"type": "string"}
+            }
+        }))
+        .expected_output_schema(json!({
+            "type": "object",
+            "properties": {
+                "answer": {"type": "string"},
+                "confidence": {"type": "number"}
+            }
+        }))
         .call()
         .await?;
 

@@ -784,6 +784,8 @@ impl LangfuseClient {
         #[builder(into)] name: String,
         #[builder(into)] description: Option<String>,
         metadata: Option<Value>,
+        #[builder(into)] input_schema: Option<Value>,
+        #[builder(into)] expected_output_schema: Option<Value>,
     ) -> Result<langfuse_client_base::models::Dataset> {
         use langfuse_client_base::apis::datasets_api;
         use langfuse_client_base::models::CreateDatasetRequest;
@@ -792,6 +794,8 @@ impl LangfuseClient {
             name,
             description: description.map(Some),
             metadata: metadata.map(Some),
+            input_schema: input_schema.map(Some),
+            expected_output_schema: expected_output_schema.map(Some),
         };
 
         datasets_api::datasets_create()
