@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.6.0...v0.6.1) - 2025-11-24
+
+### Added
+
+- support queue ids and new ingestion variants
+
+### Other
+
+- *(deps)* Update actions/checkout action to v6
+- *(deps)* Update Rust crate langfuse-client-base to ^0.6.1
+- allow Cargo.lock tracking for release automation
+- unblock security workflow by aligning dataset schema
+- *(deps)* Update rust minor updates
+- *(deps)* Update rust patch updates
+- remove RENOVATE_ANALYSIS.md
+- Update MSRV badge from 1.82 to 1.83
+- Update MSRV from 1.82 to 1.83
+- Add issues:write permission to cargo-audit workflow (genai-rs-41)
+- fix Renovate strategy and improve version clarity (genai-rs-11)
+
 ## [0.6.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.5.0...v0.6.0) - 2025-10-12
 
 ### Other
