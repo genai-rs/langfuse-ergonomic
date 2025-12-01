@@ -46,7 +46,7 @@ tracing-subscriber = { version = "^0.3.22", features = ["env-filter"] }
 dotenvy = "^0.15.7"
 mockito = "^1.7.1"
 anyhow = "^1.0.100"  # Used in examples
-reqwest-retry = "^0.7"  # Used in middleware examples
+reqwest-retry = "^0.8.0"  # Used in middleware examples
 
 [[example]]
 name = "test_trace"
