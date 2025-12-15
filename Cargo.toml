@@ -32,7 +32,7 @@ langfuse-client-base = "^0.7.0"
 bon = "^3.8.1"
 serde = { version = "^1.0.228", features = ["derive"] }
 serde_json = "^1.0.145"
-reqwest = { version = "^0.12.24", features = ["json"], default-features = false }
+reqwest = { version = "^0.12.25", features = ["json"], default-features = false }
 reqwest-middleware = "^0.4.2"
 thiserror = "^2.0.17"
 chrono = { version = "^0.4.42", features = ["serde"] }
