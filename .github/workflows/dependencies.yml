@@ -18,7 +18,7 @@ jobs:
         uses: dtolnay/rust-toolchain@nightly
         
       - name: Cache cargo-udeps
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: cache-udeps
         with:
           path: ~/.cargo/bin/cargo-udeps
