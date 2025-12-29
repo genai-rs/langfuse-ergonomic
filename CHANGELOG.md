@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.3](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.6.2...v0.6.3) - 2025-12-29
+
+### Other
+
+- *(deps)* Update Rust crate serde_json to ^1.0.148
+
 ## [0.6.2](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.6.1...v0.6.2) - 2025-12-23
 
 ### Other
