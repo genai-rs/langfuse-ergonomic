@@ -11,7 +11,7 @@ documentation = "https://docs.rs/langfuse-ergonomic"
 readme = "README.md"
 keywords = ["langfuse", "observability", "llm", "tracing", "monitoring"]
 categories = ["api-bindings", "web-programming::http-client", "development-tools::debugging"]
-rust-version = "1.83"
+rust-version = "1.88"
 
 [lints.rust]
 unsafe_code = "forbid"
