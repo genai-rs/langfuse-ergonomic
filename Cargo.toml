@@ -44,8 +44,8 @@ rand = "^0.9.2"
 [dev-dependencies]
 tracing-subscriber = { version = "^0.3.22", features = ["env-filter"] }
 dotenvy = "^0.15.7"
-mockito = "^1.7.1"
-anyhow = "^1.0.100"  # Used in examples
+mockito = "^1.7.2"
+anyhow = "^1.0.101"  # Used in examples
 reqwest-retry = "^0.8.0"  # Used in middleware examples
 
 [[example]]
