@@ -56,6 +56,10 @@ branches:
           - "Test Suite (ubuntu-latest / beta)"
           - "Test Suite (windows-latest / stable)"
           - "Test Suite (windows-latest / beta)"
+          # MSRV checks
+          - "Test Suite (ubuntu-latest / 1.88)"
+          - "Test Suite (macos-latest / 1.88)"
+          - "Test Suite (windows-latest / 1.88)"
           - "Feature Combinations"        # Ensure all feature combinations compile
           
           # Security checks (from security.yml workflow)
