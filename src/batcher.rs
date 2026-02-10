@@ -47,7 +47,7 @@
 //! ```
 
 use bon::bon;
-use rand::{rng, Rng};
+use rand::{rng, RngExt};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
