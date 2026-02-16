@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.4](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.6.3...v0.6.4) - 2026-02-16
+
+### Fixed
+
+- add OpenSSL to allowed licenses and clean up stale deny.toml skip entries
+- *(deps)* update dependencies with reqwest 0.13 feature rename fix
+
+### Other
+
+- *(deps)* Update rust minor updates
+- remove Gitleaks secret scanning ([#91](https://github.com/genai-rs/langfuse-ergonomic/pull/91))
+- add MSRV status checks to branch protection
+- *(deps)* Update rust patch updates
+- bump MSRV to 1.88
+
 ## [0.6.3](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.6.2...v0.6.3) - 2026-01-19
 
 ### Other
