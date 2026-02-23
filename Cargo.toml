@@ -45,7 +45,7 @@ rand = "^0.10.0"
 tracing-subscriber = { version = "^0.3.22", features = ["env-filter"] }
 dotenvy = "^0.15.7"
 mockito = "^1.7.2"
-anyhow = "^1.0.101"  # Used in examples
+anyhow = "^1.0.102"  # Used in examples
 reqwest-retry = "^0.9.1"  # Used in middleware examples
 
 [[example]]
