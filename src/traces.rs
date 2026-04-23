@@ -463,11 +463,11 @@ impl LangfuseClient {
         &self,
         observation_id: impl Into<String>,
     ) -> Result<langfuse_client_base::models::ObservationsView> {
-        use langfuse_client_base::apis::observations_api;
+        use langfuse_client_base::apis::legacy_observations_v1_api;
 
         let observation_id = observation_id.into();
 
-        observations_api::observations_get()
+        legacy_observations_v1_api::legacy_observations_v1_get()
             .configuration(self.configuration())
             .observation_id(observation_id.as_str())
             .call()
@@ -486,8 +486,8 @@ impl LangfuseClient {
         #[builder(into)] name: Option<String>,
         #[builder(into)] user_id: Option<String>,
         observation_type: Option<String>,
-    ) -> Result<langfuse_client_base::models::ObservationsViews> {
-        use langfuse_client_base::apis::observations_api;
+    ) -> Result<langfuse_client_base::models::LegacyObservationsViews> {
+        use langfuse_client_base::apis::legacy_observations_v1_api;
 
         // Note: The API has more parameters but they're not all exposed in v0.2
         // Using the actual signature from the base client
@@ -497,7 +497,7 @@ impl LangfuseClient {
         let user_id_ref = user_id.as_deref();
         let name_ref = name.as_deref();
 
-        observations_api::observations_get_many()
+        legacy_observations_v1_api::legacy_observations_v1_get_many()
             .configuration(self.configuration())
             .maybe_page(page)
             .maybe_limit(limit)
@@ -1016,13 +1016,10 @@ impl LangfuseClient {
         tags: Option<Vec<String>>,
     ) -> Result<langfuse_client_base::models::Prompt> {
         use langfuse_client_base::apis::prompts_api;
-        use langfuse_client_base::models::CreatePromptRequest;
-
-        // Create a text prompt request using the OneOf1 variant
-        use langfuse_client_base::models::CreatePromptRequestOneOf1;
+        use langfuse_client_base::models::{CreatePromptRequest, CreateTextPromptRequest};
 
         let prompt_request =
-            CreatePromptRequest::CreatePromptRequestOneOf1(Box::new(CreatePromptRequestOneOf1 {
+            CreatePromptRequest::CreateTextPromptRequest(Box::new(CreateTextPromptRequest {
                 name: name.clone(),
                 prompt,
                 config: Some(config),
@@ -1051,7 +1048,7 @@ impl LangfuseClient {
     ) -> Result<langfuse_client_base::models::Prompt> {
         use langfuse_client_base::apis::prompts_api;
         use langfuse_client_base::models::{
-            ChatMessageWithPlaceholders, CreatePromptRequest, CreatePromptRequestOneOf,
+            ChatMessageWithPlaceholders, CreateChatPromptRequest, CreatePromptRequest,
         };
 
         // Convert JSON messages to ChatMessageWithPlaceholders
@@ -1068,7 +1065,7 @@ impl LangfuseClient {
             .collect();
 
         let prompt_request =
-            CreatePromptRequest::CreatePromptRequestOneOf(Box::new(CreatePromptRequestOneOf {
+            CreatePromptRequest::CreateChatPromptRequest(Box::new(CreateChatPromptRequest {
                 name: name.clone(),
                 prompt: chat_messages,
                 config: Some(config),
