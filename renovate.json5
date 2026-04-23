@@ -90,7 +90,7 @@
       minimumReleaseAge: '0 days',
     },
     {
-      description: 'Core dependencies - manual review required',
+      description: 'Core dependencies',
       matchPackageNames: [
         'serde',
         'reqwest',
@@ -102,10 +102,7 @@
         'dependencies',
         'core',
       ],
-      automerge: false,
-      assignees: [
-        'timvw',
-      ],
+      automerge: true,
     },
     {
       description: 'Dev dependencies - auto-merge all',
@@ -119,7 +116,7 @@
       ],
     },
     {
-      description: 'Langfuse base client - manual review',
+      description: 'Langfuse base client',
       matchPackageNames: [
         'langfuse-client-base',
       ],
@@ -127,15 +124,7 @@
         'dependencies',
         'langfuse-base',
       ],
-      automerge: false,
-      assignees: [
-        'timvw',
-      ],
-      prBodyNotes: [
-        ' **Langfuse Base Client Update**',
-        'This updates the underlying OpenAPI-generated client.',
-        'Please review for API compatibility changes.',
-      ],
+      automerge: true,
     },
   ],
   vulnerabilityAlerts: {
