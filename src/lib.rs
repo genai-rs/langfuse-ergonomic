@@ -194,7 +194,7 @@ pub use traces::{IdGenerator, TraceResponse};
 pub use langfuse_client_base::models::{
     CreateEventBody, CreateGenerationBody, CreateSpanBody, Dataset, DatasetItem,
     DatasetRunWithItems, IngestionBatchRequest, IngestionEvent, ObservationLevel, ObservationsView,
-    ObservationsViews, PaginatedDatasetItems, PaginatedDatasetRuns, PaginatedDatasets, Prompt,
+    LegacyObservationsViews, PaginatedDatasetItems, PaginatedDatasetRuns, PaginatedDatasets, Prompt,
     PromptMetaListResponse, ScoreDataType, Trace, TraceBody, TraceWithDetails,
     TraceWithFullDetails, Traces,
 };
