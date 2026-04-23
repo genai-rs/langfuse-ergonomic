@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.4](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.6.3...v0.6.4) - 2026-04-23
+
+### Fixed
+
+- adapt to langfuse-client-base 0.12.0 breaking API changes
+- update rustls-webpki to fix security advisory
+- *(deps)* Update rustls-webpki to 0.103.12
+- *(deps)* Update vulnerable dependencies
+- add OpenSSL to allowed licenses and clean up stale deny.toml skip entries
+- *(deps)* update dependencies with reqwest 0.13 feature rename fix
+
+### Other
+
+- fix import ordering
+- *(deps)* Update rust minor updates
+- automerge core dependency updates
+- *(deps)* Update Rust crate rand to ^0.10.1
+- *(deps)* Update codecov/codecov-action action to v6
+- *(deps)* Update rust patch updates
+- *(deps)* Update actions/create-github-app-token action to v3
+- *(deps)* Update Rust crate chrono to ^0.4.44
+- *(deps)* Update Rust crate anyhow to ^1.0.102
+- *(deps)* Update rust minor updates
+- remove Gitleaks secret scanning ([#91](https://github.com/genai-rs/langfuse-ergonomic/pull/91))
+- add MSRV status checks to branch protection
+- *(deps)* Update rust patch updates
+- bump MSRV to 1.88
+
 ## [0.6.3](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.6.2...v0.6.3) - 2026-01-19
 
 ### Other
