@@ -193,8 +193,8 @@ pub use traces::{IdGenerator, TraceResponse};
 // - Utility types: ScoreDataType
 pub use langfuse_client_base::models::{
     CreateEventBody, CreateGenerationBody, CreateSpanBody, Dataset, DatasetItem,
-    DatasetRunWithItems, IngestionBatchRequest, IngestionEvent, ObservationLevel, ObservationsView,
-    LegacyObservationsViews, PaginatedDatasetItems, PaginatedDatasetRuns, PaginatedDatasets, Prompt,
-    PromptMetaListResponse, ScoreDataType, Trace, TraceBody, TraceWithDetails,
-    TraceWithFullDetails, Traces,
+    DatasetRunWithItems, IngestionBatchRequest, IngestionEvent, LegacyObservationsViews,
+    ObservationLevel, ObservationsView, PaginatedDatasetItems, PaginatedDatasetRuns,
+    PaginatedDatasets, Prompt, PromptMetaListResponse, ScoreDataType, Trace, TraceBody,
+    TraceWithDetails, TraceWithFullDetails, Traces,
 };
