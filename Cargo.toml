@@ -37,7 +37,7 @@ reqwest-middleware = "^0.5.1"
 thiserror = "^2.0.18"
 chrono = { version = "^0.4.44", features = ["serde"] }
 uuid = { version = "^1.23.1", features = ["v4", "v5", "serde"] }
-tokio = { version = "^1.52.1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "^1.52.3", features = ["macros", "rt-multi-thread", "sync", "time"] }
 tracing = "^0.1.44"  # For library logging (replacing eprintln!)
 rand = "^0.10.1"
 
