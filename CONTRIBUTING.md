@@ -134,6 +134,26 @@ mod tests {
 
 ### Integration Tests
 
+To verify generation token usage against a real Langfuse instance, configure
+`LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_BASE_URL` for a test
+project, then run:
+
+```bash
+cargo test --test generation_usage_e2e -- --ignored --nocapture
+```
+
+The instance must support the legacy ingestion and observations APIs used by
+this client. For Langfuse v4, set `LANGFUSE_MIGRATION_V4_WRITE_MODE=dual` on both
+web and worker services; the default `events_only` mode rejects these APIs.
+
+This writes a uniquely named synthetic trace and five generations, then polls
+the observations API for persisted token usage. It checks supplied counts,
+server-derived totals, explicit totals, partial usage, and zeros. It does not
+call an LLM provider. Allow up to two minutes per observation for asynchronous
+ingestion; the printed trace URL and observation IDs identify the test data.
+The test is ignored in normal runs because it needs credentials and writes
+data to the configured instance.
+
 For features that require API calls, add integration tests that can run with real credentials:
 
 ```rust
