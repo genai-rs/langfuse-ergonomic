@@ -226,6 +226,100 @@ async fn test_generation_creation_mock() {
 }
 
 #[tokio::test]
+async fn test_generation_token_usage_payload() {
+    let cases = [
+        (
+            Some(1200),
+            Some(340),
+            None,
+            Some(json!({"input": 1200, "output": 340})),
+        ),
+        (
+            Some(1200),
+            Some(340),
+            Some(1600),
+            Some(json!({"input": 1200, "output": 340, "total": 1600})),
+        ),
+        (Some(1200), None, None, Some(json!({"input": 1200}))),
+        (None, Some(340), None, Some(json!({"output": 340}))),
+        (None, None, Some(1540), Some(json!({"total": 1540}))),
+        (
+            Some(1200),
+            None,
+            Some(1540),
+            Some(json!({"input": 1200, "total": 1540})),
+        ),
+        (
+            None,
+            Some(340),
+            Some(1540),
+            Some(json!({"output": 340, "total": 1540})),
+        ),
+        (None, None, None, None),
+        (
+            Some(0),
+            Some(0),
+            Some(0),
+            Some(json!({"input": 0, "output": 0, "total": 0})),
+        ),
+        (
+            Some(i32::MAX),
+            Some(i32::MAX),
+            None,
+            Some(json!({"input": i32::MAX, "output": i32::MAX})),
+        ),
+    ];
+
+    for (prompt_tokens, completion_tokens, total_tokens, expected_usage) in cases {
+        let mut server = Server::new_async().await;
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let mock = server
+            .mock("POST", "/api/public/ingestion")
+            .with_status(207)
+            .with_header("content-type", "application/json")
+            .with_body_from_request(move |request| {
+                sender.send(request.body().unwrap().clone()).unwrap();
+                br#"{"successes": [], "errors": []}"#.to_vec()
+            })
+            .create_async()
+            .await;
+
+        let client = create_mock_client(&server);
+        let id = client
+            .generation()
+            .trace_id("trace-123")
+            .name("llm-call")
+            .model("gemini-3.1-pro-preview")
+            .maybe_prompt_tokens(prompt_tokens)
+            .maybe_completion_tokens(completion_tokens)
+            .maybe_total_tokens(total_tokens)
+            .call()
+            .await
+            .expect("generation should be ingested");
+
+        mock.assert_async().await;
+        let payload: serde_json::Value =
+            serde_json::from_slice(&receiver.try_recv().unwrap()).unwrap();
+        let batch = payload["batch"].as_array().unwrap();
+        assert_eq!(batch.len(), 1);
+        assert_eq!(batch[0]["type"], "generation-create");
+        let body = &batch[0]["body"];
+        assert_eq!(body["id"], id);
+        assert_eq!(body["traceId"], "trace-123");
+        assert_eq!(body["name"], "llm-call");
+        assert_eq!(body["model"], "gemini-3.1-pro-preview");
+        // Exact equality also ensures missing counts are neither null nor zero-filled,
+        // and no total is calculated locally or overwrites the caller's total.
+        assert_eq!(
+            body.get("usageDetails"),
+            expected_usage.as_ref(),
+            "token counts: {prompt_tokens:?}, {completion_tokens:?}, {total_tokens:?}"
+        );
+        assert!(body.get("usage").is_none());
+    }
+}
+
+#[tokio::test]
 async fn test_event_creation_mock() {
     let mut server = Server::new_async().await;
 

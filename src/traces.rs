@@ -342,6 +342,12 @@ impl LangfuseClient {
     }
 
     /// Create a generation observation
+    ///
+    /// Token counts are sent as `usageDetails`: `prompt_tokens` as `input`,
+    /// `completion_tokens` as `output`, and `total_tokens` as `total`.
+    /// Only supplied counts are sent, including zeros. An explicit total is
+    /// preserved; when omitted, Langfuse derives it from the supplied usage.
+    /// If no counts are supplied, `usageDetails` is omitted.
     #[builder]
     pub async fn generation(
         &self,
@@ -358,13 +364,13 @@ impl LangfuseClient {
         end_time: Option<DateTime<Utc>>,
         #[builder(into)] model: Option<String>,
         _model_parameters: Option<Value>,
-        _prompt_tokens: Option<i32>,
-        _completion_tokens: Option<i32>,
-        _total_tokens: Option<i32>,
+        prompt_tokens: Option<i32>,
+        completion_tokens: Option<i32>,
+        total_tokens: Option<i32>,
     ) -> Result<String> {
         use langfuse_client_base::models::{
             ingestion_event_one_of_4::Type as GenerationEventType, CreateGenerationBody,
-            IngestionEvent, IngestionEventOneOf4,
+            IngestionEvent, IngestionEventOneOf4, UsageDetails,
         };
 
         let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -375,6 +381,17 @@ impl LangfuseClient {
         let level = level.map(|l| parse_observation_level(&l));
         let end_time_str = end_time.map(|t| t.to_rfc3339_opts(chrono::SecondsFormat::Millis, true));
 
+        let usage_details: std::collections::HashMap<String, i32> = [
+            ("input", prompt_tokens),
+            ("output", completion_tokens),
+            ("total", total_tokens),
+        ]
+        .into_iter()
+        .filter_map(|(key, count)| count.map(|count| (key.to_owned(), count)))
+        .collect();
+        let usage_details =
+            (!usage_details.is_empty()).then(|| Box::new(UsageDetails::Object(usage_details)));
+
         let generation_body = CreateGenerationBody::builder()
             .id(Some(observation_id.clone()))
             .trace_id(Some(trace_id))
@@ -382,6 +399,7 @@ impl LangfuseClient {
             .maybe_name(name.map(Some))
             .maybe_end_time(end_time_str.map(Some))
             .maybe_model(model.map(Some))
+            .maybe_usage_details(usage_details)
             .maybe_input(input.map(Some))
             .maybe_output(output.map(Some))
             .maybe_metadata(metadata.map(Some))

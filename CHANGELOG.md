@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Send generation token counts as `usageDetails` instead of silently dropping them, preserving partial counts and explicit totals. Thanks to @sdtnjung for reporting [#115](https://github.com/genai-rs/langfuse-ergonomic/issues/115).
+
 ## [0.6.3](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.6.2...v0.6.3) - 2026-01-19
 
 ### Other
