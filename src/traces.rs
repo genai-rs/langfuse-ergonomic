@@ -832,9 +832,14 @@ impl LangfuseClient {
         use langfuse_client_base::models::CreateDatasetRequest;
 
         let parse_schema = |value: Value| {
-            serde_json::from_value::<std::collections::HashMap<String, Value>>(value).map_err(|e| {
-                Error::Validation(format!("Dataset schema must be a JSON object: {e}"))
-            })
+            if value.is_null() {
+                return Ok(None);
+            }
+            serde_json::from_value::<std::collections::HashMap<String, Value>>(value)
+                .map(Some)
+                .map_err(|e| {
+                    Error::Validation(format!("Dataset schema must be a JSON object: {e}"))
+                })
         };
         let input_schema = input_schema.map(parse_schema).transpose()?;
         let expected_output_schema = expected_output_schema.map(parse_schema).transpose()?;
@@ -843,8 +848,8 @@ impl LangfuseClient {
             name,
             description: description.map(Some),
             metadata: metadata.map(Some),
-            input_schema: input_schema.map(Some),
-            expected_output_schema: expected_output_schema.map(Some),
+            input_schema,
+            expected_output_schema,
         };
 
         datasets_api::datasets_create()

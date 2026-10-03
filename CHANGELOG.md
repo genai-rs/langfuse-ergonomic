@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Breaking:** Upgrade `langfuse-client-base` to 0.15.0. Re-exported models now use typed timestamps and updated ingestion variants such as `TraceEvent1`; the SDK-log ingestion variant is no longer available.
 - **Breaking:** `get_observation` returns the re-exported `ObservationsViewSingle`, with `Option<String>` trace IDs and typed timestamps. Observation lists retain the `ObservationsViews` alias.
-- Preserve the ergonomic builders' UTC datetime and string timestamp-filter inputs, converting them to the base client's typed dates. Invalid RFC3339 filters and non-object dataset schemas return validation errors before sending a request.
+- Preserve the ergonomic builders' UTC datetime and string timestamp-filter inputs, converting them to the base client's typed dates. Invalid RFC3339 filters and non-object, non-null dataset schemas return validation errors before sending a request.
 
 ### Fixed
 

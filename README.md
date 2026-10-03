@@ -93,7 +93,7 @@ The ergonomic trace, span, generation, and event builders still accept
 `chrono::DateTime<Utc>`. When constructing base models directly, timestamp fields
 now use `DateTime<FixedOffset>` (for example, `Utc::now().fixed_offset()`).
 Trace list filters still accept RFC3339 strings; invalid dates return a validation error.
-Dataset schemas must be JSON objects.
+Dataset schemas must be JSON objects or explicit `null`.
 
 `get_observation()` now returns `ObservationsViewSingle`, re-exported from this
 crate. Its `trace_id` is `Option<String>` and its dates are typed. Observation
