@@ -1,7 +1,7 @@
 //! Comprehensive test demonstrating batching, metrics, and error handling
 
 use chrono::Utc;
-use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
+use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
 use langfuse_ergonomic::{BackpressurePolicy, Batcher, ClientBuilder};
 use std::time::Duration;
 use uuid::Uuid;
@@ -78,13 +78,13 @@ async fn main() -> anyhow::Result<()> {
             _ => "user-interaction",
         };
 
-        let trace_event = IngestionEvent::IngestionEventOneOf(Box::new(IngestionEventOneOf {
+        let trace_event = IngestionEvent::TraceEvent1(Box::new(TraceEvent1 {
             id: trace_id.clone(),
             timestamp: Utc::now().to_rfc3339(),
-            r#type: langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
+            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
             body: Box::new(TraceBody {
                 id: Some(Some(trace_id.clone())),
-                timestamp: Some(Some(Utc::now().to_rfc3339())),
+                timestamp: Some(Some(Utc::now().fixed_offset())),
                 name: Some(Some(format!("{}-trace-{}", trace_type, i))),
                 user_id: Some(Some(user_id.to_string())),
                 session_id: Some(Some(session_id.clone())),
@@ -217,13 +217,13 @@ async fn main() -> anyhow::Result<()> {
     println!("\n Adding 5 more traces to test continued operation...");
     for i in 25..30 {
         let trace_id = Uuid::new_v4().to_string();
-        let trace_event = IngestionEvent::IngestionEventOneOf(Box::new(IngestionEventOneOf {
+        let trace_event = IngestionEvent::TraceEvent1(Box::new(TraceEvent1 {
             id: trace_id.clone(),
             timestamp: Utc::now().to_rfc3339(),
-            r#type: langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
+            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
             body: Box::new(TraceBody {
                 id: Some(Some(trace_id.clone())),
-                timestamp: Some(Some(Utc::now().to_rfc3339())),
+                timestamp: Some(Some(Utc::now().fixed_offset())),
                 name: Some(Some(format!("additional-trace-{}", i))),
                 user_id: Some(Some(user_id.to_string())),
                 session_id: Some(Some(session_id.clone())),

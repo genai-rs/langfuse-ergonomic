@@ -10,7 +10,7 @@ async fn wait_for_usage(
     client: &LangfuseClient,
     observation_id: &str,
     expected: &[(&str, i32)],
-) -> langfuse_client_base::models::ObservationsView {
+) -> langfuse_client_base::models::ObservationsViewSingle {
     let deadline = Instant::now() + Duration::from_secs(120);
     loop {
         let diagnostic = match timeout(
@@ -87,7 +87,7 @@ async fn generation_token_usage_persists_in_langfuse() {
         }
         let observation = wait_for_usage(&client, &id, &expected).await;
         assert_eq!(observation.id, id);
-        assert_eq!(observation.trace_id, Some(Some(trace.id.clone())));
+        assert_eq!(observation.trace_id, Some(trace.id.clone()));
         assert_eq!(observation.r#type, "GENERATION");
         assert_eq!(observation.usage.total, expected_total);
         if let Some(input) = input {

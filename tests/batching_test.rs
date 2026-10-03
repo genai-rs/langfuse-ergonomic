@@ -1,6 +1,6 @@
 //! Comprehensive tests for batching functionality
 
-use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
+use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
 use langfuse_ergonomic::{BackpressurePolicy, Batcher, ClientBuilder};
 use mockito::Server;
 use std::time::Duration;
@@ -23,11 +23,11 @@ fn create_test_event(id: &str) -> IngestionEvent {
         environment: None,
     };
 
-    IngestionEvent::IngestionEventOneOf(Box::new(IngestionEventOneOf::new(
+    IngestionEvent::TraceEvent1(Box::new(TraceEvent1::new(
         id.to_string(),
         chrono::Utc::now().to_rfc3339(),
         trace_body,
-        langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
+        langfuse_client_base::models::trace_event_1::Type::TraceCreate,
     )))
 }
 

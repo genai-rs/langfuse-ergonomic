@@ -239,16 +239,15 @@ impl Batcher {
     /// Extract a stable identifier from any ingestion event variant Langfuse supports.
     fn extract_event_id(event: &IngestionEvent) -> String {
         match event {
-            IngestionEvent::IngestionEventOneOf(e) => e.id.clone(),
-            IngestionEvent::IngestionEventOneOf1(e) => e.id.clone(),
-            IngestionEvent::IngestionEventOneOf2(e) => e.id.clone(),
-            IngestionEvent::IngestionEventOneOf3(e) => e.id.clone(),
-            IngestionEvent::IngestionEventOneOf4(e) => e.id.clone(),
-            IngestionEvent::IngestionEventOneOf5(e) => e.id.clone(),
-            IngestionEvent::IngestionEventOneOf6(e) => e.id.clone(),
-            IngestionEvent::IngestionEventOneOf7(e) => e.id.clone(),
-            IngestionEvent::IngestionEventOneOf8(e) => e.id.clone(),
-            IngestionEvent::IngestionEventOneOf9(e) => e.id.clone(),
+            IngestionEvent::TraceEvent1(e) => e.id.clone(),
+            IngestionEvent::ScoreEvent1(e) => e.id.clone(),
+            IngestionEvent::CreateSpanEvent1(e) => e.id.clone(),
+            IngestionEvent::UpdateSpanEvent1(e) => e.id.clone(),
+            IngestionEvent::CreateGenerationEvent1(e) => e.id.clone(),
+            IngestionEvent::UpdateGenerationEvent1(e) => e.id.clone(),
+            IngestionEvent::CreateEventEvent1(e) => e.id.clone(),
+            IngestionEvent::CreateObservationEvent1(e) => e.id.clone(),
+            IngestionEvent::UpdateObservationEvent1(e) => e.id.clone(),
         }
     }
 
@@ -975,19 +974,19 @@ mod tests {
     fn test_chunk_events() {
         let events = vec![
             BatchEvent {
-                event: IngestionEvent::IngestionEventOneOf(Box::default()),
+                event: IngestionEvent::TraceEvent1(Box::default()),
                 id: "1".to_string(),
                 size: 1000,
                 retry_count: 0,
             },
             BatchEvent {
-                event: IngestionEvent::IngestionEventOneOf(Box::default()),
+                event: IngestionEvent::TraceEvent1(Box::default()),
                 id: "2".to_string(),
                 size: 2000,
                 retry_count: 0,
             },
             BatchEvent {
-                event: IngestionEvent::IngestionEventOneOf(Box::default()),
+                event: IngestionEvent::TraceEvent1(Box::default()),
                 id: "3".to_string(),
                 size: 1500,
                 retry_count: 0,

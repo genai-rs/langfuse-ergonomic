@@ -144,20 +144,17 @@ impl LangfuseClient {
         public: Option<bool>,
     ) -> Result<TraceResponse> {
         use langfuse_client_base::models::{
-            ingestion_event_one_of::Type as TraceEventType, IngestionEvent, IngestionEventOneOf,
-            TraceBody,
+            trace_event_1::Type as TraceEventType, IngestionEvent, TraceBody, TraceEvent1,
         };
 
         let trace_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
-        let timestamp = timestamp
-            .unwrap_or_else(Utc::now)
-            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let timestamp = timestamp.unwrap_or_else(Utc::now);
 
         let tags_option = if tags.is_empty() { None } else { Some(tags) };
 
         let trace_body = TraceBody::builder()
             .id(Some(trace_id.clone()))
-            .timestamp(Some(timestamp.clone()))
+            .timestamp(Some(timestamp.fixed_offset()))
             .maybe_name(name.map(Some))
             .maybe_user_id(user_id.map(Some))
             .maybe_input(input.map(Some))
@@ -170,14 +167,14 @@ impl LangfuseClient {
             .maybe_public(public.map(Some))
             .build();
 
-        let event = IngestionEventOneOf::builder()
+        let event = TraceEvent1::builder()
             .body(Box::new(trace_body))
             .id(Uuid::new_v4().to_string())
-            .timestamp(timestamp.clone())
+            .timestamp(timestamp.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
             .r#type(TraceEventType::TraceCreate)
             .build();
 
-        self.ingest_events(vec![IngestionEvent::IngestionEventOneOf(Box::new(event))])
+        self.ingest_events(vec![IngestionEvent::TraceEvent1(Box::new(event))])
             .await
             .map(|_| TraceResponse {
                 id: trace_id,
@@ -218,32 +215,60 @@ impl LangfuseClient {
         #[builder(into)] order_by: Option<String>,
         #[builder(into)] tags: Option<String>,
     ) -> Result<langfuse_client_base::models::Traces> {
-        use langfuse_client_base::apis::trace_api;
+        let parse_timestamp = |value: String| {
+            DateTime::parse_from_rfc3339(&value)
+                .map(|timestamp| timestamp.to_rfc3339())
+                .map_err(|e| Error::Validation(format!("Trace timestamp must be RFC3339: {e}")))
+        };
+        let from_timestamp = from_timestamp.map(parse_timestamp).transpose()?;
+        let to_timestamp = to_timestamp.map(parse_timestamp).transpose()?;
 
-        let user_id_ref = user_id.as_deref();
-        let name_ref = name.as_deref();
-        let session_id_ref = session_id.as_deref();
-        let version_ref = version.as_deref();
-        let release_ref = release.as_deref();
-        let order_by_ref = order_by.as_deref();
-        let tags_vec = tags.map(|t| vec![t]);
-
-        trace_api::trace_list()
-            .configuration(self.configuration())
-            .maybe_page(page)
-            .maybe_limit(limit)
-            .maybe_user_id(user_id_ref)
-            .maybe_name(name_ref)
-            .maybe_session_id(session_id_ref)
-            .maybe_version(version_ref)
-            .maybe_release(release_ref)
-            .maybe_order_by(order_by_ref)
-            .maybe_from_timestamp(from_timestamp)
-            .maybe_to_timestamp(to_timestamp)
-            .maybe_tags(tags_vec)
-            .call()
+        // client-base 0.15 formats date query parameters with Display, which
+        // inserts spaces instead of the RFC3339 `T`. Keep valid query dates
+        // here while using the configured transport, middleware and auth.
+        let query: Vec<_> = [
+            ("page", page.map(|value| value.to_string())),
+            ("limit", limit.map(|value| value.to_string())),
+            ("userId", user_id),
+            ("name", name),
+            ("sessionId", session_id),
+            ("version", version),
+            ("release", release),
+            ("orderBy", order_by),
+            ("fromTimestamp", from_timestamp),
+            ("toTimestamp", to_timestamp),
+            ("tags", tags),
+        ]
+        .into_iter()
+        .filter_map(|(key, value)| value.map(|value| (key, value)))
+        .collect();
+        let configuration = self.configuration();
+        let mut request = configuration
+            .client
+            .get(format!("{}/api/public/traces", configuration.base_path))
+            .query(&query);
+        if let Some(user_agent) = &configuration.user_agent {
+            request = request.header(reqwest::header::USER_AGENT, user_agent);
+        }
+        if let Some((username, password)) = &configuration.basic_auth {
+            request = request.basic_auth(username, password.as_ref());
+        }
+        let response = request
+            .send()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to list traces: {}", e)))
+            .map_err(|e| Error::Api(format!("Failed to list traces: {e}")))?;
+        let status = response.status();
+        let content = response
+            .text()
+            .await
+            .map_err(|e| Error::Api(format!("Failed to list traces: {e}")))?;
+        if status.is_client_error() || status.is_server_error() {
+            return Err(Error::Api(format!(
+                "Failed to list traces: status {status}: {content}"
+            )));
+        }
+        serde_json::from_str(&content)
+            .map_err(|e| Error::Api(format!("Failed to list traces: {e}")))
     }
 
     /// Delete a trace
@@ -303,22 +328,20 @@ impl LangfuseClient {
         end_time: Option<DateTime<Utc>>,
     ) -> Result<String> {
         use langfuse_client_base::models::{
-            ingestion_event_one_of_2::Type as SpanEventType, CreateSpanBody, IngestionEvent,
-            IngestionEventOneOf2,
+            create_span_event_1::Type as SpanEventType, CreateSpanBody, CreateSpanEvent1,
+            IngestionEvent,
         };
 
         let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
-        let timestamp = start_time
-            .unwrap_or_else(Utc::now)
-            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let timestamp = start_time.unwrap_or_else(Utc::now);
         let level = level.map(|l| parse_observation_level(&l));
-        let end_time_str = end_time.map(|t| t.to_rfc3339_opts(chrono::SecondsFormat::Millis, true));
+        let end_time = end_time.map(|t| t.fixed_offset());
 
         let span_body = CreateSpanBody::builder()
             .id(Some(observation_id.clone()))
             .trace_id(Some(trace_id))
-            .start_time(Some(timestamp.clone()))
-            .maybe_end_time(end_time_str.map(Some))
+            .start_time(Some(timestamp.fixed_offset()))
+            .maybe_end_time(end_time.map(Some))
             .maybe_name(name.map(Some))
             .maybe_parent_observation_id(parent_observation_id.map(Some))
             .maybe_input(input.map(Some))
@@ -328,14 +351,14 @@ impl LangfuseClient {
             .maybe_metadata(metadata.map(Some))
             .build();
 
-        let event = IngestionEventOneOf2::builder()
+        let event = CreateSpanEvent1::builder()
             .body(Box::new(span_body))
             .id(Uuid::new_v4().to_string())
-            .timestamp(timestamp.clone())
+            .timestamp(timestamp.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
             .r#type(SpanEventType::SpanCreate)
             .build();
 
-        self.ingest_events(vec![IngestionEvent::IngestionEventOneOf2(Box::new(event))])
+        self.ingest_events(vec![IngestionEvent::CreateSpanEvent1(Box::new(event))])
             .await
             .map(|_| observation_id)
             .map_err(|e| crate::error::Error::Api(format!("Failed to create span: {}", e)))
@@ -369,17 +392,15 @@ impl LangfuseClient {
         total_tokens: Option<i32>,
     ) -> Result<String> {
         use langfuse_client_base::models::{
-            ingestion_event_one_of_4::Type as GenerationEventType, CreateGenerationBody,
-            IngestionEvent, IngestionEventOneOf4, UsageDetails,
+            create_generation_event_1::Type as GenerationEventType, CreateGenerationBody,
+            CreateGenerationEvent1, IngestionEvent, UsageDetails,
         };
 
         let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
-        let timestamp = start_time
-            .unwrap_or_else(Utc::now)
-            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let timestamp = start_time.unwrap_or_else(Utc::now);
 
         let level = level.map(|l| parse_observation_level(&l));
-        let end_time_str = end_time.map(|t| t.to_rfc3339_opts(chrono::SecondsFormat::Millis, true));
+        let end_time = end_time.map(|t| t.fixed_offset());
 
         let usage_details: std::collections::HashMap<String, i32> = [
             ("input", prompt_tokens),
@@ -395,9 +416,9 @@ impl LangfuseClient {
         let generation_body = CreateGenerationBody::builder()
             .id(Some(observation_id.clone()))
             .trace_id(Some(trace_id))
-            .start_time(Some(timestamp.clone()))
+            .start_time(Some(timestamp.fixed_offset()))
             .maybe_name(name.map(Some))
-            .maybe_end_time(end_time_str.map(Some))
+            .maybe_end_time(end_time.map(Some))
             .maybe_model(model.map(Some))
             .maybe_usage_details(usage_details)
             .maybe_input(input.map(Some))
@@ -408,17 +429,19 @@ impl LangfuseClient {
             .maybe_parent_observation_id(parent_observation_id.map(Some))
             .build();
 
-        let event = IngestionEventOneOf4::builder()
+        let event = CreateGenerationEvent1::builder()
             .body(Box::new(generation_body))
             .id(Uuid::new_v4().to_string())
-            .timestamp(timestamp.clone())
+            .timestamp(timestamp.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
             .r#type(GenerationEventType::GenerationCreate)
             .build();
 
-        self.ingest_events(vec![IngestionEvent::IngestionEventOneOf4(Box::new(event))])
-            .await
-            .map(|_| observation_id)
-            .map_err(|e| crate::error::Error::Api(format!("Failed to create generation: {}", e)))
+        self.ingest_events(vec![IngestionEvent::CreateGenerationEvent1(Box::new(
+            event,
+        ))])
+        .await
+        .map(|_| observation_id)
+        .map_err(|e| crate::error::Error::Api(format!("Failed to create generation: {}", e)))
     }
 
     /// Create an event observation
@@ -437,21 +460,19 @@ impl LangfuseClient {
         start_time: Option<DateTime<Utc>>,
     ) -> Result<String> {
         use langfuse_client_base::models::{
-            ingestion_event_one_of_6::Type as EventEventType, CreateEventBody, IngestionEvent,
-            IngestionEventOneOf6,
+            create_event_event_1::Type as EventEventType, CreateEventBody, CreateEventEvent1,
+            IngestionEvent,
         };
 
         let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
-        let timestamp = start_time
-            .unwrap_or_else(Utc::now)
-            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let timestamp = start_time.unwrap_or_else(Utc::now);
 
         let level = level.map(|l| parse_observation_level(&l));
 
         let event_body = CreateEventBody::builder()
             .id(Some(observation_id.clone()))
             .trace_id(Some(trace_id))
-            .start_time(Some(timestamp.clone()))
+            .start_time(Some(timestamp.fixed_offset()))
             .maybe_name(name.map(Some))
             .maybe_input(input.map(Some))
             .maybe_output(output.map(Some))
@@ -461,14 +482,14 @@ impl LangfuseClient {
             .maybe_metadata(metadata.map(Some))
             .build();
 
-        let event = IngestionEventOneOf6::builder()
+        let event = CreateEventEvent1::builder()
             .body(Box::new(event_body))
             .id(Uuid::new_v4().to_string())
-            .timestamp(timestamp.clone())
+            .timestamp(timestamp.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
             .r#type(EventEventType::EventCreate)
             .build();
 
-        self.ingest_events(vec![IngestionEvent::IngestionEventOneOf6(Box::new(event))])
+        self.ingest_events(vec![IngestionEvent::CreateEventEvent1(Box::new(event))])
             .await
             .map(|_| observation_id)
             .map_err(|e| crate::error::Error::Api(format!("Failed to create event: {}", e)))
@@ -480,7 +501,7 @@ impl LangfuseClient {
     pub async fn get_observation(
         &self,
         observation_id: impl Into<String>,
-    ) -> Result<langfuse_client_base::models::ObservationsView> {
+    ) -> Result<langfuse_client_base::models::ObservationsViewSingle> {
         use langfuse_client_base::apis::legacy_observations_v1_api;
 
         let observation_id = observation_id.into();
@@ -547,15 +568,15 @@ impl LangfuseClient {
         #[builder(into)] parent_observation_id: Option<String>,
     ) -> Result<String> {
         use chrono::Utc as ChronoUtc;
-        use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf3, UpdateSpanBody};
+        use langfuse_client_base::models::{IngestionEvent, UpdateSpanBody, UpdateSpanEvent1};
         use uuid::Uuid;
 
         let event_body = UpdateSpanBody {
             id: id.clone(),
             trace_id: Some(Some(trace_id)),
             name: Some(name),
-            start_time: Some(start_time.map(|dt| dt.to_rfc3339())),
-            end_time: Some(end_time.map(|dt| dt.to_rfc3339())),
+            start_time: Some(start_time.map(|dt| dt.fixed_offset())),
+            end_time: Some(end_time.map(|dt| dt.fixed_offset())),
             metadata: Some(metadata),
             input: Some(input),
             output: Some(output),
@@ -566,15 +587,15 @@ impl LangfuseClient {
             environment: None,
         };
 
-        let event = IngestionEventOneOf3 {
+        let event = UpdateSpanEvent1 {
             body: Box::new(event_body),
             id: Uuid::new_v4().to_string(),
             timestamp: ChronoUtc::now().to_rfc3339(),
             metadata: None,
-            r#type: langfuse_client_base::models::ingestion_event_one_of_3::Type::SpanUpdate,
+            r#type: langfuse_client_base::models::update_span_event_1::Type::SpanUpdate,
         };
 
-        self.ingest_events(vec![IngestionEvent::IngestionEventOneOf3(Box::new(event))])
+        self.ingest_events(vec![IngestionEvent::UpdateSpanEvent1(Box::new(event))])
             .await
             .map_err(|e| Error::Api(format!("Failed to update span: {}", e)))?;
 
@@ -602,7 +623,7 @@ impl LangfuseClient {
     ) -> Result<String> {
         use chrono::Utc as ChronoUtc;
         use langfuse_client_base::models::{
-            IngestionEvent, IngestionEventOneOf5, UpdateGenerationBody,
+            IngestionEvent, UpdateGenerationBody, UpdateGenerationEvent1,
         };
         use uuid::Uuid;
 
@@ -612,9 +633,9 @@ impl LangfuseClient {
             id: id.clone(),
             trace_id: Some(Some(trace_id)),
             name: Some(name),
-            start_time: Some(start_time.map(|dt| dt.to_rfc3339())),
-            end_time: Some(end_time.map(|dt| dt.to_rfc3339())),
-            completion_start_time: Some(completion_start_time.map(|dt| dt.to_rfc3339())),
+            start_time: Some(start_time.map(|dt| dt.fixed_offset())),
+            end_time: Some(end_time.map(|dt| dt.fixed_offset())),
+            completion_start_time: Some(completion_start_time.map(|dt| dt.fixed_offset())),
             model: Some(model),
             model_parameters: None, // Requires HashMap<String, MapValue>
             input: Some(input),
@@ -632,17 +653,19 @@ impl LangfuseClient {
             usage_details: None,
         };
 
-        let event = IngestionEventOneOf5 {
+        let event = UpdateGenerationEvent1 {
             body: Box::new(event_body),
             id: Uuid::new_v4().to_string(),
             timestamp: ChronoUtc::now().to_rfc3339(),
             metadata: None,
-            r#type: langfuse_client_base::models::ingestion_event_one_of_5::Type::GenerationUpdate,
+            r#type: langfuse_client_base::models::update_generation_event_1::Type::GenerationUpdate,
         };
 
-        self.ingest_events(vec![IngestionEvent::IngestionEventOneOf5(Box::new(event))])
-            .await
-            .map_err(|e| Error::Api(format!("Failed to update generation: {}", e)))?;
+        self.ingest_events(vec![IngestionEvent::UpdateGenerationEvent1(Box::new(
+            event,
+        ))])
+        .await
+        .map_err(|e| Error::Api(format!("Failed to update generation: {}", e)))?;
 
         Ok(id)
     }
@@ -673,14 +696,14 @@ impl LangfuseClient {
         }
 
         use langfuse_client_base::models::{
-            CreateScoreValue, IngestionEvent, IngestionEventOneOf1, ScoreBody, ScoreDataType,
+            CreateScoreValue, IngestionEvent, ScoreBody, ScoreDataType, ScoreEvent1,
         };
 
         let score_id = Uuid::new_v4().to_string();
         let timestamp = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
 
         let score_value = if let Some(v) = value {
-            Box::new(CreateScoreValue::Number(v))
+            Box::new(CreateScoreValue::DoubleNumber(v))
         } else if let Some(s) = string_value {
             Box::new(CreateScoreValue::String(s))
         } else {
@@ -709,15 +732,15 @@ impl LangfuseClient {
             metadata: metadata.map(Some),
         };
 
-        let event = IngestionEventOneOf1 {
+        let event = ScoreEvent1 {
             body: Box::new(score_body),
             id: Uuid::new_v4().to_string(),
             timestamp: timestamp.clone(),
             metadata: None,
-            r#type: langfuse_client_base::models::ingestion_event_one_of_1::Type::ScoreCreate,
+            r#type: langfuse_client_base::models::score_event_1::Type::ScoreCreate,
         };
 
-        self.ingest_events(vec![IngestionEvent::IngestionEventOneOf1(Box::new(event))])
+        self.ingest_events(vec![IngestionEvent::ScoreEvent1(Box::new(event))])
             .await
             .map(|_| score_id)
             .map_err(|e| crate::error::Error::Api(format!("Failed to create score: {}", e)))
@@ -807,6 +830,14 @@ impl LangfuseClient {
     ) -> Result<langfuse_client_base::models::Dataset> {
         use langfuse_client_base::apis::datasets_api;
         use langfuse_client_base::models::CreateDatasetRequest;
+
+        let parse_schema = |value: Value| {
+            serde_json::from_value::<std::collections::HashMap<String, Value>>(value).map_err(|e| {
+                Error::Validation(format!("Dataset schema must be a JSON object: {e}"))
+            })
+        };
+        let input_schema = input_schema.map(parse_schema).transpose()?;
+        let expected_output_schema = expected_output_schema.map(parse_schema).transpose()?;
 
         let request = CreateDatasetRequest {
             name,

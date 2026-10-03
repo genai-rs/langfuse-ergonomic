@@ -26,7 +26,7 @@ async fn test_simple_batch_200() {
     let batcher = Batcher::builder().client(client).build().await;
 
     // Add a simple event
-    use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
+    use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
 
     let trace_body = TraceBody {
         id: Some(Some("test-trace-1".to_string())),
@@ -34,15 +34,15 @@ async fn test_simple_batch_200() {
         ..Default::default()
     };
 
-    let event = IngestionEventOneOf {
+    let event = TraceEvent1 {
         body: Box::new(trace_body),
         id: "test-event-1".to_string(),
         timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         metadata: None,
-        r#type: langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
+        r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
     };
 
-    let ingestion_event = IngestionEvent::IngestionEventOneOf(Box::new(event));
+    let ingestion_event = IngestionEvent::TraceEvent1(Box::new(event));
 
     // Add and flush
     batcher.add(ingestion_event).await.unwrap();
