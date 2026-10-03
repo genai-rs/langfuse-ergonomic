@@ -6,7 +6,7 @@ Thank you for your interest in contributing to langfuse-ergonomic! This guide wi
 
 ### Prerequisites
 
-- Rust 1.75 or later
+- Rust 1.88 or later
 - Node.js 18+ (for OpenAPI generator)
 - Java 11+ (for OpenAPI generator v7.x)
 
@@ -196,6 +196,26 @@ Releases are automated using [release-plz](https://release-plz.ieni.dev/):
 2. release-plz creates a release PR automatically
 3. Review and merge the release PR
 4. Packages are published to crates.io automatically
+
+Before merging a release PR, verify the manifest and lockfile agree on the
+version, review the changelog (including any MSRV change), and check the current
+required CI results. Validate the release candidate locally with:
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --locked --all-targets --all-features -- -D warnings
+cargo test --locked --all-features
+cargo test --locked --no-default-features
+cargo +1.88.0 test --locked --all-features
+cargo publish --locked --dry-run
+```
+
+The dry run packages and builds the crate without uploading it. Merging the
+release PR triggers the `Release-plz` workflow on `main`, which publishes to
+crates.io and creates the version tag and GitHub release. Treat that merge as
+the publication step.
+Confirm the published crate version and workflow result before closing the
+release request.
 
 ## Getting Help
 
