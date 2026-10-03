@@ -198,3 +198,6 @@ pub use langfuse_client_base::models::{
     PaginatedDatasets, Prompt, PromptMetaListResponse, ScoreDataType, Trace, TraceBody,
     TraceWithDetails, TraceWithFullDetails, Traces,
 };
+
+/// Response from the legacy observations API, retaining the name used in 0.6.3.
+pub use langfuse_client_base::models::LegacyObservationsViews as ObservationsViews;

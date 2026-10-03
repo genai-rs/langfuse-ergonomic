@@ -504,7 +504,7 @@ impl LangfuseClient {
         #[builder(into)] name: Option<String>,
         #[builder(into)] user_id: Option<String>,
         observation_type: Option<String>,
-    ) -> Result<langfuse_client_base::models::LegacyObservationsViews> {
+    ) -> Result<crate::ObservationsViews> {
         use langfuse_client_base::apis::legacy_observations_v1_api;
 
         // Note: The API has more parameters but they're not all exposed in v0.2

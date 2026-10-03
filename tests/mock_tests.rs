@@ -1,6 +1,6 @@
 //! Mock tests for offline development and testing without API credentials
 
-use langfuse_ergonomic::{ClientBuilder, LangfuseClient};
+use langfuse_ergonomic::{ClientBuilder, LangfuseClient, ObservationsViews};
 use mockito::Server;
 use serde_json::json;
 
@@ -12,6 +12,40 @@ fn create_mock_client(mock_server: &Server) -> LangfuseClient {
         .base_url(mock_server.url())
         .build()
         .expect("mock credentials should be valid")
+}
+
+#[tokio::test]
+async fn test_get_observations_preserves_public_response_type() {
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("GET", "/api/public/observations")
+        .match_query(mockito::Matcher::Any)
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            json!({
+                "data": [],
+                "meta": {"page": 1, "limit": 10, "totalItems": 0, "totalPages": 0}
+            })
+            .to_string(),
+        )
+        .create_async()
+        .await;
+
+    let client = create_mock_client(&server);
+    // The response name exported by 0.6.3 must still match this API's result.
+    let response: ObservationsViews = client
+        .get_observations()
+        .page(1)
+        .limit(10)
+        .call()
+        .await
+        .expect("decode observations using the public response type");
+
+    mock.assert_async().await;
+    assert!(response.data.is_empty());
+    assert_eq!(response.meta.page, 1);
+    assert_eq!(response.meta.limit, 10);
 }
 
 #[tokio::test]

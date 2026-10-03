@@ -1,5 +1,5 @@
 # Configuration for release-plz
-# https://release-plz.ieni.dev/docs/config
+# https://release-plz.dev/docs/config
 
 [workspace]
 # Enable changelog generation
@@ -19,7 +19,7 @@ git_release_body = """
 _No changelog available_
 {%- endif %}
 
-**Full Changelog**: https://github.com/genai-rs/langfuse-ergonomic/compare/{{ previous_version }}...{{ version }}
+**Full Changelog**: https://github.com/genai-rs/langfuse-ergonomic/blob/v{{ version }}/CHANGELOG.md
 """
 
 # PR settings
