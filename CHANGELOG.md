@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Preserve the public `ObservationsViews` response name after the base client renamed the legacy API type to `LegacyObservationsViews`.
 - Generate GitHub release notes using supported release-plz template variables and link to the tagged changelog.
+- Update locked `chacha20` from the yanked 0.10.0 release to 0.10.2.
 - Send generation token counts as `usageDetails` instead of silently dropping them, preserving partial counts and explicit totals. Thanks to @sdtnjung for reporting [#115](https://github.com/genai-rs/langfuse-ergonomic/issues/115).
 
 ## [0.6.3](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.6.2...v0.6.3) - 2026-01-19
