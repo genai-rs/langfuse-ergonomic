@@ -1,7 +1,7 @@
 //! Example demonstrating batch ingestion with automatic chunking and retries
 
 use chrono::Utc;
-use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
+use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
 use langfuse_ergonomic::{Batcher, ClientBuilder};
 use uuid::Uuid;
 
@@ -25,16 +25,16 @@ async fn main() -> anyhow::Result<()> {
     // Create multiple traces
     for i in 0..20 {
         let trace_id = Uuid::new_v4().to_string();
-        let timestamp = Utc::now().to_rfc3339();
+        let timestamp = Utc::now();
 
         // Add trace event
-        let trace_event = IngestionEvent::IngestionEventOneOf(Box::new(IngestionEventOneOf {
+        let trace_event = IngestionEvent::TraceEvent1(Box::new(TraceEvent1 {
             id: trace_id.clone(),
-            timestamp: timestamp.clone(),
-            r#type: langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
+            timestamp: timestamp.to_rfc3339(),
+            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
             body: Box::new(TraceBody {
                 id: Some(Some(trace_id.clone())),
-                timestamp: Some(Some(timestamp.clone())),
+                timestamp: Some(Some(timestamp.fixed_offset())),
                 name: Some(Some(format!("batch-trace-{}", i))),
                 user_id: Some(Some("test-user".to_string())),
                 metadata: Some(Some(serde_json::json!({

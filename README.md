@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/langfuse-ergonomic.svg)](https://crates.io/crates/langfuse-ergonomic)
 [![Documentation](https://docs.rs/langfuse-ergonomic/badge.svg)](https://docs.rs/langfuse-ergonomic)
 [![CI](https://github.com/genai-rs/langfuse-ergonomic/workflows/CI/badge.svg)](https://github.com/genai-rs/langfuse-ergonomic/actions)
-[![MSRV](https://img.shields.io/badge/MSRV-1.83-blue)](https://blog.rust-lang.org/2024/11/28/Rust-1.83.0.html)
+[![MSRV](https://img.shields.io/badge/MSRV-1.88-blue)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/crates/l/langfuse-ergonomic)](./LICENSE-MIT)
 
 Ergonomic Rust client for [Langfuse](https://langfuse.com), the open-source LLM observability platform.
@@ -85,6 +85,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 ## Type Safety
+
+### Migrating to client-base 0.15
+
+This release uses `langfuse-client-base` 0.15.0 and requires Rust 1.88.
+The ergonomic trace, span, generation, and event builders still accept
+`chrono::DateTime<Utc>`. When constructing base models directly, timestamp fields
+now use `DateTime<FixedOffset>` (for example, `Utc::now().fixed_offset()`).
+Trace list filters still accept RFC3339 strings; invalid dates return a validation error.
+Dataset schemas must be JSON objects.
+
+`get_observation()` now returns `ObservationsViewSingle`, re-exported from this
+crate. Its `trace_id` is `Option<String>` and its dates are typed. Observation
+lists continue to use `ObservationsViews`, whose entries are `ObservationsView`.
+
+Batch ingestion uses named variants such as
+`IngestionEvent::TraceEvent1(Box::new(TraceEvent1 { ... }))` instead of
+`IngestionEvent::IngestionEventOneOf(...)`. See the updated `batch_ingestion`
+example. The base client's SDK-log ingestion variant has been removed.
 
 All API methods return strongly-typed structs instead of JSON values. Types are auto-generated from the Langfuse OpenAPI specification and re-exported for convenience:
 

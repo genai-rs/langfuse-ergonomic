@@ -47,26 +47,24 @@ async fn test_metrics_accuracy_on_retries() {
         .await;
 
     // Add a single event using the correct types from langfuse-client-base
-    use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
+    use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
 
     let trace_body = TraceBody {
         id: Some(Some("test-event".to_string())),
         name: Some(Some("test".to_string())),
-        timestamp: Some(Some(
-            chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-        )),
+        timestamp: Some(Some(chrono::Utc::now().fixed_offset())),
         ..Default::default()
     };
 
-    let event_one_of = IngestionEventOneOf {
+    let event_one_of = TraceEvent1 {
         body: Box::new(trace_body),
         id: uuid::Uuid::new_v4().to_string(),
         timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         metadata: None,
-        r#type: langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
+        r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
     };
 
-    let event = IngestionEvent::IngestionEventOneOf(Box::new(event_one_of));
+    let event = IngestionEvent::TraceEvent1(Box::new(event_one_of));
     batcher.add(event).await.unwrap();
 
     // Flush and verify metrics
@@ -130,7 +128,7 @@ async fn test_batch_207_partial_success() {
         .await;
 
     // Add test events
-    use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
+    use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
 
     for i in 1..=4 {
         let trace_body = TraceBody {
@@ -139,15 +137,15 @@ async fn test_batch_207_partial_success() {
             ..Default::default()
         };
 
-        let event = IngestionEventOneOf {
+        let event = TraceEvent1 {
             body: Box::new(trace_body),
             id: format!("event-{}", i),
             timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
             metadata: None,
-            r#type: langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
+            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
         };
 
-        let ingestion_event = IngestionEvent::IngestionEventOneOf(Box::new(event));
+        let ingestion_event = IngestionEvent::TraceEvent1(Box::new(event));
         batcher.add(ingestion_event).await.unwrap();
     }
 
@@ -213,7 +211,7 @@ async fn test_batch_size_chunking() {
         .await;
 
     // Add large events that will exceed the size limit
-    use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
+    use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
 
     for i in 1..=4 {
         let large_metadata = json!({
@@ -228,15 +226,15 @@ async fn test_batch_size_chunking() {
             ..Default::default()
         };
 
-        let event = IngestionEventOneOf {
+        let event = TraceEvent1 {
             body: Box::new(trace_body),
             id: format!("event-{}", i),
             timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
             metadata: None,
-            r#type: langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
+            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
         };
 
-        let ingestion_event = IngestionEvent::IngestionEventOneOf(Box::new(event));
+        let ingestion_event = IngestionEvent::TraceEvent1(Box::new(event));
         batcher.add(ingestion_event).await.unwrap();
     }
 
@@ -281,7 +279,7 @@ async fn test_batch_retry_on_rate_limit() {
         .await;
 
     // Add a test event
-    use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
+    use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
 
     let trace_body = TraceBody {
         id: Some(Some("trace-1".to_string())),
@@ -289,15 +287,15 @@ async fn test_batch_retry_on_rate_limit() {
         ..Default::default()
     };
 
-    let event = IngestionEventOneOf {
+    let event = TraceEvent1 {
         body: Box::new(trace_body),
         id: "event-1".to_string(),
         timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         metadata: None,
-        r#type: langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
+        r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
     };
 
-    let ingestion_event = IngestionEvent::IngestionEventOneOf(Box::new(event));
+    let ingestion_event = IngestionEvent::TraceEvent1(Box::new(event));
     batcher.add(ingestion_event).await.unwrap();
 
     // Flush - should retry after rate limit
@@ -332,7 +330,7 @@ async fn test_batch_auth_failure_no_retry() {
         .await;
 
     // Add a test event
-    use langfuse_client_base::models::{IngestionEvent, IngestionEventOneOf, TraceBody};
+    use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
 
     let trace_body = TraceBody {
         id: Some(Some("trace-1".to_string())),
@@ -340,15 +338,15 @@ async fn test_batch_auth_failure_no_retry() {
         ..Default::default()
     };
 
-    let event = IngestionEventOneOf {
+    let event = TraceEvent1 {
         body: Box::new(trace_body),
         id: "event-1".to_string(),
         timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         metadata: None,
-        r#type: langfuse_client_base::models::ingestion_event_one_of::Type::TraceCreate,
+        r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
     };
 
-    let ingestion_event = IngestionEvent::IngestionEventOneOf(Box::new(event));
+    let ingestion_event = IngestionEvent::TraceEvent1(Box::new(event));
     batcher.add(ingestion_event).await.unwrap();
 
     // Flush - should fail immediately without retry

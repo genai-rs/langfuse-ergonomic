@@ -82,21 +82,21 @@ async fn main() -> anyhow::Result<()> {
 
     // Add events to the batcher
     use langfuse_client_base::models::{
-        ingestion_event_one_of::Type, IngestionEvent, IngestionEventOneOf, TraceBody,
+        trace_event_1::Type, IngestionEvent, TraceBody, TraceEvent1,
     };
     use uuid::Uuid;
 
     for i in 0..5 {
         let trace_id = Uuid::new_v4().to_string();
-        let timestamp = Utc::now().to_rfc3339();
+        let timestamp = Utc::now();
 
-        let trace_event = IngestionEvent::IngestionEventOneOf(Box::new(IngestionEventOneOf {
+        let trace_event = IngestionEvent::TraceEvent1(Box::new(TraceEvent1 {
             id: trace_id.clone(),
-            timestamp: timestamp.clone(),
+            timestamp: timestamp.to_rfc3339(),
             r#type: Type::TraceCreate,
             body: Box::new(TraceBody {
                 id: Some(Some(trace_id.clone())),
-                timestamp: Some(Some(timestamp)),
+                timestamp: Some(Some(timestamp.fixed_offset())),
                 name: Some(Some(format!("self-hosted-trace-{}", i))),
                 metadata: Some(Some(serde_json::json!({
                     "index": i,

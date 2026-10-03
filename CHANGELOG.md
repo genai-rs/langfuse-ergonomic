@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** Upgrade `langfuse-client-base` to 0.15.0. Re-exported models now use typed timestamps and updated ingestion variants such as `TraceEvent1`; the SDK-log ingestion variant is no longer available.
+- **Breaking:** `get_observation` returns the re-exported `ObservationsViewSingle`, with `Option<String>` trace IDs and typed timestamps. Observation lists retain the `ObservationsViews` alias.
+- Preserve the ergonomic builders' UTC datetime and string timestamp-filter inputs, converting them to the base client's typed dates. Invalid RFC3339 filters and non-object dataset schemas return validation errors before sending a request.
+
+### Fixed
+
+- Adapt score values, dataset schemas, batch handling, and examples to client-base 0.15.0 while preserving ingestion payloads and generation token usage.
+- Keep trace date filters in RFC3339 format despite the base client's datetime query serialization.
+
 ## [0.6.4](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.6.3...v0.6.4) - 2026-10-03
 
 ### Fixed
