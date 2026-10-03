@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.6.4...v0.7.0) - 2026-10-03
+
+### Fixed
+
+- preserve explicit null dataset schemas
+- [**breaking**] migrate ergonomic client to client-base 0.15
+
 ### Changed
 
 - **Breaking:** Upgrade `langfuse-client-base` to 0.15.0. Re-exported models now use typed timestamps and updated ingestion variants such as `TraceEvent1`; the SDK-log ingestion variant is no longer available.
