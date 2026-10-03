@@ -330,6 +330,20 @@ async fn dataset_schemas_preserve_objects_and_reject_non_objects() {
         .expect(0)
         .create_async()
         .await;
+    let nullable = server.mock("POST", "/api/public/v2/datasets")
+        .match_body(Matcher::PartialJson(json!({"inputSchema": null, "expectedOutputSchema": null})))
+        .with_status(201).with_header("content-type", "application/json")
+        .with_body(r#"{"id":"dataset-1","name":"test","description":null,"metadata":null,"inputSchema":null,"expectedOutputSchema":null,"projectId":"project-1","createdAt":"2026-10-03T12:00:00Z","updatedAt":"2026-10-03T12:00:00Z"}"#)
+        .create_async().await;
+    client
+        .create_dataset()
+        .name("test")
+        .input_schema(json!(null))
+        .expected_output_schema(json!(null))
+        .call()
+        .await
+        .unwrap();
+    nullable.assert_async().await;
     assert!(matches!(
         client
             .create_dataset()
