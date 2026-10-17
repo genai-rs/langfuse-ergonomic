@@ -322,7 +322,7 @@ let score_id = client
 #### Prompt Management
 - **Fetching** - Get prompts by name and version
 - **Listing** - List prompts with filtering
-- **Creation** - Basic prompt creation (placeholder implementation)
+- **Creation** - Create text and chat prompts; invalid chat messages return a validation error with their zero-based index before sending a request
 
 #### Batch Processing
 - **Automatic Batching** - Events are automatically grouped into optimal batch sizes

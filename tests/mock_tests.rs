@@ -1,6 +1,6 @@
 //! Mock tests for offline development and testing without API credentials
 
-use langfuse_ergonomic::{ClientBuilder, LangfuseClient, ObservationsViews};
+use langfuse_ergonomic::{ClientBuilder, Error, LangfuseClient, ObservationsViews};
 use mockito::Server;
 use serde_json::json;
 
@@ -12,6 +12,118 @@ fn create_mock_client(mock_server: &Server) -> LangfuseClient {
         .base_url(mock_server.url())
         .build()
         .expect("mock credentials should be valid")
+}
+
+#[tokio::test]
+async fn test_create_chat_prompt_rejects_invalid_messages_without_http() {
+    let invalid_messages = [
+        json!(null),
+        json!("private-message-content"),
+        json!({"role": "user"}),
+        json!({"role": "user", "content": {"secret": "private-message-content"}}),
+        json!({"name": 42, "type": "placeholder"}),
+        json!({"role": "user", "content": "private-message-content", "type": "invalid"}),
+    ];
+
+    for invalid_message in invalid_messages {
+        // Exercise the first, middle, and last positions in a mixed list.
+        for index in 0..3 {
+            let mut server = Server::new_async().await;
+            let mock = server
+                .mock("POST", mockito::Matcher::Any)
+                .expect(0)
+                .create_async()
+                .await;
+            let client = create_mock_client(&server);
+            let mut messages = vec![
+                json!({"role": "system", "content": "private-system-content"}),
+                json!({"name": "history", "type": "placeholder"}),
+            ];
+            messages.insert(index, invalid_message.clone());
+
+            let error = client
+                .create_chat_prompt()
+                .name("private-prompt-name")
+                .messages(messages)
+                .call()
+                .await
+                .expect_err("invalid messages must fail before HTTP");
+
+            mock.assert_async().await;
+            let expected = format!(
+                "Invalid chat prompt message at index {index}: expected a chat message or placeholder"
+            );
+            assert!(matches!(&error, Error::Validation(message) if message == &expected));
+            assert!(!error.is_retryable());
+            assert_eq!(error.to_string(), format!("Validation error: {expected}"));
+            for sensitive in [
+                "private-message-content",
+                "private-system-content",
+                "private-prompt-name",
+                "pk-lf-test",
+                "sk-lf-test",
+            ] {
+                assert!(!format!("{error:?}").contains(sensitive));
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_create_chat_prompt_preserves_mixed_messages() {
+    let mut server = Server::new_async().await;
+    let messages = vec![
+        json!({"role": "system", "content": "Keep {{topic}} unchanged.\n日本語"}),
+        json!({"name": "history", "type": "placeholder"}),
+        json!({"role": "user", "content": "  Hello {{name}}!  ", "type": "chatmessage"}),
+        json!({"role": "assistant", "content": ""}),
+    ];
+    let config = json!({"temperature": 0.25});
+    let mock = server
+        .mock("POST", "/api/public/v2/prompts")
+        .match_body(mockito::Matcher::Json(json!({
+            "name": "mixed-chat",
+            "type": "chat",
+            "prompt": messages,
+            "config": config,
+            "labels": ["production"],
+            "tags": ["test"]
+        })))
+        .expect(1)
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            json!({
+                "name": "mixed-chat",
+                "version": 1,
+                "type": "chat",
+                "prompt": messages,
+                "config": config,
+                "labels": ["production"],
+                "tags": ["test"]
+            })
+            .to_string(),
+        )
+        .create_async()
+        .await;
+    let client = create_mock_client(&server);
+
+    let response = client
+        .create_chat_prompt()
+        .name("mixed-chat")
+        .messages(messages.clone())
+        .config(config)
+        .labels(vec!["production".to_owned()])
+        .tags(vec!["test".to_owned()])
+        .call()
+        .await
+        .expect("create a valid mixed chat prompt");
+
+    mock.assert_async().await;
+    assert_eq!(
+        serde_json::to_value(response).unwrap()["prompt"],
+        json!(messages)
+    );
 }
 
 #[tokio::test]

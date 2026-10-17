@@ -1091,6 +1091,9 @@ impl LangfuseClient {
     }
 
     /// Create a chat prompt with messages
+    ///
+    /// Invalid messages return a validation error with their zero-based index
+    /// before any HTTP request is sent.
     #[builder]
     pub async fn create_chat_prompt(
         &self,
@@ -1105,18 +1108,18 @@ impl LangfuseClient {
             ChatMessageWithPlaceholders, CreateChatPromptRequest, CreatePromptRequest,
         };
 
-        // Convert JSON messages to ChatMessageWithPlaceholders
-        // Since ChatMessageWithPlaceholders is an enum, we need to deserialize properly
         let chat_messages: Vec<ChatMessageWithPlaceholders> = messages
             .into_iter()
-            .map(|msg| {
-                // Try to deserialize the JSON into ChatMessageWithPlaceholders
-                serde_json::from_value(msg).unwrap_or_else(|_| {
-                    // Create a default message if parsing fails
-                    ChatMessageWithPlaceholders::default()
+            .enumerate()
+            .map(|(index, message)| {
+                serde_json::from_value(message).map_err(|_| {
+                    // Deserialization errors can contain caller content.
+                    Error::Validation(format!(
+                        "Invalid chat prompt message at index {index}: expected a chat message or placeholder"
+                    ))
                 })
             })
-            .collect();
+            .collect::<Result<_>>()?;
 
         let prompt_request =
             CreatePromptRequest::CreateChatPromptRequest(Box::new(CreateChatPromptRequest {
