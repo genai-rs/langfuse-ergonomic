@@ -484,8 +484,8 @@ async fn characterize_partial_retry_shutdown(
 async fn test_shutdown_207_recovery_in_final_flush() {
     let (result, requests) = characterize_partial_retry_shutdown(Some(3)).await;
     assert_eq!(requests.len(), 3);
-    assert_eq!(result.success_ids, ["retryable"]);
-    assert_eq!(result.success_count, 1);
+    assert_eq!(result.success_ids, ["already-successful", "retryable"]);
+    assert_eq!(result.success_count, 2);
     assert_eq!(result.failure_count, 0);
 }
 
@@ -493,8 +493,8 @@ async fn test_shutdown_207_recovery_in_final_flush() {
 async fn test_shutdown_207_includes_background_success_in_result() {
     let (result, requests) = characterize_partial_retry_shutdown(Some(2)).await;
     assert_eq!(requests.len(), 2);
-    assert_eq!(result.success_ids, ["retryable"]);
-    assert_eq!(result.success_count, 1);
+    assert_eq!(result.success_ids, ["already-successful", "retryable"]);
+    assert_eq!(result.success_count, 2);
     assert_eq!(result.failure_count, 0);
 }
 
@@ -502,8 +502,8 @@ async fn test_shutdown_207_includes_background_success_in_result() {
 async fn test_shutdown_207_recovers_on_last_allowed_attempt() {
     let (result, requests) = characterize_partial_retry_shutdown(Some(4)).await;
     assert_eq!(requests.len(), 4, "initial attempt plus three retries");
-    assert_eq!(result.success_ids, ["retryable"]);
-    assert_eq!(result.success_count, 1);
+    assert_eq!(result.success_ids, ["already-successful", "retryable"]);
+    assert_eq!(result.success_count, 2);
     assert_eq!(result.failure_count, 0);
 }
 
@@ -511,11 +511,91 @@ async fn test_shutdown_207_recovers_on_last_allowed_attempt() {
 async fn test_shutdown_207_always_failing_exhausts_retry_budget() {
     let (result, requests) = characterize_partial_retry_shutdown(None).await;
     assert_eq!(requests.len(), 4, "initial attempt plus three retries");
-    assert!(result.success_ids.is_empty());
-    assert_eq!(result.success_count, 0);
+    assert_eq!(result.success_ids, ["already-successful"]);
+    assert_eq!(result.success_count, 1);
     assert_eq!(result.failure_count, 1);
     assert_eq!(result.failures[0].event_id, "retryable");
     assert!(result.failures[0].retryable);
+}
+
+#[tokio::test]
+async fn test_shutdown_reconciles_manual_flush_after_background_retry() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let mut server = Server::new_async().await;
+        let requests = Arc::new(AtomicUsize::new(0));
+        let request_counter = Arc::clone(&requests);
+        let body_request_counter = Arc::clone(&requests);
+        let mock = server
+            .mock("POST", "/api/public/ingestion")
+            .with_status_code_from_request(move |_| {
+                if request_counter.fetch_add(1, Ordering::SeqCst) == 0 {
+                    207
+                } else {
+                    200
+                }
+            })
+            .with_body_from_request(move |request| {
+                let body: serde_json::Value =
+                    serde_json::from_slice(request.body().unwrap()).unwrap();
+                let id = body["batch"][0]["id"].as_str().unwrap();
+                if body_request_counter.load(Ordering::SeqCst) == 1 {
+                    serde_json::to_vec(&json!({
+                        "successes": [],
+                        "errors": [{"id": id, "status": 503, "message": "retry me"}]
+                    }))
+                    .unwrap()
+                } else {
+                    serde_json::to_vec(&json!({
+                        "successes": [{"id": id, "status": 201}],
+                        "errors": []
+                    }))
+                    .unwrap()
+                }
+            })
+            .expect(2)
+            .create_async()
+            .await;
+        let batcher = Batcher::builder()
+            .client(create_mock_client(&server))
+            .max_events(1)
+            .max_retries(3)
+            .initial_retry_delay(Duration::from_millis(1))
+            .max_retry_delay(Duration::from_millis(1))
+            .retry_jitter(false)
+            .flush_interval(Duration::from_secs(3600))
+            .build()
+            .await;
+        let event = TraceEvent1 {
+            body: Box::new(TraceBody::default()),
+            id: "manual-recovery".to_owned(),
+            timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
+            metadata: None,
+            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+        };
+        batcher
+            .add(IngestionEvent::TraceEvent1(Box::new(event)))
+            .await
+            .unwrap();
+
+        while requests.load(Ordering::SeqCst) == 0 || batcher.metrics().queued != 1 {
+            tokio::task::yield_now().await;
+        }
+        let manual_response = batcher.flush().await.unwrap();
+        assert_eq!(manual_response.success_ids, ["manual-recovery"]);
+
+        let result = batcher.shutdown().await.unwrap();
+        assert_eq!(requests.load(Ordering::SeqCst), 2);
+        assert_eq!(result.success_ids, ["manual-recovery"]);
+        assert_eq!(result.success_count, 1);
+        assert_eq!(result.failure_count, 0);
+        mock.assert_async().await;
+    })
+    .await
+    .expect("manual recovery must replace the earlier retryable failure");
 }
 
 #[tokio::test]

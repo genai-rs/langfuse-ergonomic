@@ -353,12 +353,7 @@ impl Batcher {
             loop {
                 tokio::select! {
                     _ = flush_interval.tick() => {
-                        match Self::flush_buffer(&client, &buffer, &buffer_size_clone, &config, &metrics_clone, &flush_mutex_clone).await {
-                            Ok(response)
-                                if response.success_count > 0 || response.failure_count > 0 =>
-                            {
-                                background_results_clone.lock().await.push(response)
-                            }
+                        match Self::flush_buffer(&client, &buffer, &buffer_size_clone, &config, &metrics_clone, &flush_mutex_clone, Some(&background_results_clone)).await {
                             Ok(_) => {}
                             Err(error) => {
                                 let mut background_error = background_error_clone.lock().await;
@@ -388,12 +383,7 @@ impl Batcher {
                         };
 
                         if should_flush {
-                            match Self::flush_buffer(&client, &buffer, &buffer_size_clone, &config, &metrics_clone, &flush_mutex_clone).await {
-                                Ok(response)
-                                    if response.success_count > 0 || response.failure_count > 0 =>
-                                {
-                                    background_results_clone.lock().await.push(response)
-                                }
+                            match Self::flush_buffer(&client, &buffer, &buffer_size_clone, &config, &metrics_clone, &flush_mutex_clone, Some(&background_results_clone)).await {
                                 Ok(_) => {}
                                 Err(error) => {
                                     let mut background_error = background_error_clone.lock().await;
@@ -537,6 +527,7 @@ impl Batcher {
             &self.config,
             &self.metrics,
             &self.flush_mutex,
+            Some(&self.background_results),
         )
         .await
     }
@@ -569,6 +560,7 @@ impl Batcher {
         config: &BatcherConfig,
         metrics: &BatcherMetrics,
         flush_mutex: &Mutex<()>,
+        result_history: Option<&Mutex<Vec<IngestionResponse>>>,
     ) -> Result<IngestionResponse> {
         // Prevent concurrent flushes
         let _guard = flush_mutex.lock().await;
@@ -724,12 +716,24 @@ impl Batcher {
             buffer_size.fetch_add(retry_size, Ordering::Relaxed);
         }
 
-        Ok(IngestionResponse {
+        let response = IngestionResponse {
             success_ids: all_success_ids.clone(),
             failures: all_failures.clone(),
             success_count: all_success_ids.len(),
             failure_count: all_failures.len(),
-        })
+        };
+        if let Some(result_history) = result_history {
+            if response.success_count > 0 || response.failure_count > 0 {
+                result_history.lock().await.push(IngestionResponse {
+                    success_ids: response.success_ids.clone(),
+                    failures: response.failures.clone(),
+                    success_count: response.success_count,
+                    failure_count: response.failure_count,
+                });
+            }
+        }
+
+        Ok(response)
     }
 
     /// Split events into chunks that fit size and count limits
@@ -1055,6 +1059,7 @@ impl Batcher {
                 &self.config,
                 &self.metrics,
                 &self.flush_mutex,
+                None,
             )
             .await?;
 
