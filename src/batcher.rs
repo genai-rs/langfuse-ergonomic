@@ -225,9 +225,34 @@ pub struct Batcher {
     rx: Arc<Mutex<mpsc::Receiver<BatchEvent>>>,
     shutdown_tx: mpsc::Sender<()>,
     metrics: Arc<BatcherMetrics>,
+    background_results: Arc<Mutex<Vec<IngestionResponse>>>,
+    background_error: Arc<Mutex<Option<Error>>>,
     flush_mutex: Arc<Mutex<()>>,
     shutdown_flag: Arc<AtomicBool>,
     task_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+}
+
+fn merge_ingestion_response(
+    success_ids: &mut Vec<String>,
+    failures: &mut Vec<EventError>,
+    response: IngestionResponse,
+) {
+    for id in response.success_ids {
+        if !success_ids.contains(&id) {
+            success_ids.push(id.clone());
+        }
+        failures.retain(|failure| failure.event_id != id);
+    }
+    for failure in response.failures {
+        if let Some(existing) = failures
+            .iter_mut()
+            .find(|existing| existing.event_id == failure.event_id)
+        {
+            *existing = failure;
+        } else {
+            failures.push(failure);
+        }
+    }
 }
 
 /// Builder type used once the required client has been provided via [`BatcherBuilder::client`].
@@ -283,6 +308,8 @@ impl Batcher {
         let (shutdown_tx, mut shutdown_rx) = mpsc::channel(1);
 
         let metrics = Arc::new(BatcherMetrics::default());
+        let background_results = Arc::new(Mutex::new(Vec::new()));
+        let background_error = Arc::new(Mutex::new(None));
         let flush_mutex = Arc::new(Mutex::new(()));
         let shutdown_flag = Arc::new(AtomicBool::new(false));
         let buffer_size = Arc::new(AtomicUsize::new(0));
@@ -298,6 +325,8 @@ impl Batcher {
             rx: Arc::new(Mutex::new(rx)),
             shutdown_tx,
             metrics: metrics.clone(),
+            background_results: background_results.clone(),
+            background_error: background_error.clone(),
             flush_mutex: flush_mutex.clone(),
             shutdown_flag: shutdown_flag.clone(),
             task_handle: task_handle.clone(),
@@ -309,6 +338,8 @@ impl Batcher {
         let client = batcher.client.clone();
         let rx = batcher.rx.clone();
         let metrics_clone = metrics.clone();
+        let background_results_clone = background_results.clone();
+        let background_error_clone = background_error.clone();
         let flush_mutex_clone = flush_mutex.clone();
         let shutdown_flag_clone = shutdown_flag.clone();
 
@@ -322,7 +353,20 @@ impl Batcher {
             loop {
                 tokio::select! {
                     _ = flush_interval.tick() => {
-                        let _ = Self::flush_buffer(&client, &buffer, &buffer_size_clone, &config, &metrics_clone, &flush_mutex_clone).await;
+                        match Self::flush_buffer(&client, &buffer, &buffer_size_clone, &config, &metrics_clone, &flush_mutex_clone).await {
+                            Ok(response)
+                                if response.success_count > 0 || response.failure_count > 0 =>
+                            {
+                                background_results_clone.lock().await.push(response)
+                            }
+                            Ok(_) => {}
+                            Err(error) => {
+                                let mut background_error = background_error_clone.lock().await;
+                                if background_error.is_none() {
+                                    *background_error = Some(error);
+                                }
+                            }
+                        }
                     }
                     Some(event) = async {
                         let mut rx = rx.lock().await;
@@ -344,7 +388,20 @@ impl Batcher {
                         };
 
                         if should_flush {
-                            let _ = Self::flush_buffer(&client, &buffer, &buffer_size_clone, &config, &metrics_clone, &flush_mutex_clone).await;
+                            match Self::flush_buffer(&client, &buffer, &buffer_size_clone, &config, &metrics_clone, &flush_mutex_clone).await {
+                                Ok(response)
+                                    if response.success_count > 0 || response.failure_count > 0 =>
+                                {
+                                    background_results_clone.lock().await.push(response)
+                                }
+                                Ok(_) => {}
+                                Err(error) => {
+                                    let mut background_error = background_error_clone.lock().await;
+                                    if background_error.is_none() {
+                                        *background_error = Some(error);
+                                    }
+                                }
+                            }
                         }
                     }
                     _ = shutdown_rx.recv() => {
@@ -516,7 +573,7 @@ impl Batcher {
         // Prevent concurrent flushes
         let _guard = flush_mutex.lock().await;
 
-        let mut events: Vec<BatchEvent> = {
+        let events: Vec<BatchEvent> = {
             let mut buffer = buffer.lock().await;
             let events = buffer.drain(..).collect();
             // Reset size atomically when clearing buffer
@@ -544,9 +601,13 @@ impl Batcher {
 
         let mut chunk_idx = 0;
         while chunk_idx < chunks.len() {
-            let chunk = chunks[chunk_idx].clone();
-            match Self::send_batch_with_retry(client, &chunk, config, metrics).await {
-                Ok(response) => {
+            let mut chunk = chunks[chunk_idx].clone();
+            let mut chunk_config = config.clone();
+            chunk_config.max_retries = config
+                .max_retries
+                .saturating_sub(chunk.first().map_or(0, |event| event.retry_count));
+            match Self::send_batch_with_retry(client, &chunk, &chunk_config, metrics).await {
+                Ok((response, transport_retries)) => {
                     // Update metrics
                     metrics
                         .flushed
@@ -556,11 +617,16 @@ impl Batcher {
                     // Queue retryable failures
                     for failure in &response.failures {
                         if failure.retryable {
-                            match events.iter_mut().find(|e| e.id == failure.event_id) {
-                                Some(event) if event.retry_count < config.max_retries => {
-                                    event.retry_count += 1;
+                            match chunks[chunk_idx]
+                                .iter_mut()
+                                .find(|e| e.id == failure.event_id)
+                            {
+                                Some(event)
+                                    if event.retry_count + transport_retries
+                                        < config.max_retries =>
+                                {
+                                    event.retry_count += transport_retries + 1;
                                     retry_queue.push(event.clone());
-                                    metrics.retries.fetch_add(1, Ordering::Relaxed);
                                 }
                                 _ => {
                                     metrics.failed.fetch_add(1, Ordering::Relaxed);
@@ -573,8 +639,13 @@ impl Batcher {
                     all_failures.extend(response.failures);
                     chunk_idx += 1;
                 }
-                Err(Error::Client { status: 413, .. }) if chunk.len() > 1 => {
+                Err((Error::Client { status: 413, .. }, transport_retries)) if chunk.len() > 1 => {
                     // Payload too large - split this chunk and retry
+                    if transport_retries > 0 {
+                        for event in &mut chunk {
+                            event.retry_count += transport_retries;
+                        }
+                    }
                     let mid = chunk.len() / 2;
                     let (first_half, second_half) = chunk.split_at(mid);
 
@@ -583,7 +654,7 @@ impl Batcher {
                     chunks[chunk_idx] = first_half.to_vec();
                     // Don't increment chunk_idx, retry with smaller chunk
                 }
-                Err(e) if e.is_retryable() => {
+                Err((e, _transport_retries)) if e.is_retryable() => {
                     // Update error timestamp
                     metrics.last_error_ts.store(
                         std::time::SystemTime::now()
@@ -593,19 +664,20 @@ impl Batcher {
                         Ordering::Relaxed,
                     );
 
-                    // Queue all events for retry
+                    // The per-event retry budget was exhausted by
+                    // send_batch_with_retry; retain terminal failure details.
                     for event in &chunk {
-                        if event.retry_count < config.max_retries {
-                            let mut event = event.clone();
-                            event.retry_count += 1;
-                            retry_queue.push(event);
-                        } else {
-                            metrics.failed.fetch_add(1, Ordering::Relaxed);
-                        }
+                        all_failures.push(EventError {
+                            event_id: event.id.clone(),
+                            message: e.to_string(),
+                            code: None,
+                            retryable: true,
+                        });
+                        metrics.failed.fetch_add(1, Ordering::Relaxed);
                     }
                     chunk_idx += 1;
                 }
-                Err(e) => {
+                Err((e, _transport_retries)) => {
                     // Update error timestamp
                     metrics.last_error_ts.store(
                         std::time::SystemTime::now()
@@ -672,6 +744,9 @@ impl Batcher {
 
         for event in events {
             if current_chunk.len() >= max_events
+                || current_chunk
+                    .first()
+                    .is_some_and(|first: &BatchEvent| first.retry_count != event.retry_count)
                 || (current_size + event.size > max_bytes && !current_chunk.is_empty())
             {
                 chunks.push(current_chunk);
@@ -696,14 +771,16 @@ impl Batcher {
         events: &[BatchEvent],
         config: &BatcherConfig,
         metrics: &BatcherMetrics,
-    ) -> Result<IngestionResponse> {
+    ) -> std::result::Result<(IngestionResponse, u32), (Error, u32)> {
         let mut delay = config.initial_retry_delay;
         let mut last_error = None;
 
         for attempt in 0..=config.max_retries {
-            if attempt > 0 {
+            if attempt > 0 || (attempt == 0 && events[0].retry_count > 0) {
                 metrics.retries.fetch_add(1, Ordering::Relaxed);
+            }
 
+            if attempt > 0 {
                 // Add jitter to avoid thundering herd
                 let actual_delay = if config.retry_jitter {
                     #[allow(clippy::cast_possible_truncation)]
@@ -725,16 +802,19 @@ impl Batcher {
             };
 
             match Self::send_batch_internal(client, batch_request, config, events).await {
-                Ok(response) => return Ok(response),
+                Ok(response) => return Ok((response, attempt)),
                 Err(Error::Client { status: 413, .. }) => {
                     // Payload too large - should be handled at the chunk level
-                    return Err(Error::Client {
-                        status: 413,
-                        message: "Payload too large".to_string(),
-                        request_id: None,
-                    });
+                    return Err((
+                        Error::Client {
+                            status: 413,
+                            message: "Payload too large".to_string(),
+                            request_id: None,
+                        },
+                        attempt,
+                    ));
                 }
-                Err(e) if !e.is_retryable() => return Err(e),
+                Err(e) if !e.is_retryable() => return Err((e, attempt)),
                 Err(e) => {
                     // Retry-After takes precedence over exponential backoff
                     if let Some(retry_after) = e.retry_after() {
@@ -745,7 +825,10 @@ impl Batcher {
             }
         }
 
-        Err(last_error.unwrap_or_else(|| Error::Api("Max retries exceeded".to_string())))
+        Err((
+            last_error.unwrap_or_else(|| Error::Api("Max retries exceeded".to_string())),
+            config.max_retries,
+        ))
     }
 
     /// Send a single batch and handle 207 responses
@@ -954,8 +1037,16 @@ impl Batcher {
 
         // Drain every requeued partial failure. Each retry increments the
         // event's retry_count, so this loop is bounded by max_retries.
+        let background_error = self.background_error.lock().await.take();
+        let background_results = {
+            let mut results = self.background_results.lock().await;
+            std::mem::take(&mut *results)
+        };
         let mut success_ids = Vec::new();
         let mut failures = Vec::new();
+        for response in background_results {
+            merge_ingestion_response(&mut success_ids, &mut failures, response);
+        }
         loop {
             let response = Self::flush_buffer(
                 &self.client,
@@ -967,22 +1058,7 @@ impl Batcher {
             )
             .await?;
 
-            for id in response.success_ids {
-                if !success_ids.contains(&id) {
-                    success_ids.push(id.clone());
-                }
-                failures.retain(|failure: &EventError| failure.event_id != id);
-            }
-            for failure in response.failures {
-                if let Some(existing) = failures
-                    .iter_mut()
-                    .find(|existing: &&mut EventError| existing.event_id == failure.event_id)
-                {
-                    *existing = failure;
-                } else {
-                    failures.push(failure);
-                }
-            }
+            merge_ingestion_response(&mut success_ids, &mut failures, response);
 
             if self.metrics.queued.load(Ordering::Relaxed) == 0 {
                 break;
@@ -1007,6 +1083,9 @@ impl Batcher {
             );
         }
 
+        if let Some(error) = background_error {
+            return Err(error);
+        }
         flush_result
     }
 }
