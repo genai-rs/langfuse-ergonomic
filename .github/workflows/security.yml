@@ -26,9 +26,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
         
-      - name: Generate Cargo.lock
-        run: cargo generate-lockfile
-        
+      # Audit the committed resolution, just like cargo-deny below.
       - name: Run cargo audit
         uses: rustsec/audit-check@v2
         with:
@@ -50,7 +48,7 @@ jobs:
         run: cargo install cargo-deny --locked
       
       - name: Run cargo deny
-        run: cargo deny check
+        run: cargo deny --locked check
 
   # Secret scanning with multiple tools
   secrets:
