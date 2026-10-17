@@ -30,6 +30,17 @@
       rangeStrategy: 'bump',
     },
     {
+      description: 'Keep UUID updates within the Rust 1.88 compatible range',
+      matchManagers: [
+        'cargo',
+      ],
+      matchPackageNames: [
+        'uuid',
+      ],
+      allowedVersions: '<1.27.0',
+      rangeStrategy: 'in-range-only',
+    },
+    {
       description: 'Group all Rust patch updates',
       matchManagers: [
         'cargo',
@@ -37,6 +48,7 @@
       matchUpdateTypes: [
         'patch',
       ],
+      matchCurrentVersion: '>=1.0.0',
       groupName: 'rust patch updates',
       automerge: true,
     },
@@ -48,6 +60,7 @@
       matchUpdateTypes: [
         'minor',
       ],
+      matchCurrentVersion: '>=1.0.0',
       groupName: 'rust minor updates',
       automerge: true,
     },
@@ -125,6 +138,15 @@
         'langfuse-base',
       ],
       automerge: true,
+    },
+    {
+      description: 'Keep pre-1.0 Rust dependency updates isolated for review',
+      matchManagers: [
+        'cargo',
+      ],
+      matchCurrentVersion: '<1.0.0',
+      groupName: 'pre-1.0 Rust updates',
+      automerge: false,
     },
   ],
   vulnerabilityAlerts: {
