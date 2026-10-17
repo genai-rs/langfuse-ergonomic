@@ -374,3 +374,154 @@ fn test_batcher_config_defaults() {
     assert_eq!(config.max_retries, 3);
     assert!(!config.fail_fast);
 }
+
+/// Exercise shutdown with a known retry already buffered. `success_on_request`
+/// counts the initial explicit flush too; `None` keeps returning retryable 207s.
+async fn characterize_partial_retry_shutdown(
+    success_on_request: Option<usize>,
+) -> (langfuse_ergonomic::IngestionResponse, Vec<Vec<String>>) {
+    use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+    use std::sync::{Arc, Mutex};
+
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let mut server = Server::new_async().await;
+        let requests = Arc::new(Mutex::new(Vec::<Vec<String>>::new()));
+        let recorded = Arc::clone(&requests);
+        let mock = server
+            .mock("POST", "/api/public/ingestion")
+            .with_status(207)
+            .with_header("content-type", "application/json")
+            .with_body_from_request(move |request| {
+                let body: serde_json::Value =
+                    serde_json::from_slice(request.body().unwrap()).unwrap();
+                let ids: Vec<String> = body["batch"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|event| event["id"].as_str().unwrap().to_owned())
+                    .collect();
+                let mut recorded = recorded.lock().unwrap();
+                recorded.push(ids.clone());
+                let recovered = success_on_request.is_some_and(|n| recorded.len() >= n);
+                let mut successes = Vec::new();
+                let mut errors = Vec::new();
+                for id in ids {
+                    if id == "already-successful" || recovered {
+                        successes.push(json!({"id": id, "status": 201}));
+                    } else {
+                        errors.push(json!({"id": id, "status": 503, "message": "retry me"}));
+                    }
+                }
+                serde_json::to_vec(&json!({"successes": successes, "errors": errors})).unwrap()
+            })
+            .create_async()
+            .await;
+
+        let batcher = Batcher::builder()
+            .client(create_mock_client(&server))
+            .max_events(100)
+            .flush_interval(Duration::from_secs(3600))
+            .max_retries(3)
+            .initial_retry_delay(Duration::from_millis(1))
+            .max_retry_delay(Duration::from_millis(1))
+            .retry_jitter(false)
+            .build()
+            .await;
+        for id in ["already-successful", "retryable"] {
+            let event = TraceEvent1 {
+                body: Box::new(TraceBody::default()),
+                id: id.to_owned(),
+                timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
+                metadata: None,
+                r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+            };
+            batcher
+                .add(IngestionEvent::TraceEvent1(Box::new(event)))
+                .await
+                .unwrap();
+        }
+
+        // Synchronize with channel consumption instead of guessing a sleep.
+        // The large batch/interval limits prevent any automatic flush here.
+        while batcher.metrics().queued != 2 {
+            tokio::task::yield_now().await;
+        }
+        let first = batcher.flush().await.unwrap();
+        assert_eq!(first.success_ids, ["already-successful"]);
+        assert_eq!(first.failure_count, 1);
+        assert_eq!(first.failures[0].event_id, "retryable");
+        assert!(first.failures[0].retryable);
+        let metrics = batcher.metrics();
+        assert_eq!(metrics.queued, 1, "the 207 failure is queued for retry");
+        assert_eq!(metrics.flushed, 1);
+        // Current metrics count retryable responses as failures, even though
+        // BatcherMetricsSnapshot documents failed as terminal event failures.
+        assert_eq!(metrics.failed, 1);
+        assert_eq!(
+            metrics.retries, 0,
+            "207 requeues bypass transport retry metrics"
+        );
+        assert_eq!(metrics.dropped, 0);
+        assert_eq!(requests.lock().unwrap().len(), 1);
+
+        let result = batcher.shutdown().await.unwrap();
+        let requests = requests.lock().unwrap().clone();
+        assert_eq!(requests[0], ["already-successful", "retryable"]);
+        for ids in &requests[1..] {
+            assert_eq!(ids, &["retryable"], "successful events must not be resent");
+        }
+        // Counts and bodies above cover every request; a single dynamic mock
+        // avoids response ordering depending on mock registration precedence.
+        drop(mock);
+        (result, requests)
+    })
+    .await
+    .expect("partial retry shutdown must complete within five seconds")
+}
+
+#[tokio::test]
+async fn test_shutdown_207_recovery_in_final_flush() {
+    let (result, requests) = characterize_partial_retry_shutdown(Some(3)).await;
+    assert_eq!(requests.len(), 3);
+    assert_eq!(result.success_ids, ["retryable"]);
+    assert_eq!(result.success_count, 1);
+    assert_eq!(result.failure_count, 0);
+}
+
+#[tokio::test]
+async fn test_shutdown_207_background_success_is_absent_from_result() {
+    let (result, requests) = characterize_partial_retry_shutdown(Some(2)).await;
+    assert_eq!(requests.len(), 2);
+    // The background shutdown flush succeeds, but only the empty final flush
+    // contributes to shutdown's response. This characterizes the current API.
+    assert!(result.success_ids.is_empty());
+    assert_eq!(result.success_count, 0);
+    assert_eq!(result.failure_count, 0);
+}
+
+#[tokio::test]
+async fn test_shutdown_207_stops_before_recovery_on_last_allowed_attempt() {
+    let (result, requests) = characterize_partial_retry_shutdown(Some(4)).await;
+    // Diagnostic characterization (LE04), not the desired contract: with three
+    // retries the fourth request is allowed and would succeed, but shutdown
+    // makes only two more passes after our initial flush. LE05 owns the fix.
+    assert_eq!(requests.len(), 3);
+    assert!(result.success_ids.is_empty());
+    assert_eq!(result.success_count, 0);
+    assert_eq!(result.failure_count, 1);
+    assert_eq!(result.failures[0].event_id, "retryable");
+    assert!(result.failures[0].retryable);
+}
+
+#[tokio::test]
+async fn test_shutdown_207_always_failing_stops_before_retry_budget() {
+    let (result, requests) = characterize_partial_retry_shutdown(None).await;
+    // Bounded completion alone is insufficient: the last allowed attempt was
+    // skipped. The returned Ok contains a retryable failure, not full success.
+    assert_eq!(requests.len(), 3);
+    assert!(result.success_ids.is_empty());
+    assert_eq!(result.success_count, 0);
+    assert_eq!(result.failure_count, 1);
+    assert_eq!(result.failures[0].event_id, "retryable");
+    assert!(result.failures[0].retryable);
+}
