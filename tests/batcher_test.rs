@@ -484,8 +484,8 @@ async fn characterize_partial_retry_shutdown(
 async fn test_shutdown_207_recovery_in_final_flush() {
     let (result, requests) = characterize_partial_retry_shutdown(Some(3)).await;
     assert_eq!(requests.len(), 3);
-    assert_eq!(result.success_ids, ["already-successful", "retryable"]);
-    assert_eq!(result.success_count, 2);
+    assert_eq!(result.success_ids, ["retryable"]);
+    assert_eq!(result.success_count, 1);
     assert_eq!(result.failure_count, 0);
 }
 
@@ -493,8 +493,8 @@ async fn test_shutdown_207_recovery_in_final_flush() {
 async fn test_shutdown_207_includes_background_success_in_result() {
     let (result, requests) = characterize_partial_retry_shutdown(Some(2)).await;
     assert_eq!(requests.len(), 2);
-    assert_eq!(result.success_ids, ["already-successful", "retryable"]);
-    assert_eq!(result.success_count, 2);
+    assert_eq!(result.success_ids, ["retryable"]);
+    assert_eq!(result.success_count, 1);
     assert_eq!(result.failure_count, 0);
 }
 
@@ -502,8 +502,8 @@ async fn test_shutdown_207_includes_background_success_in_result() {
 async fn test_shutdown_207_recovers_on_last_allowed_attempt() {
     let (result, requests) = characterize_partial_retry_shutdown(Some(4)).await;
     assert_eq!(requests.len(), 4, "initial attempt plus three retries");
-    assert_eq!(result.success_ids, ["already-successful", "retryable"]);
-    assert_eq!(result.success_count, 2);
+    assert_eq!(result.success_ids, ["retryable"]);
+    assert_eq!(result.success_count, 1);
     assert_eq!(result.failure_count, 0);
 }
 
@@ -511,8 +511,8 @@ async fn test_shutdown_207_recovers_on_last_allowed_attempt() {
 async fn test_shutdown_207_always_failing_exhausts_retry_budget() {
     let (result, requests) = characterize_partial_retry_shutdown(None).await;
     assert_eq!(requests.len(), 4, "initial attempt plus three retries");
-    assert_eq!(result.success_ids, ["already-successful"]);
-    assert_eq!(result.success_count, 1);
+    assert!(result.success_ids.is_empty());
+    assert_eq!(result.success_count, 0);
     assert_eq!(result.failure_count, 1);
     assert_eq!(result.failures[0].event_id, "retryable");
     assert!(result.failures[0].retryable);
@@ -589,13 +589,74 @@ async fn test_shutdown_reconciles_manual_flush_after_background_retry() {
 
         let result = batcher.shutdown().await.unwrap();
         assert_eq!(requests.load(Ordering::SeqCst), 2);
-        assert_eq!(result.success_ids, ["manual-recovery"]);
-        assert_eq!(result.success_count, 1);
+        assert!(result.success_ids.is_empty());
+        assert_eq!(result.success_count, 0);
         assert_eq!(result.failure_count, 0);
         mock.assert_async().await;
     })
     .await
     .expect("manual recovery must replace the earlier retryable failure");
+}
+
+#[tokio::test]
+async fn test_many_manual_flushes_do_not_retain_historical_results() {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+
+        let mut server = Server::new_async().await;
+        let mock = server
+            .mock("POST", "/api/public/ingestion")
+            .with_status(207)
+            .with_body_from_request(|request| {
+                let body: serde_json::Value =
+                    serde_json::from_slice(request.body().unwrap()).unwrap();
+                let successes: Vec<_> = body["batch"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|event| json!({"id": event["id"], "status": 201}))
+                    .collect();
+                serde_json::to_vec(&json!({"successes": successes, "errors": []})).unwrap()
+            })
+            .expect(20)
+            .create_async()
+            .await;
+        let batcher = Batcher::builder()
+            .client(create_mock_client(&server))
+            .max_events(100)
+            .flush_interval(Duration::from_secs(3600))
+            .build()
+            .await;
+
+        for index in 0..20 {
+            let id = format!("manual-{index}");
+            let event = TraceEvent1 {
+                body: Box::new(TraceBody::default()),
+                id: id.clone(),
+                timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
+                metadata: None,
+                r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+            };
+            batcher
+                .add(IngestionEvent::TraceEvent1(Box::new(event)))
+                .await
+                .unwrap();
+
+            let response = batcher.flush().await.unwrap();
+            assert_eq!(response.success_ids, [id]);
+            assert_eq!(response.success_count, 1);
+            assert_eq!(response.failure_count, 0);
+        }
+
+        assert_eq!(batcher.metrics().flushed, 20);
+        let shutdown_response = batcher.shutdown().await.unwrap();
+        assert!(shutdown_response.success_ids.is_empty());
+        assert_eq!(shutdown_response.success_count, 0);
+        assert_eq!(shutdown_response.failure_count, 0);
+        mock.assert_async().await;
+    })
+    .await
+    .expect("completed manual flushes must not accumulate until shutdown");
 }
 
 #[tokio::test]
@@ -750,7 +811,7 @@ async fn test_shutdown_mixed_failures_share_retry_budget() {
 }
 
 #[tokio::test]
-async fn test_shutdown_returns_prior_background_flush_success() {
+async fn test_shutdown_does_not_retain_prior_background_flush_results() {
     tokio::time::timeout(Duration::from_secs(5), async {
         use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
 
@@ -779,18 +840,69 @@ async fn test_shutdown_returns_prior_background_flush_success() {
             .add(IngestionEvent::TraceEvent1(Box::new(event)))
             .await
             .unwrap();
-        while !mock.matched() {
+        while !mock.matched() || batcher.metrics().flushed != 1 {
             tokio::task::yield_now().await;
         }
 
         let result = batcher.shutdown().await.unwrap();
-        assert_eq!(result.success_ids, ["background-success"]);
+        assert!(result.success_ids.is_empty());
+        assert_eq!(result.success_count, 0);
+        assert_eq!(result.failure_count, 0);
+        mock.assert_async().await;
+    })
+    .await
+    .expect("shutdown must not retain completed background results");
+}
+
+#[tokio::test]
+async fn test_shutdown_includes_background_flush_in_flight_at_start() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+
+        let mut server = Server::new_async().await;
+        let mock = server
+            .mock("POST", "/api/public/ingestion")
+            .with_status(207)
+            .with_body_from_request(|_| {
+                std::thread::sleep(Duration::from_millis(300));
+                r#"{"successes":[{"id":"in-flight","status":201}],"errors":[]}"#
+                    .to_owned()
+                    .into()
+            })
+            .expect(1)
+            .create_async()
+            .await;
+        let batcher = Batcher::builder()
+            .client(create_mock_client(&server))
+            .max_events(1)
+            .flush_interval(Duration::from_secs(3600))
+            .build()
+            .await;
+        let event = TraceEvent1 {
+            body: Box::new(TraceBody::default()),
+            id: "in-flight".to_owned(),
+            timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
+            metadata: None,
+            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+        };
+        batcher
+            .add(IngestionEvent::TraceEvent1(Box::new(event)))
+            .await
+            .unwrap();
+        while !mock.matched() {
+            tokio::task::yield_now().await;
+        }
+
+        let shutdown = tokio::spawn(batcher.shutdown());
+        tokio::time::sleep(Duration::from_millis(25)).await;
+        let result = shutdown.await.unwrap().unwrap();
+        assert_eq!(result.success_ids, ["in-flight"]);
         assert_eq!(result.success_count, 1);
         assert_eq!(result.failure_count, 0);
         mock.assert_async().await;
     })
     .await
-    .expect("background flush and shutdown must finish within five seconds");
+    .expect("shutdown must include a background flush already in flight");
 }
 
 #[tokio::test]

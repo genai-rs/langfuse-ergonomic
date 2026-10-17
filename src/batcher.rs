@@ -48,7 +48,7 @@
 
 use bon::bon;
 use rand::{rng, RngExt};
-use std::collections::VecDeque;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -225,8 +225,8 @@ pub struct Batcher {
     rx: Arc<Mutex<mpsc::Receiver<BatchEvent>>>,
     shutdown_tx: mpsc::Sender<()>,
     metrics: Arc<BatcherMetrics>,
-    background_results: Arc<Mutex<Vec<IngestionResponse>>>,
     background_error: Arc<Mutex<Option<Error>>>,
+    shutdown_overlap_result: Arc<Mutex<Option<IngestionResponse>>>,
     flush_mutex: Arc<Mutex<()>>,
     shutdown_flag: Arc<AtomicBool>,
     task_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
@@ -234,23 +234,26 @@ pub struct Batcher {
 
 fn merge_ingestion_response(
     success_ids: &mut Vec<String>,
-    failures: &mut Vec<EventError>,
+    success_id_set: &mut HashSet<String>,
+    failures: &mut Vec<Option<EventError>>,
+    failure_indexes: &mut HashMap<String, usize>,
     response: IngestionResponse,
 ) {
     for id in response.success_ids {
-        if !success_ids.contains(&id) {
+        if success_id_set.insert(id.clone()) {
             success_ids.push(id.clone());
         }
-        failures.retain(|failure| failure.event_id != id);
+        if let Some(index) = failure_indexes.remove(&id) {
+            failures[index] = None;
+        }
     }
     for failure in response.failures {
-        if let Some(existing) = failures
-            .iter_mut()
-            .find(|existing| existing.event_id == failure.event_id)
-        {
-            *existing = failure;
+        if let Some(index) = failure_indexes.get(&failure.event_id) {
+            failures[*index] = Some(failure);
         } else {
-            failures.push(failure);
+            let index = failures.len();
+            failure_indexes.insert(failure.event_id.clone(), index);
+            failures.push(Some(failure));
         }
     }
 }
@@ -308,8 +311,8 @@ impl Batcher {
         let (shutdown_tx, mut shutdown_rx) = mpsc::channel(1);
 
         let metrics = Arc::new(BatcherMetrics::default());
-        let background_results = Arc::new(Mutex::new(Vec::new()));
         let background_error = Arc::new(Mutex::new(None));
+        let shutdown_overlap_result = Arc::new(Mutex::new(None));
         let flush_mutex = Arc::new(Mutex::new(()));
         let shutdown_flag = Arc::new(AtomicBool::new(false));
         let buffer_size = Arc::new(AtomicUsize::new(0));
@@ -325,8 +328,8 @@ impl Batcher {
             rx: Arc::new(Mutex::new(rx)),
             shutdown_tx,
             metrics: metrics.clone(),
-            background_results: background_results.clone(),
             background_error: background_error.clone(),
+            shutdown_overlap_result: shutdown_overlap_result.clone(),
             flush_mutex: flush_mutex.clone(),
             shutdown_flag: shutdown_flag.clone(),
             task_handle: task_handle.clone(),
@@ -338,8 +341,8 @@ impl Batcher {
         let client = batcher.client.clone();
         let rx = batcher.rx.clone();
         let metrics_clone = metrics.clone();
-        let background_results_clone = background_results.clone();
         let background_error_clone = background_error.clone();
+        let shutdown_overlap_result_clone = shutdown_overlap_result.clone();
         let flush_mutex_clone = flush_mutex.clone();
         let shutdown_flag_clone = shutdown_flag.clone();
 
@@ -352,9 +355,15 @@ impl Batcher {
 
             loop {
                 tokio::select! {
-                    _ = flush_interval.tick() => {
-                        match Self::flush_buffer(&client, &buffer, &buffer_size_clone, &config, &metrics_clone, &flush_mutex_clone, Some(&background_results_clone)).await {
-                            Ok(_) => {}
+                    _ = flush_interval.tick(), if !shutdown_flag_clone.load(Ordering::Relaxed) => {
+                        match Self::flush_buffer(&client, &buffer, &buffer_size_clone, &config, &metrics_clone, &flush_mutex_clone).await {
+                            Ok(response) => {
+                                if shutdown_flag_clone.load(Ordering::Relaxed)
+                                    && (response.success_count > 0 || response.failure_count > 0)
+                                {
+                                    *shutdown_overlap_result_clone.lock().await = Some(response);
+                                }
+                            }
                             Err(error) => {
                                 let mut background_error = background_error_clone.lock().await;
                                 if background_error.is_none() {
@@ -366,7 +375,7 @@ impl Batcher {
                     Some(event) = async {
                         let mut rx = rx.lock().await;
                         rx.recv().await
-                    } => {
+                    }, if !shutdown_flag_clone.load(Ordering::Relaxed) => {
                         metrics_clone.queued.fetch_add(1, Ordering::Relaxed);
 
                         let event_size = event.size;
@@ -383,8 +392,14 @@ impl Batcher {
                         };
 
                         if should_flush {
-                            match Self::flush_buffer(&client, &buffer, &buffer_size_clone, &config, &metrics_clone, &flush_mutex_clone, Some(&background_results_clone)).await {
-                                Ok(_) => {}
+                            match Self::flush_buffer(&client, &buffer, &buffer_size_clone, &config, &metrics_clone, &flush_mutex_clone).await {
+                                Ok(response) => {
+                                    if shutdown_flag_clone.load(Ordering::Relaxed)
+                                        && (response.success_count > 0 || response.failure_count > 0)
+                                    {
+                                        *shutdown_overlap_result_clone.lock().await = Some(response);
+                                    }
+                                }
                                 Err(error) => {
                                     let mut background_error = background_error_clone.lock().await;
                                     if background_error.is_none() {
@@ -527,7 +542,6 @@ impl Batcher {
             &self.config,
             &self.metrics,
             &self.flush_mutex,
-            Some(&self.background_results),
         )
         .await
     }
@@ -560,7 +574,6 @@ impl Batcher {
         config: &BatcherConfig,
         metrics: &BatcherMetrics,
         flush_mutex: &Mutex<()>,
-        result_history: Option<&Mutex<Vec<IngestionResponse>>>,
     ) -> Result<IngestionResponse> {
         // Prevent concurrent flushes
         let _guard = flush_mutex.lock().await;
@@ -722,17 +735,6 @@ impl Batcher {
             success_count: all_success_ids.len(),
             failure_count: all_failures.len(),
         };
-        if let Some(result_history) = result_history {
-            if response.success_count > 0 || response.failure_count > 0 {
-                result_history.lock().await.push(IngestionResponse {
-                    success_ids: response.success_ids.clone(),
-                    failures: response.failures.clone(),
-                    success_count: response.success_count,
-                    failure_count: response.failure_count,
-                });
-            }
-        }
-
         Ok(response)
     }
 
@@ -1016,6 +1018,7 @@ impl Batcher {
     /// - Marks the batcher as shutting down (rejecting new events)
     /// - Flushes all pending events
     /// - Waits for in-flight retries to complete
+    /// - Returns outcomes for the shutdown drain; prior flush counts remain in metrics
     /// - Is idempotent (can be called multiple times safely)
     pub async fn shutdown(self) -> Result<IngestionResponse> {
         // Check if already shutting down (idempotent)
@@ -1042,14 +1045,18 @@ impl Batcher {
         // Drain every requeued partial failure. Each retry increments the
         // event's retry_count, so this loop is bounded by max_retries.
         let background_error = self.background_error.lock().await.take();
-        let background_results = {
-            let mut results = self.background_results.lock().await;
-            std::mem::take(&mut *results)
-        };
         let mut success_ids = Vec::new();
+        let mut success_id_set = HashSet::new();
         let mut failures = Vec::new();
-        for response in background_results {
-            merge_ingestion_response(&mut success_ids, &mut failures, response);
+        let mut failure_indexes = HashMap::new();
+        if let Some(response) = self.shutdown_overlap_result.lock().await.take() {
+            merge_ingestion_response(
+                &mut success_ids,
+                &mut success_id_set,
+                &mut failures,
+                &mut failure_indexes,
+                response,
+            );
         }
         loop {
             let response = Self::flush_buffer(
@@ -1059,17 +1066,23 @@ impl Batcher {
                 &self.config,
                 &self.metrics,
                 &self.flush_mutex,
-                None,
             )
             .await?;
 
-            merge_ingestion_response(&mut success_ids, &mut failures, response);
+            merge_ingestion_response(
+                &mut success_ids,
+                &mut success_id_set,
+                &mut failures,
+                &mut failure_indexes,
+                response,
+            );
 
             if self.metrics.queued.load(Ordering::Relaxed) == 0 {
                 break;
             }
         }
 
+        let failures: Vec<EventError> = failures.into_iter().flatten().collect();
         let flush_result = Ok(IngestionResponse {
             success_count: success_ids.len(),
             failure_count: failures.len(),
