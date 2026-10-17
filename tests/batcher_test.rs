@@ -454,12 +454,13 @@ async fn characterize_partial_retry_shutdown(
         let metrics = batcher.metrics();
         assert_eq!(metrics.queued, 1, "the 207 failure is queued for retry");
         assert_eq!(metrics.flushed, 1);
-        // Current metrics count retryable responses as failures, even though
-        // BatcherMetricsSnapshot documents failed as terminal event failures.
-        assert_eq!(metrics.failed, 1);
         assert_eq!(
-            metrics.retries, 0,
-            "207 requeues bypass transport retry metrics"
+            metrics.failed, 0,
+            "retryable events are not failed until retries are exhausted"
+        );
+        assert_eq!(
+            metrics.retries, 1,
+            "retry scheduling is counted even before the retry is sent"
         );
         assert_eq!(metrics.dropped, 0);
         assert_eq!(requests.lock().unwrap().len(), 1);
@@ -489,23 +490,27 @@ async fn test_shutdown_207_recovery_in_final_flush() {
 }
 
 #[tokio::test]
-async fn test_shutdown_207_background_success_is_absent_from_result() {
+async fn test_shutdown_207_includes_background_success_in_result() {
     let (result, requests) = characterize_partial_retry_shutdown(Some(2)).await;
     assert_eq!(requests.len(), 2);
-    // The background shutdown flush succeeds, but only the empty final flush
-    // contributes to shutdown's response. This characterizes the current API.
-    assert!(result.success_ids.is_empty());
-    assert_eq!(result.success_count, 0);
+    assert_eq!(result.success_ids, ["retryable"]);
+    assert_eq!(result.success_count, 1);
     assert_eq!(result.failure_count, 0);
 }
 
 #[tokio::test]
-async fn test_shutdown_207_stops_before_recovery_on_last_allowed_attempt() {
+async fn test_shutdown_207_recovers_on_last_allowed_attempt() {
     let (result, requests) = characterize_partial_retry_shutdown(Some(4)).await;
-    // Diagnostic characterization (LE04), not the desired contract: with three
-    // retries the fourth request is allowed and would succeed, but shutdown
-    // makes only two more passes after our initial flush. LE05 owns the fix.
-    assert_eq!(requests.len(), 3);
+    assert_eq!(requests.len(), 4, "initial attempt plus three retries");
+    assert_eq!(result.success_ids, ["retryable"]);
+    assert_eq!(result.success_count, 1);
+    assert_eq!(result.failure_count, 0);
+}
+
+#[tokio::test]
+async fn test_shutdown_207_always_failing_exhausts_retry_budget() {
+    let (result, requests) = characterize_partial_retry_shutdown(None).await;
+    assert_eq!(requests.len(), 4, "initial attempt plus three retries");
     assert!(result.success_ids.is_empty());
     assert_eq!(result.success_count, 0);
     assert_eq!(result.failure_count, 1);
@@ -514,14 +519,42 @@ async fn test_shutdown_207_stops_before_recovery_on_last_allowed_attempt() {
 }
 
 #[tokio::test]
-async fn test_shutdown_207_always_failing_stops_before_retry_budget() {
-    let (result, requests) = characterize_partial_retry_shutdown(None).await;
-    // Bounded completion alone is insufficient: the last allowed attempt was
-    // skipped. The returned Ok contains a retryable failure, not full success.
-    assert_eq!(requests.len(), 3);
-    assert!(result.success_ids.is_empty());
-    assert_eq!(result.success_count, 0);
-    assert_eq!(result.failure_count, 1);
-    assert_eq!(result.failures[0].event_id, "retryable");
-    assert!(result.failures[0].retryable);
+async fn test_shutdown_propagates_auth_failure_from_drain() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+
+        let mut server = Server::new_async().await;
+        let mock = server
+            .mock("POST", "/api/public/ingestion")
+            .with_status(401)
+            .with_body(r#"{"error":"invalid credentials"}"#)
+            .expect(1)
+            .create_async()
+            .await;
+        let batcher = Batcher::builder()
+            .client(create_mock_client(&server))
+            .flush_interval(Duration::from_secs(3600))
+            .build()
+            .await;
+        let event = TraceEvent1 {
+            body: Box::new(TraceBody::default()),
+            id: "auth-failure".to_owned(),
+            timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
+            metadata: None,
+            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+        };
+        batcher
+            .add(IngestionEvent::TraceEvent1(Box::new(event)))
+            .await
+            .unwrap();
+
+        let result = batcher.shutdown().await;
+        assert!(matches!(
+            result,
+            Err(langfuse_ergonomic::Error::Auth { .. })
+        ));
+        mock.assert_async().await;
+    })
+    .await
+    .expect("shutdown must surface a drain error within five seconds");
 }

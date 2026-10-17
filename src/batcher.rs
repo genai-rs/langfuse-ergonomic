@@ -362,8 +362,8 @@ impl Batcher {
                             }
                         }
 
-                        // Final flush before shutdown
-                        let _ = Self::flush_buffer(&client, &buffer, &buffer_size_clone, &config, &metrics_clone, &flush_mutex_clone).await;
+                        // The shutdown caller drains retryable work after this
+                        // task exits so it can return every pass's results.
                         break;
                     }
                 }
@@ -551,23 +551,23 @@ impl Batcher {
                     metrics
                         .flushed
                         .fetch_add(response.success_count as u64, Ordering::Relaxed);
-                    metrics
-                        .failed
-                        .fetch_add(response.failure_count as u64, Ordering::Relaxed);
-
                     all_success_ids.extend(response.success_ids.clone());
 
                     // Queue retryable failures
                     for failure in &response.failures {
                         if failure.retryable {
-                            if let Some(event) =
-                                events.iter_mut().find(|e| e.id == failure.event_id)
-                            {
-                                if event.retry_count < config.max_retries {
+                            match events.iter_mut().find(|e| e.id == failure.event_id) {
+                                Some(event) if event.retry_count < config.max_retries => {
                                     event.retry_count += 1;
                                     retry_queue.push(event.clone());
+                                    metrics.retries.fetch_add(1, Ordering::Relaxed);
+                                }
+                                _ => {
+                                    metrics.failed.fetch_add(1, Ordering::Relaxed);
                                 }
                             }
+                        } else {
+                            metrics.failed.fetch_add(1, Ordering::Relaxed);
                         }
                     }
                     all_failures.extend(response.failures);
@@ -940,16 +940,61 @@ impl Batcher {
         // Signal shutdown to background task
         let _ = self.shutdown_tx.send(()).await;
 
-        // Wait for background task to finish deterministically
+        // Wait for the background task to finish deterministically. The task
+        // drains the sender channel before exiting; propagate panics instead
+        // of silently returning a successful shutdown result.
         if let Some(handle) = {
             let mut handle_guard = self.task_handle.lock().await;
             handle_guard.take()
         } {
-            let _ = handle.await;
+            handle.await.map_err(|error| {
+                Error::Api(format!("Batcher task failed during shutdown: {error}"))
+            })?;
         }
 
-        // Final flush after task has stopped
-        let flush_result = self.flush().await;
+        // Drain every requeued partial failure. Each retry increments the
+        // event's retry_count, so this loop is bounded by max_retries.
+        let mut success_ids = Vec::new();
+        let mut failures = Vec::new();
+        loop {
+            let response = Self::flush_buffer(
+                &self.client,
+                &self.buffer,
+                &self.buffer_size,
+                &self.config,
+                &self.metrics,
+                &self.flush_mutex,
+            )
+            .await?;
+
+            for id in response.success_ids {
+                if !success_ids.contains(&id) {
+                    success_ids.push(id.clone());
+                }
+                failures.retain(|failure: &EventError| failure.event_id != id);
+            }
+            for failure in response.failures {
+                if let Some(existing) = failures
+                    .iter_mut()
+                    .find(|existing: &&mut EventError| existing.event_id == failure.event_id)
+                {
+                    *existing = failure;
+                } else {
+                    failures.push(failure);
+                }
+            }
+
+            if self.metrics.queued.load(Ordering::Relaxed) == 0 {
+                break;
+            }
+        }
+
+        let flush_result = Ok(IngestionResponse {
+            success_count: success_ids.len(),
+            failure_count: failures.len(),
+            success_ids,
+            failures,
+        });
 
         // Log final metrics
         let final_metrics = self.metrics.snapshot();
@@ -1004,5 +1049,67 @@ mod tests {
         assert_eq!(chunks.len(), 2);
         assert_eq!(chunks[0].len(), 2); // Max 2 events per chunk
         assert_eq!(chunks[1].len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod shutdown_retry_tests {
+    use super::*;
+    use crate::ClientBuilder;
+    use langfuse_client_base::models::{TraceBody, TraceEvent1};
+
+    #[tokio::test]
+    async fn shutdown_exhausts_207_retries_and_clears_queue() {
+        tokio::time::timeout(Duration::from_secs(5), async {
+            let mut server = mockito::Server::new_async().await;
+            let mock = server
+                .mock("POST", "/api/public/ingestion")
+                .with_status(207)
+                .with_body(r#"{"successes":[],"errors":[{"id":"retryable","status":503,"message":"retry me"}]}"#)
+                .expect(4)
+                .create_async()
+                .await;
+            let client = ClientBuilder::new()
+                .public_key("pk-test")
+                .secret_key("sk-test")
+                .base_url(server.url())
+                .build()
+                .unwrap();
+            let batcher = Batcher::builder()
+                .client(client)
+                .max_events(100)
+                .flush_interval(Duration::from_secs(3600))
+                .max_retries(3)
+                .retry_jitter(false)
+                .initial_retry_delay(Duration::from_millis(1))
+                .max_retry_delay(Duration::from_millis(1))
+                .build()
+                .await;
+            let metrics = Arc::clone(&batcher.metrics);
+            let buffer = Arc::clone(&batcher.buffer);
+            let event = TraceEvent1 {
+                body: Box::new(TraceBody::default()),
+                id: "retryable".to_owned(),
+                timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
+                metadata: None,
+                r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+            };
+            batcher
+                .add(IngestionEvent::TraceEvent1(Box::new(event)))
+                .await
+                .unwrap();
+
+            let result = batcher.shutdown().await.unwrap();
+            assert_eq!(result.failure_count, 1);
+            assert_eq!(result.failures[0].event_id, "retryable");
+            let metrics = metrics.snapshot();
+            assert_eq!(metrics.queued, 0);
+            assert_eq!(metrics.failed, 1);
+            assert_eq!(metrics.retries, 3);
+            assert!(buffer.lock().await.is_empty());
+            mock.assert_async().await;
+        })
+        .await
+        .expect("shutdown retries must finish within five seconds");
     }
 }
