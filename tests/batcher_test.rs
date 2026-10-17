@@ -459,8 +459,8 @@ async fn characterize_partial_retry_shutdown(
             "retryable events are not failed until retries are exhausted"
         );
         assert_eq!(
-            metrics.retries, 1,
-            "retry scheduling is counted even before the retry is sent"
+            metrics.retries, 0,
+            "only retries that were sent are counted"
         );
         assert_eq!(metrics.dropped, 0);
         assert_eq!(requests.lock().unwrap().len(), 1);
@@ -557,4 +557,203 @@ async fn test_shutdown_propagates_auth_failure_from_drain() {
     })
     .await
     .expect("shutdown must surface a drain error within five seconds");
+}
+
+#[tokio::test]
+async fn test_shutdown_transport_failure_respects_total_retry_budget() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+
+        let mut server = Server::new_async().await;
+        let mock = server
+            .mock("POST", "/api/public/ingestion")
+            .with_status(429)
+            .with_body(r#"{"error":"unavailable"}"#)
+            .expect(4)
+            .create_async()
+            .await;
+        let batcher = Batcher::builder()
+            .client(create_mock_client(&server))
+            .max_retries(3)
+            .initial_retry_delay(Duration::from_millis(1))
+            .max_retry_delay(Duration::from_millis(1))
+            .retry_jitter(false)
+            .flush_interval(Duration::from_secs(3600))
+            .build()
+            .await;
+        let event = TraceEvent1 {
+            body: Box::new(TraceBody::default()),
+            id: "transport-failure".to_owned(),
+            timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
+            metadata: None,
+            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+        };
+        batcher
+            .add(IngestionEvent::TraceEvent1(Box::new(event)))
+            .await
+            .unwrap();
+
+        let result = batcher.shutdown().await.unwrap();
+        assert_eq!(result.failure_count, 1);
+        assert_eq!(result.failures[0].event_id, "transport-failure");
+        mock.assert_async().await;
+    })
+    .await
+    .expect("transport retries must finish within five seconds");
+}
+
+#[tokio::test]
+async fn test_shutdown_mixed_failures_share_retry_budget() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+        use std::sync::{Arc, Mutex};
+
+        let mut server = Server::new_async().await;
+        let request_ids = Arc::new(Mutex::new(Vec::new()));
+        let recorded = Arc::clone(&request_ids);
+        let status_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let status_requests = Arc::clone(&status_counter);
+        let body_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let body_requests = Arc::clone(&body_counter);
+        let mock = server
+            .mock("POST", "/api/public/ingestion")
+            .with_status_code_from_request(move |_| {
+                if status_requests.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                    207
+                } else {
+                    429
+                }
+            })
+            .with_body_from_request(move |request| {
+                let body: serde_json::Value = serde_json::from_slice(request.body().unwrap()).unwrap();
+                let id = body["batch"][0]["id"].as_str().unwrap().to_owned();
+                recorded.lock().unwrap().push(id);
+                if body_requests.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                    r#"{"successes":[],"errors":[{"id":"mixed-failure","status":503,"message":"partial"}]}"#.as_bytes().to_vec()
+                } else {
+                    r#"{"error":"unavailable"}"#.as_bytes().to_vec()
+                }
+            })
+            .expect(4)
+            .create_async()
+            .await;
+        let batcher = Batcher::builder()
+            .client(create_mock_client(&server))
+            .max_events(100)
+            .max_retries(3)
+            .initial_retry_delay(Duration::from_millis(1))
+            .max_retry_delay(Duration::from_millis(1))
+            .retry_jitter(false)
+            .flush_interval(Duration::from_secs(3600))
+            .build()
+            .await;
+        let event = TraceEvent1 {
+            body: Box::new(TraceBody::default()),
+            id: "mixed-failure".to_owned(),
+            timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
+            metadata: None,
+            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+        };
+        batcher
+            .add(IngestionEvent::TraceEvent1(Box::new(event)))
+            .await
+            .unwrap();
+
+        let result = batcher.shutdown().await.unwrap();
+        assert_eq!(request_ids.lock().unwrap().len(), 4);
+        assert_eq!(result.failure_count, 1);
+        assert_eq!(result.failures[0].event_id, "mixed-failure");
+        mock.assert_async().await;
+    })
+    .await
+    .expect("mixed failures must respect the retry budget");
+}
+
+#[tokio::test]
+async fn test_shutdown_returns_prior_background_flush_success() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+
+        let mut server = Server::new_async().await;
+        let mock = server
+            .mock("POST", "/api/public/ingestion")
+            .with_status(200)
+            .with_body(r#"{"success":true}"#)
+            .expect(1)
+            .create_async()
+            .await;
+        let batcher = Batcher::builder()
+            .client(create_mock_client(&server))
+            .max_events(1)
+            .flush_interval(Duration::from_secs(3600))
+            .build()
+            .await;
+        let event = TraceEvent1 {
+            body: Box::new(TraceBody::default()),
+            id: "background-success".to_owned(),
+            timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
+            metadata: None,
+            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+        };
+        batcher
+            .add(IngestionEvent::TraceEvent1(Box::new(event)))
+            .await
+            .unwrap();
+        while !mock.matched() {
+            tokio::task::yield_now().await;
+        }
+
+        let result = batcher.shutdown().await.unwrap();
+        assert_eq!(result.success_ids, ["background-success"]);
+        assert_eq!(result.success_count, 1);
+        assert_eq!(result.failure_count, 0);
+        mock.assert_async().await;
+    })
+    .await
+    .expect("background flush and shutdown must finish within five seconds");
+}
+
+#[tokio::test]
+async fn test_shutdown_surfaces_prior_background_flush_error() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+
+        let mut server = Server::new_async().await;
+        let mock = server
+            .mock("POST", "/api/public/ingestion")
+            .with_status(401)
+            .with_body(r#"{"error":"invalid credentials"}"#)
+            .expect(1)
+            .create_async()
+            .await;
+        let batcher = Batcher::builder()
+            .client(create_mock_client(&server))
+            .max_events(1)
+            .flush_interval(Duration::from_secs(3600))
+            .build()
+            .await;
+        let event = TraceEvent1 {
+            body: Box::new(TraceBody::default()),
+            id: "background-auth-failure".to_owned(),
+            timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
+            metadata: None,
+            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+        };
+        batcher
+            .add(IngestionEvent::TraceEvent1(Box::new(event)))
+            .await
+            .unwrap();
+        while !mock.matched() {
+            tokio::task::yield_now().await;
+        }
+
+        let result = batcher.shutdown().await;
+        assert!(matches!(
+            result,
+            Err(langfuse_ergonomic::Error::Auth { .. })
+        ));
+        mock.assert_async().await;
+    })
+    .await
+    .expect("background worker errors must be surfaced within five seconds");
 }
