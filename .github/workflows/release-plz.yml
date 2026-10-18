@@ -10,13 +10,22 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch: # Allow manual triggering
+  workflow_dispatch:
+    inputs:
+      release_action:
+        description: Prepare a release PR or explicitly publish an already prepared release
+        required: true
+        type: choice
+        default: prepare
+        options:
+          - prepare
+          - publish
 
 jobs:
-  release-plz:
-    name: Release-plz
+  release-pr:
+    name: Prepare release PR
+    if: github.event_name == 'push' || (github.ref == 'refs/heads/main' && inputs.release_action == 'prepare')
     runs-on: ubuntu-latest
-    # Explicitly set permissions at job level too
     permissions:
       contents: write
       pull-requests: write
@@ -27,11 +36,10 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-          
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      # Mint short-lived GitHub App token so the release branch push triggers CI
       - name: Create GitHub App token
         id: app-token
         uses: actions/create-github-app-token@v3
@@ -39,8 +47,50 @@ jobs:
           client-id: ${{ secrets.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_PRIVATE_KEY }}
         
-      - name: Run release-plz
+      - name: Run release-plz release-pr
         uses: MarcoIeni/release-plz-action@v0.5
+        with:
+          command: release-pr
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Assert App token present
+        run: |
+          if [ -z "${{ steps.app-token.outputs.token }}" ]; then
+            echo "GitHub App token missing. Ensure BOT_APP_ID and BOT_PRIVATE_KEY are configured." >&2
+            exit 1
+          fi
+
+  publish:
+    name: Publish release
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_action == 'publish'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - name: Checkout dispatch commit
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
+      - name: Run release-plz release
+        uses: MarcoIeni/release-plz-action@v0.5
+        with:
+          command: release
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
