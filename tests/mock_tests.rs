@@ -1,7 +1,7 @@
 //! Mock tests for offline development and testing without API credentials
 
 use langfuse_ergonomic::{ClientBuilder, Error, LangfuseClient, ObservationsViews};
-use mockito::Server;
+use mockito::{Matcher, Server};
 use serde_json::json;
 
 /// Helper to create a mock client pointing to a mockito server
@@ -124,6 +124,121 @@ async fn test_create_chat_prompt_preserves_mixed_messages() {
         serde_json::to_value(response).unwrap()["prompt"],
         json!(messages)
     );
+}
+
+#[tokio::test]
+async fn dataset_schemas_preserve_objects_and_reject_non_objects() {
+    let mut server = Server::new_async().await;
+    let client = create_mock_client(&server);
+    let input_schema = json!({"type": "object", "properties": {"query": {"type": "string"}}});
+    let expected_output_schema =
+        json!({"type": "object", "properties": {"answer": {"type": "integer"}}});
+    let objects = server
+        .mock("POST", "/api/public/v2/datasets")
+        .match_body(Matcher::Json(json!({
+            "name": "objects",
+            "inputSchema": input_schema,
+            "expectedOutputSchema": expected_output_schema
+        })))
+        .with_status(201)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"id":"dataset-1","name":"test","description":null,"metadata":null,"inputSchema":null,"expectedOutputSchema":null,"projectId":"project-1","createdAt":"2026-10-03T12:00:00Z","updatedAt":"2026-10-03T12:00:00Z"}"#)
+        .create_async()
+        .await;
+    client
+        .create_dataset()
+        .name("objects")
+        .input_schema(input_schema)
+        .expected_output_schema(expected_output_schema)
+        .call()
+        .await
+        .unwrap();
+    objects.assert_async().await;
+
+    let nulls = server
+        .mock("POST", "/api/public/v2/datasets")
+        .match_body(Matcher::Json(json!({
+            "name": "nulls",
+            "inputSchema": null,
+            "expectedOutputSchema": null
+        })))
+        .with_status(201)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"id":"dataset-1","name":"nulls","description":null,"metadata":null,"inputSchema":null,"expectedOutputSchema":null,"projectId":"project-1","createdAt":"2026-10-03T12:00:00Z","updatedAt":"2026-10-03T12:00:00Z"}"#)
+        .create_async()
+        .await;
+    client
+        .create_dataset()
+        .name("nulls")
+        .input_schema(json!(null))
+        .expected_output_schema(json!(null))
+        .call()
+        .await
+        .unwrap();
+    nulls.assert_async().await;
+
+    let omitted = server
+        .mock("POST", "/api/public/v2/datasets")
+        .match_body(Matcher::Json(json!({"name": "omitted"})))
+        .with_status(201)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"id":"dataset-1","name":"omitted","description":null,"metadata":null,"inputSchema":null,"expectedOutputSchema":null,"projectId":"project-1","createdAt":"2026-10-03T12:00:00Z","updatedAt":"2026-10-03T12:00:00Z"}"#)
+        .create_async()
+        .await;
+    client
+        .create_dataset()
+        .name("omitted")
+        .call()
+        .await
+        .unwrap();
+    omitted.assert_async().await;
+
+    let invalid = server
+        .mock("POST", "/api/public/v2/datasets")
+        .expect(0)
+        .create_async()
+        .await;
+    let errors = [
+        client
+            .create_dataset()
+            .name("private-dataset")
+            .input_schema(json!("private-input-schema"))
+            .call()
+            .await
+            .unwrap_err(),
+        client
+            .create_dataset()
+            .name("private-dataset")
+            .input_schema(json!(true))
+            .call()
+            .await
+            .unwrap_err(),
+        client
+            .create_dataset()
+            .name("private-dataset")
+            .expected_output_schema(json!(["private-output-schema"]))
+            .call()
+            .await
+            .unwrap_err(),
+        client
+            .create_dataset()
+            .name("private-dataset")
+            .expected_output_schema(json!([]))
+            .call()
+            .await
+            .unwrap_err(),
+    ];
+    for error in errors {
+        assert!(matches!(
+            &error,
+            Error::Validation(message)
+                if message == "Dataset schema must be a JSON object or null"
+        ));
+        let diagnostics = format!("{error:?}");
+        assert!(!diagnostics.contains("private-input-schema"));
+        assert!(!diagnostics.contains("private-output-schema"));
+    }
+    invalid.assert_async().await;
 }
 
 #[tokio::test]
