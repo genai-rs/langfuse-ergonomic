@@ -226,7 +226,10 @@ async fn single_observation_decodes_typed_dates_and_usage() {
     assert_eq!(observation.usage_details["total"], 1540);
     assert_eq!(observation.usage.total, 1540);
     assert_eq!(observation.cost_details["total"], 0.01);
-    assert_eq!(observation.metadata["source"], "test");
+    assert_eq!(
+        serde_json::to_value(&observation.metadata).unwrap(),
+        json!({"source": "test"})
+    );
 }
 
 #[tokio::test]
