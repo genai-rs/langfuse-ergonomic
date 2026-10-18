@@ -832,25 +832,41 @@ impl LangfuseClient {
         use langfuse_client_base::models::CreateDatasetRequest;
 
         let parse_schema = |value: Value| {
-            if value.is_null() {
-                return Ok(None);
+            if value.is_null() || value.is_object() {
+                Ok(value)
+            } else {
+                // Keep diagnostics independent of caller-provided schema contents.
+                Err(Error::Validation(
+                    "Dataset schema must be a JSON object or null".to_string(),
+                ))
             }
-            serde_json::from_value::<std::collections::HashMap<String, Value>>(value)
-                .map(Some)
-                .map_err(|e| {
-                    Error::Validation(format!("Dataset schema must be a JSON object: {e}"))
-                })
         };
         let input_schema = input_schema.map(parse_schema).transpose()?;
         let expected_output_schema = expected_output_schema.map(parse_schema).transpose()?;
 
-        let request = CreateDatasetRequest {
-            name,
-            description: description.map(Some),
-            metadata: metadata.map(Some),
-            input_schema,
-            expected_output_schema,
-        };
+        // The published client-base model uses a HashMap for these fields,
+        // while generated source revisions use serde_json::Value. Deserialize
+        // the wire representation so both supported model shapes remain usable.
+        let mut request_body = serde_json::Map::new();
+        request_body.insert("name".to_string(), Value::String(name));
+        if let Some(description) = description {
+            request_body.insert("description".to_string(), Value::String(description));
+        }
+        if let Some(metadata) = metadata {
+            request_body.insert("metadata".to_string(), metadata);
+        }
+        if let Some(input_schema) = input_schema {
+            request_body.insert("inputSchema".to_string(), input_schema);
+        }
+        if let Some(expected_output_schema) = expected_output_schema {
+            request_body.insert("expectedOutputSchema".to_string(), expected_output_schema);
+        }
+        let request = serde_json::from_value::<CreateDatasetRequest>(Value::Object(request_body))
+            .map_err(|_| {
+            Error::Validation(
+                "Dataset request is incompatible with the available API model".to_string(),
+            )
+        })?;
 
         datasets_api::datasets_create()
             .configuration(self.configuration())
