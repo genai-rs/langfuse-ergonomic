@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.7.0...v0.7.1) - 2026-10-18
+
+### Fixed
+
+- preserve dataset schemas across client models
+- bound shutdown result tracking
+- reconcile ordered batcher flush results
+- drain batcher shutdown retries
+- drain bounded retries during shutdown
+- reject invalid chat prompt messages before HTTP
+- *(deps)* keep Renovate updates within Rust 1.88
+- patch locked security dependencies and audit committed lockfile
+
+### Other
+
+- support optional observation metadata model
+- gate Langfuse release publication
+- characterize shutdown retry loss on partial failures
+- *(deps)* Update rust minor updates
+- *(deps)* Update rust patch updates
+
 ## [0.7.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.6.4...v0.7.0) - 2026-10-03
 
 ### Fixed
