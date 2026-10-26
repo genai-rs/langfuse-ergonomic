@@ -137,28 +137,25 @@ impl LangfuseClient {
         connect_timeout: Option<Duration>,
         user_agent: Option<String>,
         http_client: Option<reqwest_middleware::ClientWithMiddleware>,
-    ) -> Self {
-        // Use provided client or build a default one
-        let client = http_client.unwrap_or_else(|| {
-            #[allow(unused_mut)]
-            let mut client_builder = reqwest::Client::builder()
-                .timeout(timeout.unwrap_or(DEFAULT_TIMEOUT))
-                .connect_timeout(connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT))
-                .pool_max_idle_per_host(10)
-                .pool_idle_timeout(Duration::from_secs(90));
+    ) -> Result<Self> {
+        let client = match http_client {
+            Some(client) => client,
+            None => {
+                #[allow(unused_mut)]
+                let mut client_builder = reqwest::Client::builder()
+                    .timeout(timeout.unwrap_or(DEFAULT_TIMEOUT))
+                    .connect_timeout(connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT))
+                    .pool_max_idle_per_host(10)
+                    .pool_idle_timeout(Duration::from_secs(90));
 
-            #[cfg(not(feature = "compression"))]
-            {
-                client_builder = client_builder.no_gzip().no_brotli().no_deflate();
+                #[cfg(not(feature = "compression"))]
+                {
+                    client_builder = client_builder.no_gzip().no_brotli().no_deflate();
+                }
+
+                finish_http_client(client_builder)?
             }
-
-            let reqwest_client = client_builder
-                .build()
-                .unwrap_or_else(|_| reqwest::Client::new());
-
-            // Wrap with middleware support
-            reqwest_middleware::ClientBuilder::new(reqwest_client).build()
-        });
+        };
 
         let default_user_agent = format!("{}/{} (Rust)", SDK_NAME, SDK_VERSION);
         let final_user_agent = user_agent.unwrap_or(default_user_agent);
@@ -173,13 +170,26 @@ impl LangfuseClient {
             user_agent: Some(final_user_agent),
         };
 
-        Self {
+        Ok(Self {
             public_key,
             secret_key,
             base_url,
             configuration,
-        }
+        })
     }
+}
+
+/// Build the HTTP client, surfacing failures instead of silently dropping the configured
+/// timeouts and connection settings.
+fn finish_http_client(
+    builder: reqwest::ClientBuilder,
+) -> Result<reqwest_middleware::ClientWithMiddleware> {
+    let reqwest_client = builder
+        .build()
+        .map_err(|e| Error::Configuration(format!("failed to build HTTP client: {e}")))?;
+
+    // Wrap with middleware support
+    Ok(reqwest_middleware::ClientBuilder::new(reqwest_client).build())
 }
 
 /// Builder for [`LangfuseClient`], mirroring the style of `opentelemetry-langfuse`.
@@ -303,7 +313,7 @@ impl ClientBuilder {
             .base_url
             .unwrap_or_else(|| "https://cloud.langfuse.com".to_string());
 
-        Ok(LangfuseClient::build_internal(
+        LangfuseClient::build_internal(
             public_key,
             secret_key,
             base_url,
@@ -311,6 +321,22 @@ impl ClientBuilder {
             self.connect_timeout,
             self.user_agent,
             self.http_client,
-        ))
+        )
+    }
+}
+
+#[cfg(all(test, any(feature = "rustls", feature = "native-tls")))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn http_client_build_failure_is_an_error() {
+        // An unusable preconfigured TLS backend makes `reqwest::ClientBuilder::build` fail.
+        let builder = reqwest::Client::builder().use_preconfigured_tls(());
+        let err = finish_http_client(builder).unwrap_err();
+        assert!(
+            matches!(&err, Error::Configuration(msg) if msg.starts_with("failed to build HTTP client")),
+            "unexpected error: {err:?}"
+        );
     }
 }
