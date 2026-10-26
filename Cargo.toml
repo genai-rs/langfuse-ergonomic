@@ -108,6 +108,10 @@ path = "examples/advanced_features.rs"
 name = "http_middleware_retry"
 path = "examples/http_middleware_retry.rs"
 
+[[example]]
+name = "comprehensive_batch_test"
+path = "examples/comprehensive_batch_test.rs"
+
 
 [features]
 default = ["rustls"]
