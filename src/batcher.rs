@@ -566,7 +566,6 @@ impl Batcher {
     }
 
     /// Internal flush implementation
-    #[allow(clippy::too_many_lines)]
     async fn flush_buffer(
         client: &LangfuseClient,
         buffer: &Mutex<VecDeque<BatchEvent>>,
@@ -619,28 +618,14 @@ impl Batcher {
                         .fetch_add(response.success_count as u64, Ordering::Relaxed);
                     all_success_ids.extend(response.success_ids.clone());
 
-                    // Queue retryable failures
-                    for failure in &response.failures {
-                        if failure.retryable {
-                            match chunks[chunk_idx]
-                                .iter_mut()
-                                .find(|e| e.id == failure.event_id)
-                            {
-                                Some(event)
-                                    if event.retry_count + transport_retries
-                                        < config.max_retries =>
-                                {
-                                    event.retry_count += transport_retries + 1;
-                                    retry_queue.push(event.clone());
-                                }
-                                _ => {
-                                    metrics.failed.fetch_add(1, Ordering::Relaxed);
-                                }
-                            }
-                        } else {
-                            metrics.failed.fetch_add(1, Ordering::Relaxed);
-                        }
-                    }
+                    Self::queue_retryable_failures(
+                        &mut chunks[chunk_idx],
+                        &response.failures,
+                        transport_retries,
+                        config,
+                        metrics,
+                        &mut retry_queue,
+                    );
                     all_failures.extend(response.failures);
                     chunk_idx += 1;
                 }
@@ -660,37 +645,15 @@ impl Batcher {
                     // Don't increment chunk_idx, retry with smaller chunk
                 }
                 Err((e, _transport_retries)) if e.is_retryable() => {
-                    // Update error timestamp
-                    metrics.last_error_ts.store(
-                        std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_secs(),
-                        Ordering::Relaxed,
-                    );
+                    Self::record_error_timestamp(metrics);
 
                     // The per-event retry budget was exhausted by
                     // send_batch_with_retry; retain terminal failure details.
-                    for event in &chunk {
-                        all_failures.push(EventError {
-                            event_id: event.id.clone(),
-                            message: e.to_string(),
-                            code: None,
-                            retryable: true,
-                        });
-                        metrics.failed.fetch_add(1, Ordering::Relaxed);
-                    }
+                    Self::fail_chunk(&chunk, &e, true, metrics, &mut all_failures);
                     chunk_idx += 1;
                 }
                 Err((e, _transport_retries)) => {
-                    // Update error timestamp
-                    metrics.last_error_ts.store(
-                        std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_secs(),
-                        Ordering::Relaxed,
-                    );
+                    Self::record_error_timestamp(metrics);
 
                     // Always fail fast for auth errors
                     if matches!(e, Error::Auth { .. }) || config.fail_fast {
@@ -700,34 +663,13 @@ impl Batcher {
                         return Err(e);
                     }
                     // Convert to failures
-                    for event in &chunk {
-                        all_failures.push(EventError {
-                            event_id: event.id.clone(),
-                            message: e.to_string(),
-                            code: None,
-                            retryable: false,
-                        });
-                        metrics.failed.fetch_add(1, Ordering::Relaxed);
-                    }
+                    Self::fail_chunk(&chunk, &e, false, metrics, &mut all_failures);
                     chunk_idx += 1;
                 }
             }
         }
 
-        // Re-queue retry events
-        if !retry_queue.is_empty() {
-            // Calculate total size of retry events
-            let retry_size: usize = retry_queue.iter().map(|e| e.size).sum();
-
-            let mut buffer = buffer.lock().await;
-            buffer.extend(retry_queue.clone());
-
-            // Update both queued count and buffer size
-            metrics
-                .queued
-                .fetch_add(retry_queue.len() as u64, Ordering::Relaxed);
-            buffer_size.fetch_add(retry_size, Ordering::Relaxed);
-        }
+        Self::requeue_events(buffer, buffer_size, metrics, retry_queue).await;
 
         let response = IngestionResponse {
             success_ids: all_success_ids.clone(),
@@ -736,6 +678,86 @@ impl Batcher {
             failure_count: all_failures.len(),
         };
         Ok(response)
+    }
+
+    /// Record the time of the most recent error in the metrics.
+    fn record_error_timestamp(metrics: &BatcherMetrics) {
+        metrics.last_error_ts.store(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+            Ordering::Relaxed,
+        );
+    }
+
+    /// Queue the retryable failures of a 207 response for another attempt, counting the rest as
+    /// failed.
+    fn queue_retryable_failures(
+        chunk: &mut [BatchEvent],
+        failures: &[EventError],
+        transport_retries: u32,
+        config: &BatcherConfig,
+        metrics: &BatcherMetrics,
+        retry_queue: &mut Vec<BatchEvent>,
+    ) {
+        for failure in failures {
+            if failure.retryable {
+                match chunk.iter_mut().find(|e| e.id == failure.event_id) {
+                    Some(event) if event.retry_count + transport_retries < config.max_retries => {
+                        event.retry_count += transport_retries + 1;
+                        retry_queue.push(event.clone());
+                    }
+                    _ => {
+                        metrics.failed.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+            } else {
+                metrics.failed.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+
+    /// Record every event of a chunk as failed with the given error.
+    fn fail_chunk(
+        chunk: &[BatchEvent],
+        error: &Error,
+        retryable: bool,
+        metrics: &BatcherMetrics,
+        all_failures: &mut Vec<EventError>,
+    ) {
+        for event in chunk {
+            all_failures.push(EventError {
+                event_id: event.id.clone(),
+                message: error.to_string(),
+                code: None,
+                retryable,
+            });
+            metrics.failed.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// Put events that should be retried back on the buffer and update the counters.
+    async fn requeue_events(
+        buffer: &Mutex<VecDeque<BatchEvent>>,
+        buffer_size: &AtomicUsize,
+        metrics: &BatcherMetrics,
+        retry_queue: Vec<BatchEvent>,
+    ) {
+        if retry_queue.is_empty() {
+            return;
+        }
+
+        // Calculate total size of retry events
+        let retry_size: usize = retry_queue.iter().map(|e| e.size).sum();
+        let retry_count = retry_queue.len() as u64;
+
+        let mut buffer = buffer.lock().await;
+        buffer.extend(retry_queue);
+
+        // Update both queued count and buffer size
+        metrics.queued.fetch_add(retry_count, Ordering::Relaxed);
+        buffer_size.fetch_add(retry_size, Ordering::Relaxed);
     }
 
     /// Split events into chunks that fit size and count limits
@@ -837,8 +859,91 @@ impl Batcher {
         ))
     }
 
+    /// Parse the `Retry-After` header, either as seconds or as an HTTP-date.
+    fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
+        headers
+            .get("retry-after")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| {
+                // Try parsing as seconds (integer)
+                s.parse::<u64>().ok().or_else(|| {
+                    // Try parsing as HTTP-date (RFC2616)
+                    chrono::DateTime::parse_from_rfc2822(s).ok().and_then(|dt| {
+                        let now = chrono::Utc::now();
+                        let retry_time = dt.with_timezone(&chrono::Utc);
+                        if retry_time > now {
+                            Some((retry_time - now).num_seconds() as u64)
+                        } else {
+                            None
+                        }
+                    })
+                })
+            })
+            .map(Duration::from_secs)
+    }
+
+    /// Parse a 207 Multi-Status ingestion response into per-event successes and failures.
+    async fn parse_multi_status(response: reqwest::Response) -> Result<IngestionResponse> {
+        #[derive(serde::Deserialize)]
+        struct MultiStatusResponse {
+            successes: Vec<SuccessItem>,
+            errors: Vec<ErrorItem>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct SuccessItem {
+            id: String,
+            #[allow(dead_code)]
+            status: Option<u16>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct ErrorItem {
+            id: String,
+            status: Option<u16>,
+            error: Option<String>,
+            message: Option<String>,
+        }
+
+        let body = response
+            .text()
+            .await
+            .map_err(|e| Error::Api(format!("Failed to read 207 response: {e}")))?;
+
+        let multi_status: MultiStatusResponse = serde_json::from_str(&body)
+            .map_err(|e| Error::Api(format!("Failed to parse 207 response: {e}")))?;
+
+        let success_ids: Vec<String> = multi_status
+            .successes
+            .iter()
+            .map(|s| s.id.clone())
+            .collect();
+
+        let failures: Vec<EventError> = multi_status
+            .errors
+            .iter()
+            .map(|e| EventError {
+                event_id: e.id.clone(),
+                message: e
+                    .message
+                    .as_ref()
+                    .or(e.error.as_ref())
+                    .unwrap_or(&"Unknown error".to_string())
+                    .clone(),
+                code: e.status.map(|s| s.to_string()),
+                retryable: e.status.is_some_and(|s| s >= 500 || s == 429),
+            })
+            .collect();
+
+        Ok(IngestionResponse {
+            success_count: success_ids.len(),
+            failure_count: failures.len(),
+            success_ids,
+            failures,
+        })
+    }
+
     /// Send a single batch and handle 207 responses
-    #[allow(clippy::too_many_lines)]
     async fn send_batch_internal(
         client: &LangfuseClient,
         batch: IngestionBatchRequest,
@@ -881,67 +986,7 @@ impl Batcher {
                     failure_count: 0,
                 })
             }
-            207 => {
-                // Parse the 207 response body
-                #[derive(serde::Deserialize)]
-                struct MultiStatusResponse {
-                    successes: Vec<SuccessItem>,
-                    errors: Vec<ErrorItem>,
-                }
-
-                #[derive(serde::Deserialize)]
-                struct SuccessItem {
-                    id: String,
-                    #[allow(dead_code)]
-                    status: Option<u16>,
-                }
-
-                #[derive(serde::Deserialize)]
-                struct ErrorItem {
-                    id: String,
-                    status: Option<u16>,
-                    error: Option<String>,
-                    message: Option<String>,
-                }
-
-                // Multi-Status: Parse the response to identify partial failures
-                let body = response
-                    .text()
-                    .await
-                    .map_err(|e| Error::Api(format!("Failed to read 207 response: {e}")))?;
-
-                let multi_status: MultiStatusResponse = serde_json::from_str(&body)
-                    .map_err(|e| Error::Api(format!("Failed to parse 207 response: {e}")))?;
-
-                let success_ids: Vec<String> = multi_status
-                    .successes
-                    .iter()
-                    .map(|s| s.id.clone())
-                    .collect();
-
-                let failures: Vec<EventError> = multi_status
-                    .errors
-                    .iter()
-                    .map(|e| EventError {
-                        event_id: e.id.clone(),
-                        message: e
-                            .message
-                            .as_ref()
-                            .or(e.error.as_ref())
-                            .unwrap_or(&"Unknown error".to_string())
-                            .clone(),
-                        code: e.status.map(|s| s.to_string()),
-                        retryable: e.status.is_some_and(|s| s >= 500 || s == 429),
-                    })
-                    .collect();
-
-                Ok(IngestionResponse {
-                    success_count: success_ids.len(),
-                    failure_count: failures.len(),
-                    success_ids,
-                    failures,
-                })
-            }
+            207 => Self::parse_multi_status(response).await,
             401 | 403 => Err(Error::Auth {
                 message: response
                     .text()
@@ -967,26 +1012,7 @@ impl Batcher {
                 }
             }
             429 => {
-                let retry_after = response
-                    .headers()
-                    .get("retry-after")
-                    .and_then(|v| v.to_str().ok())
-                    .and_then(|s| {
-                        // Try parsing as seconds (integer)
-                        s.parse::<u64>().ok().or_else(|| {
-                            // Try parsing as HTTP-date (RFC2616)
-                            chrono::DateTime::parse_from_rfc2822(s).ok().and_then(|dt| {
-                                let now = chrono::Utc::now();
-                                let retry_time = dt.with_timezone(&chrono::Utc);
-                                if retry_time > now {
-                                    Some((retry_time - now).num_seconds() as u64)
-                                } else {
-                                    None
-                                }
-                            })
-                        })
-                    })
-                    .map(Duration::from_secs);
+                let retry_after = Self::parse_retry_after(response.headers());
 
                 Err(Error::RateLimit {
                     retry_after,
