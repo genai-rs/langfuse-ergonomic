@@ -87,22 +87,6 @@
       automerge: true,
     },
     {
-      description: 'Security updates - merge immediately',
-      matchUpdateTypes: [
-        'security',
-      ],
-      labels: [
-        'security',
-        'dependencies',
-      ],
-      automerge: true,
-      prPriority: 10,
-      schedule: [
-        'at any time',
-      ],
-      minimumReleaseAge: '0 days',
-    },
-    {
       description: 'Core dependencies',
       matchPackageNames: [
         'serde',
@@ -153,9 +137,15 @@
     enabled: true,
     labels: [
       'security',
+      'dependencies',
     ],
     assignees: [
       'timvw',
     ],
+    automerge: true,
+    schedule: [
+      'at any time',
+    ],
+    minimumReleaseAge: '0 days',
   },
 }
