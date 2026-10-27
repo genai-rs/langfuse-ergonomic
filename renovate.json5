@@ -1,158 +1,25 @@
 {
   $schema: 'https://docs.renovatebot.com/renovate-schema.json',
-  extends: [
-    'config:recommended',
-    ':dependencyDashboard',
-    ':semanticCommitTypeAll(chore)',
-    ':rebaseStalePrs',
-    ':prConcurrentLimit10',
-  ],
-  timezone: 'UTC',
-  schedule: [
-    'after 2am and before 6am on monday',
-  ],
-  enabledManagers: [
-    'cargo',
-    'github-actions',
-  ],
-  labels: [
-    'dependencies',
-  ],
-  commitMessagePrefix: 'chore(deps):',
-  prBodyTemplate: 'This PR updates dependencies. See the [Dependency Dashboard](../../issues) for details.',
-  rangeStrategy: 'auto',
-  lockFileMaintenance: {
-    enabled: true,
-    schedule: [
-      'after 2am and before 6am on monday',
-    ],
-    automerge: false,
-  },
+  extends: ['github>genai-rs/.github:renovate-default'],
   packageRules: [
     {
-      matchCategories: [
-        'rust',
-      ],
-      enabled: true,
-      rangeStrategy: 'bump',
-    },
-    {
       description: 'Keep UUID updates within the Rust 1.88 compatible range',
-      matchManagers: [
-        'cargo',
-      ],
-      matchPackageNames: [
-        'uuid',
-      ],
+      matchManagers: ['cargo'],
+      matchPackageNames: ['uuid'],
       allowedVersions: '<1.27.0',
       rangeStrategy: 'in-range-only',
     },
     {
-      description: 'Group all Rust patch updates',
-      matchManagers: [
-        'cargo',
-      ],
-      matchUpdateTypes: [
-        'patch',
-      ],
-      matchCurrentVersion: '>=1.0.0',
-      groupName: 'rust patch updates',
-      automerge: true,
-    },
-    {
-      description: 'Group all Rust minor updates',
-      matchManagers: [
-        'cargo',
-      ],
-      matchUpdateTypes: [
-        'minor',
-      ],
-      matchCurrentVersion: '>=1.0.0',
-      groupName: 'rust minor updates',
-      automerge: true,
-    },
-    {
-      description: 'Rust major updates - require manual review',
-      matchManagers: [
-        'cargo',
-      ],
-      matchUpdateTypes: [
-        'major',
-      ],
-      labels: [
-        'dependencies',
-        'breaking',
-      ],
-      automerge: false,
-    },
-    {
-      description: 'Group all GitHub Actions updates',
-      matchManagers: [
-        'github-actions',
-      ],
-      groupName: 'github-actions',
-      automerge: true,
-    },
-    {
       description: 'Core dependencies',
-      matchPackageNames: [
-        'serde',
-        'reqwest',
-        'tokio',
-        'bon',
-        'langfuse-client-base',
-      ],
-      labels: [
-        'dependencies',
-        'core',
-      ],
+      matchPackageNames: ['serde', 'reqwest', 'tokio', 'bon', 'langfuse-client-base'],
+      labels: ['dependencies', 'core'],
       automerge: true,
-    },
-    {
-      description: 'Dev dependencies - auto-merge all',
-      matchDepTypes: [
-        'devDependencies',
-      ],
-      automerge: true,
-      labels: [
-        'dependencies',
-        'dev',
-      ],
     },
     {
       description: 'Langfuse base client',
-      matchPackageNames: [
-        'langfuse-client-base',
-      ],
-      labels: [
-        'dependencies',
-        'langfuse-base',
-      ],
+      matchPackageNames: ['langfuse-client-base'],
+      labels: ['dependencies', 'langfuse-base'],
       automerge: true,
     },
-    {
-      description: 'Keep pre-1.0 Rust dependency updates isolated for review',
-      matchManagers: [
-        'cargo',
-      ],
-      matchCurrentVersion: '<1.0.0',
-      groupName: 'pre-1.0 Rust updates',
-      automerge: false,
-    },
   ],
-  vulnerabilityAlerts: {
-    enabled: true,
-    labels: [
-      'security',
-      'dependencies',
-    ],
-    assignees: [
-      'timvw',
-    ],
-    automerge: true,
-    schedule: [
-      'at any time',
-    ],
-    minimumReleaseAge: '0 days',
-  },
 }

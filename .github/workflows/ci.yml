@@ -2,75 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
-
-permissions:
-  contents: read
-  checks: write
-
-env:
-  CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
-  CARGO_INCREMENTAL: 0
-  CARGO_NET_RETRY: 10
-  RUSTUP_MAX_RETRIES: 10
 
 jobs:
-  # Main test suite with OS and Rust version matrix
-  test:
-    name: Test Suite (${{ matrix.os }} / ${{ matrix.rust }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        rust: [stable, beta, "1.88"]  # 1.88 is our MSRV
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-        
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.rust }}
-          components: rustfmt, clippy
-          
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: true
-          
-      - name: Check formatting
-        if: matrix.rust == 'stable'
-        run: cargo fmt --all -- --check
-        
-      - name: Run clippy
-        if: matrix.rust == 'stable'
-        run: cargo clippy --all-targets --all-features -- -D warnings
-        
-      - name: Build
-        run: cargo build --verbose --all-features
-        
-      - name: Run tests
-        run: cargo test --verbose --all-features
-        env:
-          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
-          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
-        
-      - name: Run tests (no default features)
-        run: cargo test --verbose --no-default-features
-        
-      - name: Build documentation
-        run: cargo doc --no-deps --all-features
-        env:
-          RUSTDOCFLAGS: "-D warnings"
-        
-      - name: Build examples
-        run: cargo build --examples --all-features
-  
+  ci:
+    uses: genai-rs/.github/.github/workflows/rust-ci.yml@main
+    with:
+      msrv: "1.88"
+    secrets: inherit
+
   # Feature combinations test
   features:
     name: Feature Combinations
@@ -79,73 +20,30 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-        
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        
+
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
-        
+
       - name: Test with no features
         run: cargo test --no-default-features
-        
+
       - name: Test with default features (rustls)
         run: cargo test
-        
+
       - name: Test with rustls explicitly
         run: cargo test --no-default-features --features rustls
-        
+
       - name: Test with native-tls
         run: cargo test --no-default-features --features native-tls
-        
+
       - name: Test with compression + rustls
         run: cargo test --features compression
-        
+
       - name: Test with compression + native-tls
         run: cargo test --no-default-features --features "compression,native-tls"
-        
+
       - name: Test with all features
         run: cargo test --all-features
-  
-  # Coverage (optional, informational only)
-  coverage:
-    name: Code Coverage
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    continue-on-error: true
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-        
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: llvm-tools-preview
-          
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-        
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-        
-      - name: Generate coverage
-        run: cargo llvm-cov --all-features --lcov --output-path lcov.info
-        env:
-          LANGFUSE_PUBLIC_KEY: test-key
-          LANGFUSE_SECRET_KEY: test-secret
-        
-      - name: Upload to Codecov
-        uses: codecov/codecov-action@v7
-        with:
-          files: lcov.info
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
-
-  semver:
-    name: semver-checks
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: obi1kenobi/cargo-semver-checks-action@v2
