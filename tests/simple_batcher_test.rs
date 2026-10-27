@@ -1,4 +1,5 @@
 //! Simple test to debug batching issues
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use langfuse_ergonomic::{Batcher, ClientBuilder};
 use mockito::Server;

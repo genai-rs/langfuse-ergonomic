@@ -1,4 +1,5 @@
 //! Example showing how to connect to a self-hosted Langfuse instance
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use chrono::Utc;
 use langfuse_ergonomic::ClientBuilder;

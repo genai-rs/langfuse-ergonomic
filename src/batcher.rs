@@ -1136,6 +1136,7 @@ impl Batcher {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
 
     #[test]
@@ -1177,6 +1178,7 @@ mod tests {
 
 #[cfg(test)]
 mod shutdown_retry_tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
     use crate::ClientBuilder;
     use langfuse_client_base::models::{TraceBody, TraceEvent1};

@@ -1,4 +1,5 @@
 //! Tests for batching and 207 Multi-Status handling
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use langfuse_ergonomic::{Batcher, BatcherConfig, ClientBuilder, LangfuseClient};
 use mockito::Server;

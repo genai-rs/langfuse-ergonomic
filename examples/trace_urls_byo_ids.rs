@@ -5,6 +5,7 @@
 //! - Use custom/deterministic IDs for traces and observations
 //! - Generate reproducible IDs from seeds
 //! - Create hierarchical ID structures
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use langfuse_ergonomic::{ClientBuilder, IdGenerator};
 use serde_json::json;

@@ -1,4 +1,5 @@
 //! Comprehensive test demonstrating batching, metrics, and error handling
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use chrono::Utc;
 use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};

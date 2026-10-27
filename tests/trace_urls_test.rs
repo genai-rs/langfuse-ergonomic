@@ -1,4 +1,5 @@
 //! Tests for Trace URLs and BYO IDs functionality
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use langfuse_ergonomic::{ClientBuilder, IdGenerator};
 use mockito::Server;
