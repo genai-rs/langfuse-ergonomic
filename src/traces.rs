@@ -103,7 +103,7 @@ impl IdGenerator {
         let mut hasher = DefaultHasher::new();
         seed.hash(&mut hasher);
         let hash = hasher.finish();
-        format!("{:016x}", hash)
+        format!("{hash:016x}")
     }
 }
 
@@ -301,7 +301,7 @@ impl LangfuseClient {
             .await
             .map(|_| ())
             .map_err(|e| {
-                crate::error::Error::Api(format!("Failed to delete trace '{}': {}", trace_id, e))
+                crate::error::Error::Api(format!("Failed to delete trace '{trace_id}': {e}"))
             })
     }
 
@@ -322,7 +322,7 @@ impl LangfuseClient {
             .await
             .map(|_| ())
             .map_err(|e| {
-                crate::error::Error::Api(format!("Failed to delete {} traces: {}", trace_count, e))
+                crate::error::Error::Api(format!("Failed to delete {trace_count} traces: {e}"))
             })
     }
 }

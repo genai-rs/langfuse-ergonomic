@@ -27,7 +27,7 @@ async fn main() -> Result<()> {
         .tags(vec!["greeting".to_string(), "welcome".to_string()])
         .call()
         .await?;
-    println!("Created text prompt: {:?}", text_prompt);
+    println!("Created text prompt: {text_prompt:?}");
 
     // Create a chat prompt
     let chat_prompt = client
@@ -51,7 +51,7 @@ async fn main() -> Result<()> {
         .tags(vec!["chat".to_string()])
         .call()
         .await?;
-    println!("Created chat prompt: {:?}", chat_prompt);
+    println!("Created chat prompt: {chat_prompt:?}");
 
     // Update prompt version labels
     let updated = client
@@ -61,7 +61,7 @@ async fn main() -> Result<()> {
         .labels(vec!["production".to_string(), "stable".to_string()])
         .call()
         .await?;
-    println!("Updated prompt version: {:?}", updated);
+    println!("Updated prompt version: {updated:?}");
 
     // ===== DATASET ITEM OPERATIONS =====
     println!("\nTesting Dataset Items...");
@@ -78,7 +78,7 @@ async fn main() -> Result<()> {
         }))
         .call()
         .await?;
-    println!("Created dataset: {:?}", dataset);
+    println!("Created dataset: {dataset:?}");
 
     // Add items to the dataset
     let item1 = client
@@ -96,7 +96,7 @@ async fn main() -> Result<()> {
         }))
         .call()
         .await?;
-    println!("Created dataset item 1: {:?}", item1);
+    println!("Created dataset item 1: {item1:?}");
 
     let item2 = client
         .create_dataset_item()
@@ -113,7 +113,7 @@ async fn main() -> Result<()> {
         }))
         .call()
         .await?;
-    println!("Created dataset item 2: {:?}", item2);
+    println!("Created dataset item 2: {item2:?}");
 
     // List dataset items
     let items = client
@@ -122,7 +122,7 @@ async fn main() -> Result<()> {
         .limit(10)
         .call()
         .await?;
-    println!("Listed dataset items: {:?}", items);
+    println!("Listed dataset items: {items:?}");
 
     // ===== OBSERVATION UPDATES =====
     println!("\nTesting Observation Updates...");
@@ -148,7 +148,7 @@ async fn main() -> Result<()> {
         .input(json!({"step": 1}))
         .call()
         .await?;
-    println!("Created span: {}", span);
+    println!("Created span: {span}");
 
     // Update the span
     let updated_span = client
@@ -161,7 +161,7 @@ async fn main() -> Result<()> {
         .status_message("Span successfully completed".to_string())
         .call()
         .await?;
-    println!("Updated span: {}", updated_span);
+    println!("Updated span: {updated_span}");
 
     // Create a generation
     let gen_id = Uuid::new_v4().to_string();
@@ -174,7 +174,7 @@ async fn main() -> Result<()> {
         .input(json!({"prompt": "Hello"}))
         .call()
         .await?;
-    println!("Created generation: {}", generation);
+    println!("Created generation: {generation}");
 
     // Update the generation
     let updated_gen = client
@@ -186,7 +186,7 @@ async fn main() -> Result<()> {
         .metadata(json!({"tokens": 10}))
         .call()
         .await?;
-    println!("Updated generation: {}", updated_gen);
+    println!("Updated generation: {updated_gen}");
 
     // Get observations
     let observations = client
@@ -195,7 +195,7 @@ async fn main() -> Result<()> {
         .limit(10)
         .call()
         .await?;
-    println!("Retrieved observations: {:?}", observations);
+    println!("Retrieved observations: {observations:?}");
 
     println!("\nAll advanced features tested successfully!");
 

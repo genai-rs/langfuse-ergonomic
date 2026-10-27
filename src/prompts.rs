@@ -46,7 +46,7 @@ impl LangfuseClient {
             .create_prompt_request(prompt_request)
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to create prompt: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to create prompt: {e}")))
     }
 
     /// Create a chat prompt with messages
@@ -95,7 +95,7 @@ impl LangfuseClient {
             .create_prompt_request(prompt_request)
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to create chat prompt: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to create chat prompt: {e}")))
     }
 
     /// Update labels for a specific prompt version
@@ -118,9 +118,7 @@ impl LangfuseClient {
             .prompt_version_update_request(update_request)
             .call()
             .await
-            .map_err(|e| {
-                crate::error::Error::Api(format!("Failed to update prompt version: {}", e))
-            })
+            .map_err(|e| crate::error::Error::Api(format!("Failed to update prompt version: {e}")))
     }
 
     /// Get a prompt by name and version
@@ -141,7 +139,7 @@ impl LangfuseClient {
             .maybe_label(label)
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to get prompt: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to get prompt: {e}")))
     }
 
     /// List prompts with filters
@@ -170,6 +168,6 @@ impl LangfuseClient {
             .maybe_limit(limit_num)
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to list prompts: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to list prompts: {e}")))
     }
 }

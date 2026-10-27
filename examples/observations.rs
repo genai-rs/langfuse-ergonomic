@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    println!("Created main span: {}", main_span_id);
+    println!("Created main span: {main_span_id}");
 
     // Create a nested span for preprocessing
     let preprocessing_span_id = client
@@ -46,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    println!("Created preprocessing span: {}", preprocessing_span_id);
+    println!("Created preprocessing span: {preprocessing_span_id}");
 
     // Log an event for an important milestone
     let event_id = client
@@ -60,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    println!("Created event: {}", event_id);
+    println!("Created event: {event_id}");
 
     // Create a generation for the LLM call
     let generation_id = client
@@ -87,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    println!("Created generation: {}", generation_id);
+    println!("Created generation: {generation_id}");
 
     // Create another event for post-processing
     let postprocess_event_id = client
@@ -102,7 +102,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    println!("Created post-processing event: {}", postprocess_event_id);
+    println!("Created post-processing event: {postprocess_event_id}");
 
     // Log an error event example
     let error_event_id = client
@@ -118,7 +118,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    println!("Created warning event: {}", error_event_id);
+    println!("Created warning event: {error_event_id}");
 
     println!("\nAll observations created successfully!");
     println!("View them in Langfuse dashboard for trace ID: {}", trace.id);

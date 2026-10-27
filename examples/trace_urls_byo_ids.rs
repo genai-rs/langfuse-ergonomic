@@ -58,8 +58,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let seed = "user-123:session-456:request-789";
     let deterministic_id = IdGenerator::from_seed(seed);
 
-    println!("   Seed: {}", seed);
-    println!("   Generated ID: {}", deterministic_id);
+    println!("   Seed: {seed}");
+    println!("   Generated ID: {deterministic_id}");
 
     // Create trace with deterministic ID
     let response = client
@@ -101,7 +101,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    println!("   Trace ID: {}", trace_id);
+    println!("   Trace ID: {trace_id}");
     println!("   Trace URL: {}", response.url());
 
     // Create related spans with hierarchical IDs
@@ -117,7 +117,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    println!("    Span 1 ID: {}", span1);
+    println!("    Span 1 ID: {span1}");
 
     let span2 = client
         .span()
@@ -129,7 +129,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    println!("       Span 2 ID: {}", span2);
+    println!("       Span 2 ID: {span2}");
     println!();
 
     // Example 5: Hash-based IDs for simple cases
@@ -138,8 +138,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let hash_seed = "simple-seed-123";
     let hash_id = IdGenerator::from_hash(hash_seed);
 
-    println!("   Hash seed: {}", hash_seed);
-    println!("   Hash ID: {}", hash_id);
+    println!("   Hash seed: {hash_seed}");
+    println!("   Hash ID: {hash_id}");
 
     // This is useful when you want shorter, simpler IDs
     let response = client
@@ -162,7 +162,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let idempotent_seed = format!("daily-report:{}", chrono::Utc::now().format("%Y-%m-%d"));
     let idempotent_id = IdGenerator::from_seed(&idempotent_seed);
 
-    println!("   Creating trace with ID from seed: {}", idempotent_seed);
+    println!("   Creating trace with ID from seed: {idempotent_seed}");
 
     // First creation
     let response1 = client

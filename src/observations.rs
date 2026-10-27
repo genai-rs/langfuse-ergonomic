@@ -72,7 +72,7 @@ impl LangfuseClient {
         self.ingest_events(vec![IngestionEvent::CreateSpanEvent1(Box::new(event))])
             .await
             .map(|_| observation_id)
-            .map_err(|e| crate::error::Error::Api(format!("Failed to create span: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to create span: {e}")))
     }
 
     /// Create a generation observation
@@ -152,7 +152,7 @@ impl LangfuseClient {
         ))])
         .await
         .map(|_| observation_id)
-        .map_err(|e| crate::error::Error::Api(format!("Failed to create generation: {}", e)))
+        .map_err(|e| crate::error::Error::Api(format!("Failed to create generation: {e}")))
     }
 
     /// Create an event observation
@@ -203,7 +203,7 @@ impl LangfuseClient {
         self.ingest_events(vec![IngestionEvent::CreateEventEvent1(Box::new(event))])
             .await
             .map(|_| observation_id)
-            .map_err(|e| crate::error::Error::Api(format!("Failed to create event: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to create event: {e}")))
     }
 
     // ===== OBSERVATION UPDATES AND RETRIEVAL =====
@@ -222,7 +222,7 @@ impl LangfuseClient {
             .observation_id(observation_id.as_str())
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to get observation: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to get observation: {e}")))
     }
 
     /// Get multiple observations
@@ -258,7 +258,7 @@ impl LangfuseClient {
             .maybe_name(name_ref)
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to get observations: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to get observations: {e}")))
     }
 
     /// Update an existing span
@@ -308,7 +308,7 @@ impl LangfuseClient {
 
         self.ingest_events(vec![IngestionEvent::UpdateSpanEvent1(Box::new(event))])
             .await
-            .map_err(|e| Error::Api(format!("Failed to update span: {}", e)))?;
+            .map_err(|e| Error::Api(format!("Failed to update span: {e}")))?;
 
         Ok(id)
     }
@@ -376,7 +376,7 @@ impl LangfuseClient {
             event,
         ))])
         .await
-        .map_err(|e| Error::Api(format!("Failed to update generation: {}", e)))?;
+        .map_err(|e| Error::Api(format!("Failed to update generation: {e}")))?;
 
         Ok(id)
     }

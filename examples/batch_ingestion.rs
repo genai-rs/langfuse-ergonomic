@@ -35,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
             body: Box::new(TraceBody {
                 id: Some(Some(trace_id.clone())),
                 timestamp: Some(Some(timestamp.fixed_offset())),
-                name: Some(Some(format!("batch-trace-{}", i))),
+                name: Some(Some(format!("batch-trace-{i}"))),
                 user_id: Some(Some("test-user".to_string())),
                 metadata: Some(Some(serde_json::json!({
                     "batch_number": i,
