@@ -21,6 +21,13 @@
   commitMessagePrefix: 'chore(deps):',
   prBodyTemplate: 'This PR updates dependencies. See the [Dependency Dashboard](../../issues) for details.',
   rangeStrategy: 'auto',
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: [
+      'after 2am and before 6am on monday',
+    ],
+    automerge: false,
+  },
   packageRules: [
     {
       matchCategories: [

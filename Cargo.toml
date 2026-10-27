@@ -27,6 +27,10 @@ bare_urls = "warn"
 unescaped_backticks = "warn"
 
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dependencies]
 langfuse-client-base = "^0.16.0"
 bon = "^3.10.2"
