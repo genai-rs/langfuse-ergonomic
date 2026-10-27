@@ -71,7 +71,7 @@ impl LangfuseClient {
             .create_dataset_request(request)
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to create dataset: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to create dataset: {e}")))
     }
 
     /// Get a dataset by name
@@ -88,7 +88,7 @@ impl LangfuseClient {
             .dataset_name(dataset_name.as_str())
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset: {e}")))
     }
 
     /// List datasets with pagination
@@ -106,7 +106,7 @@ impl LangfuseClient {
             .maybe_limit(limit)
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to list datasets: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to list datasets: {e}")))
     }
 
     /// Delete a dataset run
@@ -127,7 +127,7 @@ impl LangfuseClient {
             .call()
             .await
             .map(|_| ())
-            .map_err(|e| crate::error::Error::Api(format!("Failed to delete dataset run: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to delete dataset run: {e}")))
     }
 
     /// Get a dataset run
@@ -147,7 +147,7 @@ impl LangfuseClient {
             .run_name(run_name.as_str())
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset run: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset run: {e}")))
     }
 
     /// Get all runs for a dataset
@@ -164,7 +164,7 @@ impl LangfuseClient {
             .dataset_name(dataset_name.as_str())
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset runs: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset runs: {e}")))
     }
 
     // ===== DATASET ITEM OPERATIONS =====
@@ -201,7 +201,7 @@ impl LangfuseClient {
             .create_dataset_item_request(item_request)
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to create dataset item: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to create dataset item: {e}")))
     }
 
     /// Get a specific dataset item
@@ -218,7 +218,7 @@ impl LangfuseClient {
             .id(item_id.as_str())
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset item: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset item: {e}")))
     }
 
     /// List dataset items
@@ -246,7 +246,7 @@ impl LangfuseClient {
             .maybe_limit(limit)
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to list dataset items: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to list dataset items: {e}")))
     }
 
     /// Delete a dataset item
@@ -260,9 +260,7 @@ impl LangfuseClient {
             .id(item_id.as_str())
             .call()
             .await
-            .map_err(|e| {
-                crate::error::Error::Api(format!("Failed to delete dataset item: {}", e))
-            })?;
+            .map_err(|e| crate::error::Error::Api(format!("Failed to delete dataset item: {e}")))?;
 
         Ok(())
     }

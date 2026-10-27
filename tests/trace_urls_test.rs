@@ -43,9 +43,7 @@ fn test_trace_url_generation() {
         assert_eq!(
             response.url(),
             expected_url,
-            "Failed for base_url: {}, trace_id: {}",
-            base_url,
-            trace_id
+            "Failed for base_url: {base_url}, trace_id: {trace_id}"
         );
     }
 }

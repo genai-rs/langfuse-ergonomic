@@ -9,7 +9,7 @@ use std::time::Duration;
 fn create_test_event(id: &str) -> IngestionEvent {
     let trace_body = TraceBody {
         id: Some(Some(id.to_string())),
-        name: Some(Some(format!("Test event {}", id))),
+        name: Some(Some(format!("Test event {id}"))),
         timestamp: None,
         metadata: None,
         input: None,

@@ -86,7 +86,7 @@ impl LangfuseClient {
         self.ingest_events(vec![IngestionEvent::ScoreEvent1(Box::new(event))])
             .await
             .map(|_| score_id)
-            .map_err(|e| crate::error::Error::Api(format!("Failed to create score: {}", e)))
+            .map_err(|e| crate::error::Error::Api(format!("Failed to create score: {e}")))
     }
 
     /// Create a binary score (0 or 1)
@@ -124,8 +124,7 @@ impl LangfuseClient {
         }
         if rating > max_rating {
             return Err(Error::Validation(format!(
-                "rating ({}) must be less than or equal to max_rating ({})",
-                rating, max_rating
+                "rating ({rating}) must be less than or equal to max_rating ({max_rating})"
             )));
         }
 

@@ -60,7 +60,7 @@ impl LangfuseClient {
             }),
             status => Err(Error::Client {
                 status: status.as_u16(),
-                message: format!("Validation failed with status {}", status),
+                message: format!("Validation failed with status {status}"),
                 request_id: response
                     .headers()
                     .get("x-request-id")
@@ -157,7 +157,7 @@ impl LangfuseClient {
             }
         };
 
-        let default_user_agent = format!("{}/{} (Rust)", SDK_NAME, SDK_VERSION);
+        let default_user_agent = format!("{SDK_NAME}/{SDK_VERSION} (Rust)");
         let final_user_agent = user_agent.unwrap_or(default_user_agent);
 
         let configuration = Configuration {

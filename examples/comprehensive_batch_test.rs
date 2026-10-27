@@ -58,9 +58,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Safe to log: these are trace organization identifiers, not secrets
     // codeql[rust/cleartext-logging] - False positive: session_id is not a secret
-    println!(" Session ID: {}", session_id);
+    println!(" Session ID: {session_id}");
     // codeql[rust/cleartext-logging] - False positive: user_id is not a secret
-    println!(" User ID: {}\n", user_id);
+    println!(" User ID: {user_id}\n");
 
     // Create multiple traces to test batching
     let mut trace_ids = Vec::new();
@@ -85,7 +85,7 @@ async fn main() -> anyhow::Result<()> {
             body: Box::new(TraceBody {
                 id: Some(Some(trace_id.clone())),
                 timestamp: Some(Some(Utc::now().fixed_offset())),
-                name: Some(Some(format!("{}-trace-{}", trace_type, i))),
+                name: Some(Some(format!("{trace_type}-trace-{i}"))),
                 user_id: Some(Some(user_id.to_string())),
                 session_id: Some(Some(session_id.clone())),
                 metadata: Some(Some(serde_json::json!({
@@ -224,7 +224,7 @@ async fn main() -> anyhow::Result<()> {
             body: Box::new(TraceBody {
                 id: Some(Some(trace_id.clone())),
                 timestamp: Some(Some(Utc::now().fixed_offset())),
-                name: Some(Some(format!("additional-trace-{}", i))),
+                name: Some(Some(format!("additional-trace-{i}"))),
                 user_id: Some(Some(user_id.to_string())),
                 session_id: Some(Some(session_id.clone())),
                 metadata: Some(Some(serde_json::json!({
@@ -269,7 +269,7 @@ async fn main() -> anyhow::Result<()> {
     } else {
         0.0
     };
-    println!("  - Success rate: {:.2}%", success_rate);
+    println!("  - Success rate: {success_rate:.2}%");
 
     if final_metrics.last_error_ts > 0 {
         let error_time = std::time::UNIX_EPOCH + Duration::from_secs(final_metrics.last_error_ts);
@@ -281,10 +281,7 @@ async fn main() -> anyhow::Result<()> {
     println!("\n{}", "=".repeat(50));
     println!(" Test complete!");
     println!("\n View results at:");
-    println!(
-        "   Session: https://cloud.langfuse.com/sessions/{}",
-        session_id
-    );
+    println!("   Session: https://cloud.langfuse.com/sessions/{session_id}");
     if !trace_ids.is_empty() {
         println!(
             "   First trace: https://cloud.langfuse.com/trace/{}",

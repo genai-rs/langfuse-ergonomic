@@ -61,7 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
         Err(e) => {
-            println!("  Could not retrieve dataset: {}", e);
+            println!("  Could not retrieve dataset: {e}");
         }
     }
 
@@ -72,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!(" Dataset runs: {}", serde_json::to_string_pretty(&runs)?);
         }
         Err(e) => {
-            println!("  Could not retrieve dataset runs: {}", e);
+            println!("  Could not retrieve dataset runs: {e}");
         }
     }
 

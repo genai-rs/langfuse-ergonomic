@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
         Err(e) => {
-            println!("  Could not fetch trace: {}", e);
+            println!("  Could not fetch trace: {e}");
         }
     }
 

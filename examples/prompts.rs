@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!(" Prompt result: {}", serde_json::to_string_pretty(&prompt)?);
         }
         Err(e) => {
-            println!("  Prompt creation (placeholder): {}", e);
+            println!("  Prompt creation (placeholder): {e}");
         }
     }
 
@@ -47,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
         Err(e) => {
-            println!("  Could not retrieve prompt: {}", e);
+            println!("  Could not retrieve prompt: {e}");
         }
     }
 
@@ -68,7 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
         Err(e) => {
-            println!("  Could not list prompts: {}", e);
+            println!("  Could not list prompts: {e}");
         }
     }
 
@@ -79,7 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!(" All prompts: {}", serde_json::to_string_pretty(&prompts)?);
         }
         Err(e) => {
-            println!("  Could not list all prompts: {}", e);
+            println!("  Could not list all prompts: {e}");
         }
     }
 

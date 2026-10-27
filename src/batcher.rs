@@ -1032,7 +1032,7 @@ impl Batcher {
                 message: response
                     .text()
                     .await
-                    .unwrap_or_else(|_| format!("Unexpected status: {}", status)),
+                    .unwrap_or_else(|_| format!("Unexpected status: {status}")),
                 request_id,
             }),
         }

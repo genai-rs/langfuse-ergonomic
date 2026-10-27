@@ -46,8 +46,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(" Adding events to batch...");
     for i in 1..=15 {
         let trace = TraceBody {
-            id: Some(Some(format!("batch-trace-{}", i))),
-            name: Some(Some(format!("Batch Test Trace {}", i))),
+            id: Some(Some(format!("batch-trace-{i}"))),
+            name: Some(Some(format!("Batch Test Trace {i}"))),
             input: Some(Some(json!({
                 "batch_index": i,
                 "timestamp": chrono::Utc::now().to_rfc3339()
@@ -77,7 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         let event = IngestionEvent::TraceEvent1(Box::new(TraceEvent1::new(
-            format!("event-{}", i),
+            format!("event-{i}"),
             chrono::Utc::now().to_rfc3339(),
             trace,
             langfuse_client_base::models::trace_event_1::Type::TraceCreate,
@@ -86,7 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Add to batch
         match batcher.add(event).await {
             Ok(_) => {
-                println!("   Added event {} to batch", i);
+                println!("   Added event {i} to batch");
 
                 // Show metrics periodically
                 if i % 5 == 0 {
@@ -108,7 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     );
                 }
             }
-            Err(e) => eprintln!("   Failed to add event {}: {}", i, e),
+            Err(e) => eprintln!("   Failed to add event {i}: {e}"),
         }
 
         // Small delay to simulate real-world event generation
@@ -130,8 +130,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n Adding more events and performing manual flush...");
     for i in 16..=20 {
         let trace = TraceBody {
-            id: Some(Some(format!("manual-trace-{}", i))),
-            name: Some(Some(format!("Manual Flush Trace {}", i))),
+            id: Some(Some(format!("manual-trace-{i}"))),
+            name: Some(Some(format!("Manual Flush Trace {i}"))),
             metadata: Some(Some(json!({
                 "flush_type": "manual",
                 "example_feature": "207_multi_status"
@@ -140,13 +140,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         let event = IngestionEvent::TraceEvent1(Box::new(TraceEvent1::new(
-            format!("event-{}", i),
+            format!("event-{i}"),
             chrono::Utc::now().to_rfc3339(),
             trace,
             langfuse_client_base::models::trace_event_1::Type::TraceCreate,
         )));
         batcher.add(event).await?;
-        println!("   Added event {}", i);
+        println!("   Added event {i}");
     }
 
     println!("\n Performing manual flush...");
@@ -167,7 +167,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         Err(e) => {
-            eprintln!(" Manual flush failed: {}", e);
+            eprintln!(" Manual flush failed: {e}");
 
             // Check if it's a partial failure (207 response)
             if let langfuse_ergonomic::Error::PartialFailure {
@@ -178,8 +178,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } = &e
             {
                 println!("\n  Partial failure (207 Multi-Status):");
-                println!("   Successful: {}", success_count);
-                println!("   Failed: {}", failure_count);
+                println!("   Successful: {success_count}");
+                println!("   Failed: {failure_count}");
 
                 // Note: request_id and retry_after metadata is available
                 // in other error types like RateLimit and Client errors
@@ -200,7 +200,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             {
                 println!("\n  Rate limited:");
                 if let Some(req_id) = request_id {
-                    println!("   Request ID: {}", req_id);
+                    println!("   Request ID: {req_id}");
                 }
                 if let Some(retry) = retry_after {
                     println!("    Retry after: {} seconds", retry.as_secs());
@@ -210,7 +210,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ..
             } = &e
             {
-                println!("   Request ID: {}", req_id);
+                println!("   Request ID: {req_id}");
             }
         }
     }
@@ -229,20 +229,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for i in 1..=5 {
         let trace = TraceBody {
-            id: Some(Some(format!("backpressure-trace-{}", i))),
-            name: Some(Some(format!("Backpressure Test {}", i))),
+            id: Some(Some(format!("backpressure-trace-{i}"))),
+            name: Some(Some(format!("Backpressure Test {i}"))),
             ..Default::default()
         };
 
         let event = IngestionEvent::TraceEvent1(Box::new(TraceEvent1::new(
-            format!("event-{}", i),
+            format!("event-{i}"),
             chrono::Utc::now().to_rfc3339(),
             trace,
             langfuse_client_base::models::trace_event_1::Type::TraceCreate,
         )));
         match backpressure_batcher.add(event).await {
-            Ok(_) => println!("   Event {} queued", i),
-            Err(e) => println!("    Event {} dropped: {}", i, e),
+            Ok(_) => println!("   Event {i} queued"),
+            Err(e) => println!("    Event {i} dropped: {e}"),
         }
     }
 
@@ -281,7 +281,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
             }
         }
-        Err(e) => eprintln!(" Shutdown failed: {}", e),
+        Err(e) => eprintln!(" Shutdown failed: {e}"),
     }
 
     // Shutdown backpressure test batcher

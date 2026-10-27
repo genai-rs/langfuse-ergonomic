@@ -104,7 +104,7 @@ impl fmt::Display for EventError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Event {} failed: {}", self.event_id, self.message)?;
         if let Some(ref code) = self.code {
-            write!(f, " (code: {})", code)?;
+            write!(f, " (code: {code})")?;
         }
         if self.retryable {
             write!(f, " [retryable]")?;
@@ -201,11 +201,11 @@ pub fn map_api_error<T>(err: langfuse_client_base::apis::Error<T>) -> Error {
         ApiError::Reqwest(e) => Error::Network(e),
         ApiError::ReqwestMiddleware(e) => Error::Middleware(e),
         ApiError::Serde(e) => Error::Serialization(e),
-        ApiError::Io(e) => Error::Api(format!("IO error: {}", e)),
+        ApiError::Io(e) => Error::Api(format!("IO error: {e}")),
         ApiError::ResponseError(response) => {
             let status = response.status.as_u16();
             let message = if response.content.is_empty() {
-                format!("status {}", status)
+                format!("status {status}")
             } else {
                 response.content.clone()
             };
@@ -386,7 +386,7 @@ mod tests {
             retryable: true,
         };
 
-        let display = format!("{}", error);
+        let display = format!("{error}");
         assert!(display.contains("test-id"));
         assert!(display.contains("Something went wrong"));
         assert!(display.contains("TEST_ERROR"));
@@ -402,7 +402,7 @@ mod tests {
             retryable: false,
         };
 
-        let display = format!("{}", error);
+        let display = format!("{error}");
         assert!(display.contains("minimal-id"));
         assert!(display.contains("Minimal error"));
         assert!(!display.contains("retryable"));

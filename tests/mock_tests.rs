@@ -422,8 +422,7 @@ async fn test_rate_limiting_handling() {
         let error_str = error.to_string();
         assert!(
             error_str.contains("Rate limit"),
-            "Expected rate limit error, got: {}",
-            error_str
+            "Expected rate limit error, got: {error_str}"
         );
     }
 }
@@ -680,8 +679,7 @@ async fn test_network_error_handling() {
                 || error_str.contains("Connection")
                 || error_str.contains("Network")
                 || error_str.contains("error sending request"),
-            "Expected network error, got: {}",
-            error_str
+            "Expected network error, got: {error_str}"
         );
     }
 }

@@ -132,14 +132,14 @@ async fn test_batch_207_partial_success() {
 
     for i in 1..=4 {
         let trace_body = TraceBody {
-            id: Some(Some(format!("trace-{}", i))),
-            name: Some(Some(format!("Test Trace {}", i))),
+            id: Some(Some(format!("trace-{i}"))),
+            name: Some(Some(format!("Test Trace {i}"))),
             ..Default::default()
         };
 
         let event = TraceEvent1 {
             body: Box::new(trace_body),
-            id: format!("event-{}", i),
+            id: format!("event-{i}"),
             timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
             metadata: None,
             r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
@@ -220,15 +220,15 @@ async fn test_batch_size_chunking() {
         });
 
         let trace_body = TraceBody {
-            id: Some(Some(format!("trace-{}", i))),
-            name: Some(Some(format!("Large Trace {}", i))),
+            id: Some(Some(format!("trace-{i}"))),
+            name: Some(Some(format!("Large Trace {i}"))),
             metadata: Some(Some(large_metadata)),
             ..Default::default()
         };
 
         let event = TraceEvent1 {
             body: Box::new(trace_body),
-            id: format!("event-{}", i),
+            id: format!("event-{i}"),
             timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
             metadata: None,
             r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
@@ -360,7 +360,7 @@ async fn test_batch_auth_failure_no_retry() {
             langfuse_ergonomic::Error::Auth { .. } => {
                 // Expected auth error
             }
-            _ => panic!("Expected Auth error, got: {:?}", e),
+            _ => panic!("Expected Auth error, got: {e:?}"),
         }
     }
 }

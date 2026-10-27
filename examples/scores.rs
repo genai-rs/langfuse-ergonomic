@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    println!("Created quality score: {}", quality_score_id);
+    println!("Created quality score: {quality_score_id}");
 
     // Add a categorical score for sentiment
     let sentiment_score_id = client
@@ -56,26 +56,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    println!("Created sentiment score: {}", sentiment_score_id);
+    println!("Created sentiment score: {sentiment_score_id}");
 
     // Use the binary score helper for a success/failure metric
     let success_score_id = client
         .binary_score(&trace.id, "task_completed", true)
         .await?;
 
-    println!("Created binary score: {}", success_score_id);
+    println!("Created binary score: {success_score_id}");
 
     // Use the rating score helper for user feedback
     let rating_score_id = client.rating_score(&trace.id, "user_rating", 4, 5).await?;
 
-    println!("Created rating score: {}", rating_score_id);
+    println!("Created rating score: {rating_score_id}");
 
     // Use categorical score helper for classification
     let category_score_id = client
         .categorical_score(&trace.id, "response_type", "code_generation")
         .await?;
 
-    println!("Created categorical score: {}", category_score_id);
+    println!("Created categorical score: {category_score_id}");
 
     // Create a generation and score it
     let generation_id = client
@@ -90,7 +90,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    println!("Created generation: {}", generation_id);
+    println!("Created generation: {generation_id}");
 
     // Score the specific generation (observation-level score)
     let generation_score_id = client
@@ -103,7 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    println!("Created generation-specific score: {}", generation_score_id);
+    println!("Created generation-specific score: {generation_score_id}");
 
     // Example of multiple evaluation criteria
     let criteria = vec![
@@ -122,7 +122,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .comment(comment)
             .call()
             .await?;
-        println!("Created {} score: {}", name, score_id);
+        println!("Created {name} score: {score_id}");
     }
 
     println!("\nAll scores created successfully!");

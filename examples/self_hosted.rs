@@ -23,7 +23,7 @@ async fn main() -> anyhow::Result<()> {
     match client.validate().await {
         Ok(true) => println!("Successfully connected to self-hosted Langfuse"),
         Ok(false) => println!("Connection established but validation failed"),
-        Err(e) => println!("Failed to connect: {}", e),
+        Err(e) => println!("Failed to connect: {e}"),
     }
 
     // Example 2: Using environment variables for self-hosted instance
@@ -35,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
     let env_client = ClientBuilder::from_env()
         .and_then(|builder| builder.build())
         .or_else(|e| {
-            println!("Failed to create client from env: {}", e);
+            println!("Failed to create client from env: {e}");
             println!("Using default cloud instance for demo");
             ClientBuilder::new()
                 .public_key("demo-public-key")
@@ -97,7 +97,7 @@ async fn main() -> anyhow::Result<()> {
             body: Box::new(TraceBody {
                 id: Some(Some(trace_id.clone())),
                 timestamp: Some(Some(timestamp.fixed_offset())),
-                name: Some(Some(format!("self-hosted-trace-{}", i))),
+                name: Some(Some(format!("self-hosted-trace-{i}"))),
                 metadata: Some(Some(serde_json::json!({
                     "index": i,
                     "instance": "self-hosted"
