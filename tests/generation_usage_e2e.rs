@@ -1,6 +1,7 @@
 //! Live Langfuse verification. Run explicitly with LANGFUSE_PUBLIC_KEY,
 //! LANGFUSE_SECRET_KEY, and LANGFUSE_BASE_URL configured:
 //! cargo test --test generation_usage_e2e -- --ignored --nocapture
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use langfuse_ergonomic::{ClientBuilder, LangfuseClient};
 use std::time::Duration;

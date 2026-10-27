@@ -1,4 +1,5 @@
 //! Example demonstrating batch ingestion with automatic chunking and retries
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use chrono::Utc;
 use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};

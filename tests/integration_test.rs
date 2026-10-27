@@ -1,4 +1,5 @@
 //! Integration tests for langfuse-ergonomic
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use langfuse_ergonomic::{ClientBuilder, LangfuseClient};
 use serde_json::json;

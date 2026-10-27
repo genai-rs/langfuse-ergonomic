@@ -1,4 +1,5 @@
 //! Example demonstrating trace fetching functionality
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use langfuse_ergonomic::ClientBuilder;
 use serde_json::json;

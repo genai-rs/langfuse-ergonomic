@@ -6,6 +6,7 @@
 //! - Configure batch size, flush intervals, and backpressure
 //! - Monitor metrics (queued, flushed, failed, dropped)
 //! - Graceful shutdown with guarantees
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
 use langfuse_ergonomic::{BackpressurePolicy, Batcher, ClientBuilder};

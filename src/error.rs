@@ -7,29 +7,37 @@ use thiserror::Error;
 /// Result type for Langfuse operations
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Errors returned by the Langfuse ergonomic client
 #[derive(Error, Debug)]
 pub enum Error {
+    /// The Langfuse API returned an error
     #[error("API error: {0}")]
     Api(String),
 
+    /// Invalid or missing client configuration
     #[error("Configuration error: {0}")]
     Configuration(String),
 
+    /// Invalid input rejected before sending a request
     #[error("Validation error: {0}")]
     Validation(String),
 
+    /// JSON serialization or deserialization failed
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 
+    /// Network-level failure while sending a request
     #[error("Network error: {0}")]
     Network(#[from] reqwest::Error),
 
+    /// Failure in the HTTP middleware stack
     #[error("Middleware error: {0}")]
     Middleware(#[from] reqwest_middleware::Error),
 
     /// Authentication failure
     #[error("Authentication failed: {message}")]
     Auth {
+        /// Description of the authentication failure
         message: String,
         /// Request ID for debugging
         request_id: Option<String>,
@@ -47,7 +55,9 @@ pub enum Error {
     /// Server error (5xx status codes)
     #[error("Server error (status {status}): {message}")]
     Server {
+        /// HTTP status code
         status: u16,
+        /// Error message returned by the server
         message: String,
         /// Request ID for debugging
         request_id: Option<String>,
@@ -56,7 +66,9 @@ pub enum Error {
     /// Client error (4xx status codes other than auth/rate limit)
     #[error("Client error (status {status}): {message}")]
     Client {
+        /// HTTP status code
         status: u16,
+        /// Error message returned by the server
         message: String,
         /// Request ID for debugging
         request_id: Option<String>,
@@ -65,7 +77,9 @@ pub enum Error {
     /// Partial failure in batch operations (207 Multi-Status)
     #[error("Partial batch failure: {success_count} succeeded, {failure_count} failed")]
     PartialFailure {
+        /// Number of events processed successfully
         success_count: usize,
+        /// Number of events that failed
         failure_count: usize,
         /// Individual error details for failed items
         errors: Vec<EventError>,
@@ -75,7 +89,12 @@ pub enum Error {
 
     /// Batch size exceeded
     #[error("Batch size exceeded: {size} bytes (max: {max_size} bytes)")]
-    BatchSizeExceeded { size: usize, max_size: usize },
+    BatchSizeExceeded {
+        /// Size of the rejected batch in bytes
+        size: usize,
+        /// Maximum allowed batch size in bytes
+        max_size: usize,
+    },
 
     /// Backpressure triggered when queue is full
     #[error("Backpressure: {reason} (policy: {policy:?})")]
@@ -164,6 +183,7 @@ pub struct IngestionResponse {
     pub failures: Vec<EventError>,
     /// Overall success/failure counts
     pub success_count: usize,
+    /// Number of failed events
     pub failure_count: usize,
 }
 
@@ -237,6 +257,7 @@ pub fn map_api_error<T>(err: langfuse_client_base::apis::Error<T>) -> Error {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
     use std::time::Duration;
 

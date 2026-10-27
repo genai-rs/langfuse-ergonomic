@@ -1,4 +1,5 @@
 //! Protocol regressions for the client-base 0.15 migration, without live credentials.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use chrono::{DateTime, Utc};
 use langfuse_ergonomic::{ClientBuilder, Error, LangfuseClient, ObservationsViewSingle};

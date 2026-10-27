@@ -1,4 +1,5 @@
 //! Example demonstrating advanced features like prompt management, dataset items, and observation updates
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use anyhow::Result;
 use langfuse_ergonomic::ClientBuilder;

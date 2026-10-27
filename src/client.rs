@@ -327,6 +327,7 @@ impl ClientBuilder {
 
 #[cfg(all(test, any(feature = "rustls", feature = "native-tls")))]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
 
     #[test]

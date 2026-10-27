@@ -1,4 +1,5 @@
 //! Mock tests for offline development and testing without API credentials
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use langfuse_ergonomic::{ClientBuilder, Error, LangfuseClient, ObservationsViews};
 use mockito::{Matcher, Server};

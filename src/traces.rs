@@ -12,6 +12,7 @@ use crate::error::{Error, Result};
 
 /// Helper trait for ergonomic tag creation
 pub trait IntoTags {
+    /// Convert into a list of tag strings
     fn into_tags(self) -> Vec<String>;
 }
 
@@ -54,7 +55,9 @@ impl<const N: usize> IntoTags for [String; N] {
 
 /// Response from trace creation
 pub struct TraceResponse {
+    /// ID of the created trace
     pub id: String,
+    /// Base URL of the Langfuse instance
     pub base_url: String,
 }
 

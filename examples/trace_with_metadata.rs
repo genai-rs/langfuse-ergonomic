@@ -1,4 +1,5 @@
 //! Example showing trace creation with full metadata
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use langfuse_ergonomic::ClientBuilder;
 use serde_json::json;

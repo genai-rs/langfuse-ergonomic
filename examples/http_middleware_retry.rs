@@ -10,6 +10,7 @@
 //! - Compose multiple middleware layers
 //!
 //! Run with: `cargo run --example http_middleware_retry`
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use langfuse_ergonomic::{ClientBuilder, Result};
 use reqwest_middleware::ClientBuilder as MiddlewareClientBuilder;
