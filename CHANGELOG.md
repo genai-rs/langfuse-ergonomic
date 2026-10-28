@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.8.0...v0.8.1) - 2026-10-28
+
+### Other
+
+- *(deps)* bump langfuse-client-base to 0.16.1
+- adopt common lint baseline
+- grant actions read to the shared security workflow
+- inline format args (clippy 1.88 uninlined_format_args)
+- switch to shared genai-rs workflows
+- fail on rustdoc warnings, add docs.rs metadata and Renovate lockfile maintenance
+
 ## [0.8.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.7.1...v0.8.0) - 2026-10-27
 
 ### Added
