@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.2](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.8.1...v0.8.2) - 2026-11-05
+
+### Other
+
+- *(deps)* Lock file maintenance
+- *(deps)* Update Rust crate tokio to ^1.54.1
+- *(deps)* Update Rust crate bon to ^3.10.3
+
 ## [0.8.1](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.8.0...v0.8.1) - 2026-10-28
 
 ### Other
