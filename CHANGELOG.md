@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.8.2...v0.9.0) - 2026-11-06
+
+### Added
+
+- [**breaking**] upgrade to langfuse-client-base 0.17
+
+### Other
+
+- lock langfuse-client-base 0.17.0
+
 ## [0.8.2](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.8.1...v0.8.2) - 2026-11-05
 
 ### Other
