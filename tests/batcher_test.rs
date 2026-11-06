@@ -48,7 +48,7 @@ async fn test_metrics_accuracy_on_retries() {
         .await;
 
     // Add a single event using the correct types from langfuse-client-base
-    use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+    use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
 
     let trace_body = TraceBody {
         id: Some(Some("test-event".to_string())),
@@ -57,15 +57,15 @@ async fn test_metrics_accuracy_on_retries() {
         ..Default::default()
     };
 
-    let event_one_of = TraceEvent1 {
-        body: Box::new(trace_body),
+    let event_one_of = IngestionEventTraceEvent {
+        body: trace_body,
         id: uuid::Uuid::new_v4().to_string(),
         timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         metadata: None,
-        r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+        r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
     };
 
-    let event = IngestionEvent::TraceEvent1(Box::new(event_one_of));
+    let event = IngestionEvent::TraceEvent(event_one_of);
     batcher.add(event).await.unwrap();
 
     // Flush and verify metrics
@@ -129,7 +129,7 @@ async fn test_batch_207_partial_success() {
         .await;
 
     // Add test events
-    use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+    use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
 
     for i in 1..=4 {
         let trace_body = TraceBody {
@@ -138,15 +138,15 @@ async fn test_batch_207_partial_success() {
             ..Default::default()
         };
 
-        let event = TraceEvent1 {
-            body: Box::new(trace_body),
+        let event = IngestionEventTraceEvent {
+            body: trace_body,
             id: format!("event-{i}"),
             timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
             metadata: None,
-            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+            r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
         };
 
-        let ingestion_event = IngestionEvent::TraceEvent1(Box::new(event));
+        let ingestion_event = IngestionEvent::TraceEvent(event);
         batcher.add(ingestion_event).await.unwrap();
     }
 
@@ -212,7 +212,7 @@ async fn test_batch_size_chunking() {
         .await;
 
     // Add large events that will exceed the size limit
-    use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+    use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
 
     for i in 1..=4 {
         let large_metadata = json!({
@@ -227,15 +227,15 @@ async fn test_batch_size_chunking() {
             ..Default::default()
         };
 
-        let event = TraceEvent1 {
-            body: Box::new(trace_body),
+        let event = IngestionEventTraceEvent {
+            body: trace_body,
             id: format!("event-{i}"),
             timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
             metadata: None,
-            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+            r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
         };
 
-        let ingestion_event = IngestionEvent::TraceEvent1(Box::new(event));
+        let ingestion_event = IngestionEvent::TraceEvent(event);
         batcher.add(ingestion_event).await.unwrap();
     }
 
@@ -280,7 +280,7 @@ async fn test_batch_retry_on_rate_limit() {
         .await;
 
     // Add a test event
-    use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+    use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
 
     let trace_body = TraceBody {
         id: Some(Some("trace-1".to_string())),
@@ -288,15 +288,15 @@ async fn test_batch_retry_on_rate_limit() {
         ..Default::default()
     };
 
-    let event = TraceEvent1 {
-        body: Box::new(trace_body),
+    let event = IngestionEventTraceEvent {
+        body: trace_body,
         id: "event-1".to_string(),
         timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         metadata: None,
-        r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+        r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
     };
 
-    let ingestion_event = IngestionEvent::TraceEvent1(Box::new(event));
+    let ingestion_event = IngestionEvent::TraceEvent(event);
     batcher.add(ingestion_event).await.unwrap();
 
     // Flush - should retry after rate limit
@@ -331,7 +331,7 @@ async fn test_batch_auth_failure_no_retry() {
         .await;
 
     // Add a test event
-    use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+    use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
 
     let trace_body = TraceBody {
         id: Some(Some("trace-1".to_string())),
@@ -339,15 +339,15 @@ async fn test_batch_auth_failure_no_retry() {
         ..Default::default()
     };
 
-    let event = TraceEvent1 {
-        body: Box::new(trace_body),
+    let event = IngestionEventTraceEvent {
+        body: trace_body,
         id: "event-1".to_string(),
         timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         metadata: None,
-        r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+        r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
     };
 
-    let ingestion_event = IngestionEvent::TraceEvent1(Box::new(event));
+    let ingestion_event = IngestionEvent::TraceEvent(event);
     batcher.add(ingestion_event).await.unwrap();
 
     // Flush - should fail immediately without retry
@@ -381,7 +381,7 @@ fn test_batcher_config_defaults() {
 async fn characterize_partial_retry_shutdown(
     success_on_request: Option<usize>,
 ) -> (langfuse_ergonomic::IngestionResponse, Vec<Vec<String>>) {
-    use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+    use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
     use std::sync::{Arc, Mutex};
 
     tokio::time::timeout(Duration::from_secs(5), async {
@@ -429,15 +429,16 @@ async fn characterize_partial_retry_shutdown(
             .build()
             .await;
         for id in ["already-successful", "retryable"] {
-            let event = TraceEvent1 {
-                body: Box::new(TraceBody::default()),
+            let event = IngestionEventTraceEvent {
+                body: TraceBody::default(),
                 id: id.to_owned(),
                 timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
                 metadata: None,
-                r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+                r#type:
+                    langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
             };
             batcher
-                .add(IngestionEvent::TraceEvent1(Box::new(event)))
+                .add(IngestionEvent::TraceEvent(event))
                 .await
                 .unwrap();
         }
@@ -522,7 +523,7 @@ async fn test_shutdown_207_always_failing_exhausts_retry_budget() {
 #[tokio::test]
 async fn test_shutdown_reconciles_manual_flush_after_background_retry() {
     tokio::time::timeout(Duration::from_secs(5), async {
-        use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+        use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
 
@@ -570,15 +571,15 @@ async fn test_shutdown_reconciles_manual_flush_after_background_retry() {
             .flush_interval(Duration::from_secs(3600))
             .build()
             .await;
-        let event = TraceEvent1 {
-            body: Box::new(TraceBody::default()),
+        let event = IngestionEventTraceEvent {
+            body: TraceBody::default(),
             id: "manual-recovery".to_owned(),
             timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
             metadata: None,
-            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+            r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
         };
         batcher
-            .add(IngestionEvent::TraceEvent1(Box::new(event)))
+            .add(IngestionEvent::TraceEvent(event))
             .await
             .unwrap();
 
@@ -602,7 +603,7 @@ async fn test_shutdown_reconciles_manual_flush_after_background_retry() {
 #[tokio::test]
 async fn test_many_manual_flushes_do_not_retain_historical_results() {
     tokio::time::timeout(Duration::from_secs(10), async {
-        use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+        use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
 
         let mut server = Server::new_async().await;
         let mock = server
@@ -631,15 +632,16 @@ async fn test_many_manual_flushes_do_not_retain_historical_results() {
 
         for index in 0..20 {
             let id = format!("manual-{index}");
-            let event = TraceEvent1 {
-                body: Box::new(TraceBody::default()),
+            let event = IngestionEventTraceEvent {
+                body: TraceBody::default(),
                 id: id.clone(),
                 timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
                 metadata: None,
-                r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+                r#type:
+                    langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
             };
             batcher
-                .add(IngestionEvent::TraceEvent1(Box::new(event)))
+                .add(IngestionEvent::TraceEvent(event))
                 .await
                 .unwrap();
 
@@ -663,7 +665,7 @@ async fn test_many_manual_flushes_do_not_retain_historical_results() {
 #[tokio::test]
 async fn test_shutdown_propagates_auth_failure_from_drain() {
     tokio::time::timeout(Duration::from_secs(5), async {
-        use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+        use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
 
         let mut server = Server::new_async().await;
         let mock = server
@@ -678,15 +680,15 @@ async fn test_shutdown_propagates_auth_failure_from_drain() {
             .flush_interval(Duration::from_secs(3600))
             .build()
             .await;
-        let event = TraceEvent1 {
-            body: Box::new(TraceBody::default()),
+        let event = IngestionEventTraceEvent {
+            body: TraceBody::default(),
             id: "auth-failure".to_owned(),
             timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
             metadata: None,
-            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+            r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
         };
         batcher
-            .add(IngestionEvent::TraceEvent1(Box::new(event)))
+            .add(IngestionEvent::TraceEvent(event))
             .await
             .unwrap();
 
@@ -704,7 +706,7 @@ async fn test_shutdown_propagates_auth_failure_from_drain() {
 #[tokio::test]
 async fn test_shutdown_transport_failure_respects_total_retry_budget() {
     tokio::time::timeout(Duration::from_secs(5), async {
-        use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+        use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
 
         let mut server = Server::new_async().await;
         let mock = server
@@ -723,15 +725,15 @@ async fn test_shutdown_transport_failure_respects_total_retry_budget() {
             .flush_interval(Duration::from_secs(3600))
             .build()
             .await;
-        let event = TraceEvent1 {
-            body: Box::new(TraceBody::default()),
+        let event = IngestionEventTraceEvent {
+            body: TraceBody::default(),
             id: "transport-failure".to_owned(),
             timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
             metadata: None,
-            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+            r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
         };
         batcher
-            .add(IngestionEvent::TraceEvent1(Box::new(event)))
+            .add(IngestionEvent::TraceEvent(event))
             .await
             .unwrap();
 
@@ -747,7 +749,7 @@ async fn test_shutdown_transport_failure_respects_total_retry_budget() {
 #[tokio::test]
 async fn test_shutdown_mixed_failures_share_retry_budget() {
     tokio::time::timeout(Duration::from_secs(5), async {
-        use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+        use langfuse_client_base::models::{IngestionEvent, TraceBody, IngestionEventTraceEvent};
         use std::sync::{Arc, Mutex};
 
         let mut server = Server::new_async().await;
@@ -789,15 +791,15 @@ async fn test_shutdown_mixed_failures_share_retry_budget() {
             .flush_interval(Duration::from_secs(3600))
             .build()
             .await;
-        let event = TraceEvent1 {
-            body: Box::new(TraceBody::default()),
+        let event = IngestionEventTraceEvent {
+            body: TraceBody::default(),
             id: "mixed-failure".to_owned(),
             timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
             metadata: None,
-            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+            r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
         };
         batcher
-            .add(IngestionEvent::TraceEvent1(Box::new(event)))
+            .add(IngestionEvent::TraceEvent(event))
             .await
             .unwrap();
 
@@ -814,7 +816,7 @@ async fn test_shutdown_mixed_failures_share_retry_budget() {
 #[tokio::test]
 async fn test_shutdown_does_not_retain_prior_background_flush_results() {
     tokio::time::timeout(Duration::from_secs(5), async {
-        use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+        use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
 
         let mut server = Server::new_async().await;
         let mock = server
@@ -830,15 +832,15 @@ async fn test_shutdown_does_not_retain_prior_background_flush_results() {
             .flush_interval(Duration::from_secs(3600))
             .build()
             .await;
-        let event = TraceEvent1 {
-            body: Box::new(TraceBody::default()),
+        let event = IngestionEventTraceEvent {
+            body: TraceBody::default(),
             id: "background-success".to_owned(),
             timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
             metadata: None,
-            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+            r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
         };
         batcher
-            .add(IngestionEvent::TraceEvent1(Box::new(event)))
+            .add(IngestionEvent::TraceEvent(event))
             .await
             .unwrap();
         while !mock.matched() || batcher.metrics().flushed != 1 {
@@ -858,7 +860,7 @@ async fn test_shutdown_does_not_retain_prior_background_flush_results() {
 #[tokio::test]
 async fn test_shutdown_includes_background_flush_in_flight_at_start() {
     tokio::time::timeout(Duration::from_secs(5), async {
-        use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+        use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
 
         let mut server = Server::new_async().await;
         let mock = server
@@ -879,15 +881,15 @@ async fn test_shutdown_includes_background_flush_in_flight_at_start() {
             .flush_interval(Duration::from_secs(3600))
             .build()
             .await;
-        let event = TraceEvent1 {
-            body: Box::new(TraceBody::default()),
+        let event = IngestionEventTraceEvent {
+            body: TraceBody::default(),
             id: "in-flight".to_owned(),
             timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
             metadata: None,
-            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+            r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
         };
         batcher
-            .add(IngestionEvent::TraceEvent1(Box::new(event)))
+            .add(IngestionEvent::TraceEvent(event))
             .await
             .unwrap();
         while !mock.matched() {
@@ -909,7 +911,7 @@ async fn test_shutdown_includes_background_flush_in_flight_at_start() {
 #[tokio::test]
 async fn test_shutdown_surfaces_prior_background_flush_error() {
     tokio::time::timeout(Duration::from_secs(5), async {
-        use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+        use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
 
         let mut server = Server::new_async().await;
         let mock = server
@@ -925,15 +927,15 @@ async fn test_shutdown_surfaces_prior_background_flush_error() {
             .flush_interval(Duration::from_secs(3600))
             .build()
             .await;
-        let event = TraceEvent1 {
-            body: Box::new(TraceBody::default()),
+        let event = IngestionEventTraceEvent {
+            body: TraceBody::default(),
             id: "background-auth-failure".to_owned(),
             timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
             metadata: None,
-            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+            r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
         };
         batcher
-            .add(IngestionEvent::TraceEvent1(Box::new(event)))
+            .add(IngestionEvent::TraceEvent(event))
             .await
             .unwrap();
         while !mock.matched() {

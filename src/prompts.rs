@@ -32,14 +32,12 @@ impl LangfuseClient {
         use langfuse_client_base::models::{CreatePromptRequest, CreateTextPromptRequest};
 
         let prompt_request =
-            CreatePromptRequest::CreateTextPromptRequest(Box::new(CreateTextPromptRequest {
-                name: name.clone(),
-                prompt,
+            CreatePromptRequest::CreateTextPromptRequest(CreateTextPromptRequest {
                 config: Some(config),
                 labels: Some(labels),
                 tags: Some(tags),
-                ..Default::default()
-            }));
+                ..CreateTextPromptRequest::new(name.clone(), prompt)
+            });
 
         prompts_api::prompts_create()
             .configuration(self.configuration())
@@ -64,31 +62,51 @@ impl LangfuseClient {
     ) -> Result<langfuse_client_base::models::Prompt> {
         use langfuse_client_base::apis::prompts_api;
         use langfuse_client_base::models::{
-            ChatMessageWithPlaceholders, CreateChatPromptRequest, CreatePromptRequest,
+            ChatMessageType, ChatMessageWithPlaceholders, CreateChatPromptRequest,
+            CreateChatPromptType, CreatePromptRequest, PlaceholderMessageType,
         };
 
         let chat_messages: Vec<ChatMessageWithPlaceholders> = messages
             .into_iter()
             .enumerate()
             .map(|(index, message)| {
-                serde_json::from_value(message).map_err(|_| {
+                let invalid = || {
                     // Deserialization errors can contain caller content.
                     Error::Validation(format!(
                         "Invalid chat prompt message at index {index}: expected a chat message or placeholder"
                     ))
-                })
+                };
+                let message: ChatMessageWithPlaceholders =
+                    serde_json::from_value(message).map_err(|_| invalid())?;
+                // The message types accept any `type` value, since a response
+                // may carry one this crate does not know yet (`Unknown`). In a
+                // request that is a caller error, not a value to send.
+                let unknown_type = match &message {
+                    ChatMessageWithPlaceholders::ChatMessage(m) => {
+                        m.r#type == Some(ChatMessageType::Unknown)
+                    }
+                    ChatMessageWithPlaceholders::PlaceholderMessage(m) => {
+                        m.r#type == Some(PlaceholderMessageType::Unknown)
+                    }
+                };
+                if unknown_type {
+                    return Err(invalid());
+                }
+                Ok(message)
             })
             .collect::<Result<_>>()?;
 
         let prompt_request =
-            CreatePromptRequest::CreateChatPromptRequest(Box::new(CreateChatPromptRequest {
-                name: name.clone(),
-                prompt: chat_messages,
+            CreatePromptRequest::CreateChatPromptRequest(CreateChatPromptRequest {
                 config: Some(config),
                 labels: Some(labels),
                 tags: Some(tags),
-                ..Default::default()
-            }));
+                ..CreateChatPromptRequest::new(
+                    name.clone(),
+                    chat_messages,
+                    CreateChatPromptType::Chat,
+                )
+            });
 
         prompts_api::prompts_create()
             .configuration(self.configuration())
@@ -114,7 +132,7 @@ impl LangfuseClient {
         prompt_version_api::prompt_version_update()
             .configuration(self.configuration())
             .name(name.as_str())
-            .version(version)
+            .version(i64::from(version))
             .prompt_version_update_request(update_request)
             .call()
             .await
@@ -135,7 +153,7 @@ impl LangfuseClient {
         prompts_api::prompts_get()
             .configuration(self.configuration())
             .prompt_name(prompt_name.as_str())
-            .maybe_version(version)
+            .maybe_version(version.map(i64::from))
             .maybe_label(label)
             .call()
             .await
@@ -157,14 +175,14 @@ impl LangfuseClient {
         let name_ref = name.as_deref();
         let tag_ref = tag.as_deref();
         let label_ref = label.as_deref();
-        let limit_num = limit.and_then(|value| value.parse::<i32>().ok());
+        let limit_num = limit.and_then(|value| value.parse::<i64>().ok());
 
         prompts_api::prompts_list()
             .configuration(self.configuration())
             .maybe_name(name_ref)
             .maybe_tag(tag_ref)
             .maybe_label(label_ref)
-            .maybe_page(page)
+            .maybe_page(page.map(i64::from))
             .maybe_limit(limit_num)
             .call()
             .await

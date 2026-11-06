@@ -39,8 +39,8 @@ impl LangfuseClient {
         end_time: Option<DateTime<Utc>>,
     ) -> Result<String> {
         use langfuse_client_base::models::{
-            create_span_event_1::Type as SpanEventType, CreateSpanBody, CreateSpanEvent1,
-            IngestionEvent,
+            ingestion_event_create_span_event::Type as SpanEventType, CreateSpanBody,
+            IngestionEvent, IngestionEventCreateSpanEvent,
         };
 
         let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -62,14 +62,14 @@ impl LangfuseClient {
             .maybe_metadata(metadata.map(Some))
             .build();
 
-        let event = CreateSpanEvent1::builder()
-            .body(Box::new(span_body))
+        let event = IngestionEventCreateSpanEvent::builder()
+            .body(span_body)
             .id(Uuid::new_v4().to_string())
             .timestamp(timestamp.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
             .r#type(SpanEventType::SpanCreate)
             .build();
 
-        self.ingest_events(vec![IngestionEvent::CreateSpanEvent1(Box::new(event))])
+        self.ingest_events(vec![IngestionEvent::CreateSpanEvent(event)])
             .await
             .map(|_| observation_id)
             .map_err(|e| crate::error::Error::Api(format!("Failed to create span: {e}")))
@@ -103,8 +103,9 @@ impl LangfuseClient {
         total_tokens: Option<i32>,
     ) -> Result<String> {
         use langfuse_client_base::models::{
-            create_generation_event_1::Type as GenerationEventType, CreateGenerationBody,
-            CreateGenerationEvent1, IngestionEvent, UsageDetails,
+            ingestion_event_create_generation_event::Type as GenerationEventType,
+            CreateGenerationBody, IngestionEvent, IngestionEventCreateGenerationEvent,
+            UsageDetails,
         };
 
         let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -113,16 +114,16 @@ impl LangfuseClient {
         let level = level.map(|l| parse_observation_level(&l));
         let end_time = end_time.map(|t| t.fixed_offset());
 
-        let usage_details: std::collections::HashMap<String, i32> = [
+        let usage_details: std::collections::HashMap<String, i64> = [
             ("input", prompt_tokens),
             ("output", completion_tokens),
             ("total", total_tokens),
         ]
         .into_iter()
-        .filter_map(|(key, count)| count.map(|count| (key.to_owned(), count)))
+        .filter_map(|(key, count)| count.map(|count| (key.to_owned(), i64::from(count))))
         .collect();
         let usage_details =
-            (!usage_details.is_empty()).then(|| Box::new(UsageDetails::Object(usage_details)));
+            (!usage_details.is_empty()).then_some(UsageDetails::Object(usage_details));
 
         let generation_body = CreateGenerationBody::builder()
             .id(Some(observation_id.clone()))
@@ -140,19 +141,17 @@ impl LangfuseClient {
             .maybe_parent_observation_id(parent_observation_id.map(Some))
             .build();
 
-        let event = CreateGenerationEvent1::builder()
-            .body(Box::new(generation_body))
+        let event = IngestionEventCreateGenerationEvent::builder()
+            .body(generation_body)
             .id(Uuid::new_v4().to_string())
             .timestamp(timestamp.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
             .r#type(GenerationEventType::GenerationCreate)
             .build();
 
-        self.ingest_events(vec![IngestionEvent::CreateGenerationEvent1(Box::new(
-            event,
-        ))])
-        .await
-        .map(|_| observation_id)
-        .map_err(|e| crate::error::Error::Api(format!("Failed to create generation: {e}")))
+        self.ingest_events(vec![IngestionEvent::CreateGenerationEvent(event)])
+            .await
+            .map(|_| observation_id)
+            .map_err(|e| crate::error::Error::Api(format!("Failed to create generation: {e}")))
     }
 
     /// Create an event observation
@@ -171,8 +170,8 @@ impl LangfuseClient {
         start_time: Option<DateTime<Utc>>,
     ) -> Result<String> {
         use langfuse_client_base::models::{
-            create_event_event_1::Type as EventEventType, CreateEventBody, CreateEventEvent1,
-            IngestionEvent,
+            ingestion_event_create_event_event::Type as EventEventType, CreateEventBody,
+            IngestionEvent, IngestionEventCreateEventEvent,
         };
 
         let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -193,14 +192,14 @@ impl LangfuseClient {
             .maybe_metadata(metadata.map(Some))
             .build();
 
-        let event = CreateEventEvent1::builder()
-            .body(Box::new(event_body))
+        let event = IngestionEventCreateEventEvent::builder()
+            .body(event_body)
             .id(Uuid::new_v4().to_string())
             .timestamp(timestamp.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
             .r#type(EventEventType::EventCreate)
             .build();
 
-        self.ingest_events(vec![IngestionEvent::CreateEventEvent1(Box::new(event))])
+        self.ingest_events(vec![IngestionEvent::CreateEventEvent(event)])
             .await
             .map(|_| observation_id)
             .map_err(|e| crate::error::Error::Api(format!("Failed to create event: {e}")))
@@ -249,8 +248,8 @@ impl LangfuseClient {
 
         legacy_observations_v1_api::legacy_observations_v1_get_many()
             .configuration(self.configuration())
-            .maybe_page(page)
-            .maybe_limit(limit)
+            .maybe_page(page.map(i64::from))
+            .maybe_limit(limit.map(i64::from))
             .maybe_trace_id(trace_id_ref)
             .maybe_parent_observation_id(parent_ref)
             .maybe_type(type_ref)
@@ -279,7 +278,9 @@ impl LangfuseClient {
         #[builder(into)] parent_observation_id: Option<String>,
     ) -> Result<String> {
         use chrono::Utc as ChronoUtc;
-        use langfuse_client_base::models::{IngestionEvent, UpdateSpanBody, UpdateSpanEvent1};
+        use langfuse_client_base::models::{
+            IngestionEvent, IngestionEventUpdateSpanEvent, UpdateSpanBody,
+        };
         use uuid::Uuid;
 
         let event_body = UpdateSpanBody {
@@ -298,15 +299,16 @@ impl LangfuseClient {
             environment: None,
         };
 
-        let event = UpdateSpanEvent1 {
-            body: Box::new(event_body),
+        let event = IngestionEventUpdateSpanEvent {
+            body: event_body,
             id: Uuid::new_v4().to_string(),
             timestamp: ChronoUtc::now().to_rfc3339(),
             metadata: None,
-            r#type: langfuse_client_base::models::update_span_event_1::Type::SpanUpdate,
+            r#type:
+                langfuse_client_base::models::ingestion_event_update_span_event::Type::SpanUpdate,
         };
 
-        self.ingest_events(vec![IngestionEvent::UpdateSpanEvent1(Box::new(event))])
+        self.ingest_events(vec![IngestionEvent::UpdateSpanEvent(event)])
             .await
             .map_err(|e| Error::Api(format!("Failed to update span: {e}")))?;
 
@@ -334,7 +336,7 @@ impl LangfuseClient {
     ) -> Result<String> {
         use chrono::Utc as ChronoUtc;
         use langfuse_client_base::models::{
-            IngestionEvent, UpdateGenerationBody, UpdateGenerationEvent1,
+            IngestionEvent, IngestionEventUpdateGenerationEvent, UpdateGenerationBody,
         };
         use uuid::Uuid;
 
@@ -364,19 +366,17 @@ impl LangfuseClient {
             usage_details: None,
         };
 
-        let event = UpdateGenerationEvent1 {
-            body: Box::new(event_body),
+        let event = IngestionEventUpdateGenerationEvent {
+            body: event_body,
             id: Uuid::new_v4().to_string(),
             timestamp: ChronoUtc::now().to_rfc3339(),
             metadata: None,
-            r#type: langfuse_client_base::models::update_generation_event_1::Type::GenerationUpdate,
+            r#type: langfuse_client_base::models::ingestion_event_update_generation_event::Type::GenerationUpdate,
         };
 
-        self.ingest_events(vec![IngestionEvent::UpdateGenerationEvent1(Box::new(
-            event,
-        ))])
-        .await
-        .map_err(|e| Error::Api(format!("Failed to update generation: {e}")))?;
+        self.ingest_events(vec![IngestionEvent::UpdateGenerationEvent(event)])
+            .await
+            .map_err(|e| Error::Api(format!("Failed to update generation: {e}")))?;
 
         Ok(id)
     }

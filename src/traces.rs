@@ -164,7 +164,8 @@ impl LangfuseClient {
         public: Option<bool>,
     ) -> Result<TraceResponse> {
         use langfuse_client_base::models::{
-            trace_event_1::Type as TraceEventType, IngestionEvent, TraceBody, TraceEvent1,
+            ingestion_event_trace_event::Type as TraceEventType, IngestionEvent,
+            IngestionEventTraceEvent, TraceBody,
         };
 
         let trace_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -187,14 +188,14 @@ impl LangfuseClient {
             .maybe_public(public.map(Some))
             .build();
 
-        let event = TraceEvent1::builder()
-            .body(Box::new(trace_body))
+        let event = IngestionEventTraceEvent::builder()
+            .body(trace_body)
             .id(Uuid::new_v4().to_string())
             .timestamp(timestamp.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
             .r#type(TraceEventType::TraceCreate)
             .build();
 
-        self.ingest_events(vec![IngestionEvent::TraceEvent1(Box::new(event))])
+        self.ingest_events(vec![IngestionEvent::TraceEvent(event)])
             .await
             .map(|_| TraceResponse {
                 id: trace_id,

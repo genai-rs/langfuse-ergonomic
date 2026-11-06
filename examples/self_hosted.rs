@@ -83,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Add events to the batcher
     use langfuse_client_base::models::{
-        trace_event_1::Type, IngestionEvent, TraceBody, TraceEvent1,
+        ingestion_event_trace_event::Type, IngestionEvent, IngestionEventTraceEvent, TraceBody,
     };
     use uuid::Uuid;
 
@@ -91,11 +91,11 @@ async fn main() -> anyhow::Result<()> {
         let trace_id = Uuid::new_v4().to_string();
         let timestamp = Utc::now();
 
-        let trace_event = IngestionEvent::TraceEvent1(Box::new(TraceEvent1 {
+        let trace_event = IngestionEvent::TraceEvent(IngestionEventTraceEvent {
             id: trace_id.clone(),
             timestamp: timestamp.to_rfc3339(),
             r#type: Type::TraceCreate,
-            body: Box::new(TraceBody {
+            body: TraceBody {
                 id: Some(Some(trace_id.clone())),
                 timestamp: Some(Some(timestamp.fixed_offset())),
                 name: Some(Some(format!("self-hosted-trace-{i}"))),
@@ -106,9 +106,9 @@ async fn main() -> anyhow::Result<()> {
                 tags: Some(Some(vec!["batch".to_string(), "self-hosted".to_string()])),
                 environment: None,
                 ..Default::default()
-            }),
+            },
             metadata: None,
-        }));
+        });
 
         batcher.add(trace_event).await?;
     }
