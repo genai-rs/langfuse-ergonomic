@@ -2,7 +2,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use chrono::Utc;
-use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
 use langfuse_ergonomic::{Batcher, ClientBuilder};
 use uuid::Uuid;
 
@@ -29,11 +29,11 @@ async fn main() -> anyhow::Result<()> {
         let timestamp = Utc::now();
 
         // Add trace event
-        let trace_event = IngestionEvent::TraceEvent1(Box::new(TraceEvent1 {
+        let trace_event = IngestionEvent::TraceEvent(IngestionEventTraceEvent {
             id: trace_id.clone(),
             timestamp: timestamp.to_rfc3339(),
-            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
-            body: Box::new(TraceBody {
+            r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
+            body: TraceBody {
                 id: Some(Some(trace_id.clone())),
                 timestamp: Some(Some(timestamp.fixed_offset())),
                 name: Some(Some(format!("batch-trace-{i}"))),
@@ -55,9 +55,9 @@ async fn main() -> anyhow::Result<()> {
                     "test_output": format!("Output for trace {}", i)
                 }))),
                 environment: None,
-            }),
+            },
             metadata: None,
-        }));
+        });
 
         batcher.add(trace_event).await?;
 

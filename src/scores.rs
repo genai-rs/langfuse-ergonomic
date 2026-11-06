@@ -39,16 +39,16 @@ impl LangfuseClient {
         }
 
         use langfuse_client_base::models::{
-            CreateScoreValue, IngestionEvent, ScoreBody, ScoreDataType, ScoreEvent1,
+            CreateScoreValue, IngestionEvent, IngestionEventScoreEvent, ScoreBody, ScoreDataType,
         };
 
         let score_id = Uuid::new_v4().to_string();
         let timestamp = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
 
         let score_value = if let Some(v) = value {
-            Box::new(CreateScoreValue::DoubleNumber(v))
+            CreateScoreValue::DoubleNumber(v)
         } else if let Some(s) = string_value {
-            Box::new(CreateScoreValue::String(s))
+            CreateScoreValue::String(s)
         } else {
             return Err(crate::error::Error::Validation(
                 "Score must have either a numeric value or string value".to_string(),
@@ -75,15 +75,15 @@ impl LangfuseClient {
             metadata: metadata.map(Some),
         };
 
-        let event = ScoreEvent1 {
-            body: Box::new(score_body),
+        let event = IngestionEventScoreEvent {
+            body: score_body,
             id: Uuid::new_v4().to_string(),
             timestamp: timestamp.clone(),
             metadata: None,
-            r#type: langfuse_client_base::models::score_event_1::Type::ScoreCreate,
+            r#type: langfuse_client_base::models::ingestion_event_score_event::Type::ScoreCreate,
         };
 
-        self.ingest_events(vec![IngestionEvent::ScoreEvent1(Box::new(event))])
+        self.ingest_events(vec![IngestionEvent::ScoreEvent(event)])
             .await
             .map(|_| score_id)
             .map_err(|e| crate::error::Error::Api(format!("Failed to create score: {e}")))

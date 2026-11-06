@@ -102,8 +102,8 @@ impl LangfuseClient {
 
         datasets_api::datasets_list()
             .configuration(self.configuration())
-            .maybe_page(page)
-            .maybe_limit(limit)
+            .maybe_page(page.map(i64::from))
+            .maybe_limit(limit.map(i64::from))
             .call()
             .await
             .map_err(|e| crate::error::Error::Api(format!("Failed to list datasets: {e}")))
@@ -242,8 +242,8 @@ impl LangfuseClient {
             .maybe_dataset_name(dataset_name_ref)
             .maybe_source_trace_id(source_trace_ref)
             .maybe_source_observation_id(source_observation_ref)
-            .maybe_page(page)
-            .maybe_limit(limit)
+            .maybe_page(page.map(i64::from))
+            .maybe_limit(limit.map(i64::from))
             .call()
             .await
             .map_err(|e| crate::error::Error::Api(format!("Failed to list dataset items: {e}")))

@@ -8,7 +8,7 @@
 //! - Graceful shutdown with guarantees
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
 use langfuse_ergonomic::{BackpressurePolicy, Batcher, ClientBuilder};
 use serde_json::json;
 use std::time::Duration;
@@ -77,12 +77,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ..Default::default()
         };
 
-        let event = IngestionEvent::TraceEvent1(Box::new(TraceEvent1::new(
+        let event = IngestionEvent::TraceEvent(IngestionEventTraceEvent::new(
             format!("event-{i}"),
             chrono::Utc::now().to_rfc3339(),
             trace,
-            langfuse_client_base::models::trace_event_1::Type::TraceCreate,
-        )));
+            langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
+        ));
 
         // Add to batch
         match batcher.add(event).await {
@@ -140,12 +140,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ..Default::default()
         };
 
-        let event = IngestionEvent::TraceEvent1(Box::new(TraceEvent1::new(
+        let event = IngestionEvent::TraceEvent(IngestionEventTraceEvent::new(
             format!("event-{i}"),
             chrono::Utc::now().to_rfc3339(),
             trace,
-            langfuse_client_base::models::trace_event_1::Type::TraceCreate,
-        )));
+            langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
+        ));
         batcher.add(event).await?;
         println!("   Added event {i}");
     }
@@ -235,12 +235,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ..Default::default()
         };
 
-        let event = IngestionEvent::TraceEvent1(Box::new(TraceEvent1::new(
+        let event = IngestionEvent::TraceEvent(IngestionEventTraceEvent::new(
             format!("event-{i}"),
             chrono::Utc::now().to_rfc3339(),
             trace,
-            langfuse_client_base::models::trace_event_1::Type::TraceCreate,
-        )));
+            langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
+        ));
         match backpressure_batcher.add(event).await {
             Ok(_) => println!("   Event {i} queued"),
             Err(e) => println!("    Event {i} dropped: {e}"),

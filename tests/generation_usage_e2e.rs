@@ -10,7 +10,7 @@ use tokio::time::{sleep, timeout, Instant};
 async fn wait_for_usage(
     client: &LangfuseClient,
     observation_id: &str,
-    expected: &[(&str, i32)],
+    expected: &[(&str, i64)],
 ) -> langfuse_client_base::models::ObservationsViewSingle {
     let deadline = Instant::now() + Duration::from_secs(120);
     loop {
@@ -79,23 +79,23 @@ async fn generation_token_usage_persists_in_langfuse() {
             .await
             .expect("ingest live generation");
 
-        let mut expected = vec![("total", expected_total)];
+        let mut expected = vec![("total", i64::from(expected_total))];
         if let Some(input) = input {
-            expected.push(("input", input));
+            expected.push(("input", i64::from(input)));
         }
         if let Some(output) = output {
-            expected.push(("output", output));
+            expected.push(("output", i64::from(output)));
         }
         let observation = wait_for_usage(&client, &id, &expected).await;
         assert_eq!(observation.id, id);
         assert_eq!(observation.trace_id, Some(trace.id.clone()));
         assert_eq!(observation.r#type, "GENERATION");
-        assert_eq!(observation.usage.total, expected_total);
+        assert_eq!(observation.usage.total, i64::from(expected_total));
         if let Some(input) = input {
-            assert_eq!(observation.usage.input, input);
+            assert_eq!(observation.usage.input, i64::from(input));
         }
         if let Some(output) = output {
-            assert_eq!(observation.usage.output, output);
+            assert_eq!(observation.usage.output, i64::from(output));
         }
         println!(
             "Verified {name}: observation={id}, usageDetails={:?}, costDetails={:?}",

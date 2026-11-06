@@ -86,6 +86,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Type Safety
 
+### Migrating to client-base 0.17
+
+This release uses `langfuse-client-base` 0.17, generated with the stable naming,
+union and integer rules of its generator. The ergonomic builders keep their
+signatures; code that builds base models directly changes:
+
+- Ingestion variants drop the numeric suffix and the `Box`:
+  `IngestionEvent::TraceEvent(IngestionEventTraceEvent { body: trace_body, ... })`
+  instead of `IngestionEvent::TraceEvent1(Box::new(TraceEvent1 { body: Box::new(trace_body), ... }))`.
+  The same holds for the score, span, generation, event and observation events,
+  and for unions such as `CreatePromptRequest` and `ScoreV3`. A model is boxed
+  only where a type contains itself.
+- Integers are `i64` unless the spec says `format: int32`: page and limit
+  parameters, prompt versions, usage counts and similar fields.
+- Structs derive `Default` only when they have no required field, and enums no
+  longer implement `Default`. Build such a struct with `new(..)` or its builder.
+- Enums a response can carry accept values the spec does not list as `Unknown`,
+  and tagged unions as `Unknown(serde_json::Value)`, so one new value no longer
+  fails a whole response. An exhaustive `match` on such a type needs a new arm.
+- Closed enums implement `FromStr` and `TryFrom<&str>`; structs no longer
+  implement `Display`.
+
 ### Migrating to client-base 0.15
 
 This release uses `langfuse-client-base` 0.15.0 and requires Rust 1.88.
@@ -100,7 +122,8 @@ crate. Its `trace_id` is `Option<String>` and its dates are typed. Observation
 lists continue to use `ObservationsViews`, whose entries are `ObservationsView`.
 
 Batch ingestion uses named variants such as
-`IngestionEvent::TraceEvent1(Box::new(TraceEvent1 { ... }))` instead of
+`IngestionEvent::TraceEvent1(Box::new(TraceEvent1 { ... }))` (0.17:
+`IngestionEvent::TraceEvent(IngestionEventTraceEvent { ... })`) instead of
 `IngestionEvent::IngestionEventOneOf(...)`. See the updated `batch_ingestion`
 example. The base client's SDK-log ingestion variant has been removed.
 

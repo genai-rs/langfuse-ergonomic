@@ -267,15 +267,15 @@ impl Batcher {
     /// Extract a stable identifier from any ingestion event variant Langfuse supports.
     fn extract_event_id(event: &IngestionEvent) -> String {
         match event {
-            IngestionEvent::TraceEvent1(e) => e.id.clone(),
-            IngestionEvent::ScoreEvent1(e) => e.id.clone(),
-            IngestionEvent::CreateSpanEvent1(e) => e.id.clone(),
-            IngestionEvent::UpdateSpanEvent1(e) => e.id.clone(),
-            IngestionEvent::CreateGenerationEvent1(e) => e.id.clone(),
-            IngestionEvent::UpdateGenerationEvent1(e) => e.id.clone(),
-            IngestionEvent::CreateEventEvent1(e) => e.id.clone(),
-            IngestionEvent::CreateObservationEvent1(e) => e.id.clone(),
-            IngestionEvent::UpdateObservationEvent1(e) => e.id.clone(),
+            IngestionEvent::TraceEvent(e) => e.id.clone(),
+            IngestionEvent::ScoreEvent(e) => e.id.clone(),
+            IngestionEvent::CreateSpanEvent(e) => e.id.clone(),
+            IngestionEvent::UpdateSpanEvent(e) => e.id.clone(),
+            IngestionEvent::CreateGenerationEvent(e) => e.id.clone(),
+            IngestionEvent::UpdateGenerationEvent(e) => e.id.clone(),
+            IngestionEvent::CreateEventEvent(e) => e.id.clone(),
+            IngestionEvent::CreateObservationEvent(e) => e.id.clone(),
+            IngestionEvent::UpdateObservationEvent(e) => e.id.clone(),
         }
     }
 
@@ -1139,23 +1139,35 @@ mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
 
+    fn empty_trace_event() -> IngestionEvent {
+        use langfuse_client_base::models::{
+            ingestion_event_trace_event::Type, IngestionEventTraceEvent, TraceBody,
+        };
+        IngestionEvent::TraceEvent(IngestionEventTraceEvent::new(
+            String::new(),
+            String::new(),
+            TraceBody::default(),
+            Type::TraceCreate,
+        ))
+    }
+
     #[test]
     fn test_chunk_events() {
         let events = vec![
             BatchEvent {
-                event: IngestionEvent::TraceEvent1(Box::default()),
+                event: empty_trace_event(),
                 id: "1".to_string(),
                 size: 1000,
                 retry_count: 0,
             },
             BatchEvent {
-                event: IngestionEvent::TraceEvent1(Box::default()),
+                event: empty_trace_event(),
                 id: "2".to_string(),
                 size: 2000,
                 retry_count: 0,
             },
             BatchEvent {
-                event: IngestionEvent::TraceEvent1(Box::default()),
+                event: empty_trace_event(),
                 id: "3".to_string(),
                 size: 1500,
                 retry_count: 0,
@@ -1181,7 +1193,7 @@ mod shutdown_retry_tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
     use crate::ClientBuilder;
-    use langfuse_client_base::models::{TraceBody, TraceEvent1};
+    use langfuse_client_base::models::{IngestionEventTraceEvent, TraceBody};
 
     #[tokio::test]
     async fn shutdown_exhausts_207_retries_and_clears_queue() {
@@ -1212,15 +1224,15 @@ mod shutdown_retry_tests {
                 .await;
             let metrics = Arc::clone(&batcher.metrics);
             let buffer = Arc::clone(&batcher.buffer);
-            let event = TraceEvent1 {
-                body: Box::new(TraceBody::default()),
+            let event = IngestionEventTraceEvent {
+                body: TraceBody::default(),
                 id: "retryable".to_owned(),
                 timestamp: "2026-10-17T00:00:00.000Z".to_owned(),
                 metadata: None,
-                r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
+                r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
             };
             batcher
-                .add(IngestionEvent::TraceEvent1(Box::new(event)))
+                .add(IngestionEvent::TraceEvent(event))
                 .await
                 .unwrap();
 

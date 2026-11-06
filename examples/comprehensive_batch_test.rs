@@ -2,7 +2,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use chrono::Utc;
-use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
 use langfuse_ergonomic::{BackpressurePolicy, Batcher, ClientBuilder};
 use std::time::Duration;
 use uuid::Uuid;
@@ -79,11 +79,11 @@ async fn main() -> anyhow::Result<()> {
             _ => "user-interaction",
         };
 
-        let trace_event = IngestionEvent::TraceEvent1(Box::new(TraceEvent1 {
+        let trace_event = IngestionEvent::TraceEvent(IngestionEventTraceEvent {
             id: trace_id.clone(),
             timestamp: Utc::now().to_rfc3339(),
-            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
-            body: Box::new(TraceBody {
+            r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
+            body: TraceBody {
                 id: Some(Some(trace_id.clone())),
                 timestamp: Some(Some(Utc::now().fixed_offset())),
                 name: Some(Some(format!("{trace_type}-trace-{i}"))),
@@ -148,9 +148,9 @@ async fn main() -> anyhow::Result<()> {
                 }))),
                 public: Some(Some(false)),
                 environment: None,
-            }),
+            },
             metadata: None,
-        }));
+        });
 
         batcher.add(trace_event).await?;
 
@@ -218,11 +218,11 @@ async fn main() -> anyhow::Result<()> {
     println!("\n Adding 5 more traces to test continued operation...");
     for i in 25..30 {
         let trace_id = Uuid::new_v4().to_string();
-        let trace_event = IngestionEvent::TraceEvent1(Box::new(TraceEvent1 {
+        let trace_event = IngestionEvent::TraceEvent(IngestionEventTraceEvent {
             id: trace_id.clone(),
             timestamp: Utc::now().to_rfc3339(),
-            r#type: langfuse_client_base::models::trace_event_1::Type::TraceCreate,
-            body: Box::new(TraceBody {
+            r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
+            body: TraceBody {
                 id: Some(Some(trace_id.clone())),
                 timestamp: Some(Some(Utc::now().fixed_offset())),
                 name: Some(Some(format!("additional-trace-{i}"))),
@@ -242,9 +242,9 @@ async fn main() -> anyhow::Result<()> {
                 version: Some(Some("2.0.0".to_string())),
                 public: Some(Some(false)),
                 environment: None,
-            }),
+            },
             metadata: None,
-        }));
+        });
         batcher.add(trace_event).await?;
     }
     println!("   Added 5 additional traces");

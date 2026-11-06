@@ -1,7 +1,7 @@
 //! Comprehensive tests for batching functionality
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use langfuse_client_base::models::{IngestionEvent, TraceBody, TraceEvent1};
+use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
 use langfuse_ergonomic::{BackpressurePolicy, Batcher, ClientBuilder};
 use mockito::Server;
 use std::time::Duration;
@@ -24,12 +24,12 @@ fn create_test_event(id: &str) -> IngestionEvent {
         environment: None,
     };
 
-    IngestionEvent::TraceEvent1(Box::new(TraceEvent1::new(
+    IngestionEvent::TraceEvent(IngestionEventTraceEvent::new(
         id.to_string(),
         chrono::Utc::now().to_rfc3339(),
         trace_body,
-        langfuse_client_base::models::trace_event_1::Type::TraceCreate,
-    )))
+        langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
+    ))
 }
 
 #[tokio::test]
