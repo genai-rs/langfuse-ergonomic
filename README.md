@@ -86,6 +86,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Type Safety
 
+### Migrating to client-base 0.18
+
+`langfuse-client-base` 0.18 adds role-based auth for blob storage integrations:
+a `BlobStorageIntegrationAuthType` enum (`AccessKeys`, `RoleArn`), four new fields
+on `BlobStorageIntegrationResponse` and two optional fields on
+`CreateBlobStorageIntegrationRequest`. The ergonomic builders are unchanged; only
+code that builds those base models directly needs the new fields. See the base
+crate's `migration/api-diff-0.17.0-to-0.18.0.md`.
+
 ### Migrating to client-base 0.17
 
 This release uses `langfuse-client-base` 0.17, generated with the stable naming,
