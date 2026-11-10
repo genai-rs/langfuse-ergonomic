@@ -833,3 +833,57 @@ async fn batcher_fails_fast_on_score_auth_error() {
     assert!(matches!(err, Error::Auth { .. }), "{err:?}");
     denied.assert_async().await;
 }
+
+#[tokio::test]
+async fn batcher_does_not_record_rejected_events() {
+    let mut server = Server::new_async().await;
+    let (otlp, recorded) = capture(&mut server, OTLP_PATH, 200, "{}", 1).await;
+    let batcher = Batcher::builder()
+        .client(v4_client(&server))
+        .max_bytes(2_000)
+        .flush_interval(Duration::from_secs(3600))
+        .build()
+        .await;
+
+    // Too large: rejected before it is queued, so it must not become the trace root.
+    let mut big = span_event("big", "t1");
+    if let IngestionEvent::CreateSpanEvent(e) = &mut big {
+        e.body.input = Some(Some(json!("x".repeat(5_000))));
+    }
+    assert!(matches!(
+        batcher.add(big).await,
+        Err(Error::BatchSizeExceeded { .. })
+    ));
+    batcher.add(span_event("small", "t1")).await.unwrap();
+    batcher.shutdown().await.unwrap();
+    otlp.assert_async().await;
+
+    let exported = spans(&recorded.bodies()[0]);
+    assert_eq!(exported.len(), 1);
+    assert_eq!(exported[0]["spanId"], otel::observation_id("small"));
+    assert!(exported[0].get("parentSpanId").is_none());
+}
+
+#[tokio::test]
+async fn evicted_spans_cannot_be_updated() {
+    let mut server = Server::new_async().await;
+    let (_otlp, _recorded) = capture(&mut server, OTLP_PATH, 200, "{}", 2).await;
+    let client = ClientBuilder::new()
+        .public_key("pk-test")
+        .secret_key("sk-test")
+        .base_url(server.url())
+        .v4_state_capacity(1)
+        .build()
+        .unwrap();
+    client.span().trace_id("t1").id("s1").call().await.unwrap();
+    client.span().trace_id("t1").id("s2").call().await.unwrap();
+    let err = client
+        .update_span()
+        .id("s1")
+        .trace_id("t1")
+        .output(json!("late"))
+        .call()
+        .await
+        .unwrap_err();
+    assert!(matches!(err, Error::Validation(_)), "{err:?}");
+}

@@ -220,6 +220,7 @@ impl LangfuseClient {
         user_agent: Option<String>,
         http_client: Option<reqwest_middleware::ClientWithMiddleware>,
         api_version: ApiVersion,
+        v4_state: crate::otel::V4State,
     ) -> Result<Self> {
         let client = match http_client {
             Some(client) => client,
@@ -259,7 +260,7 @@ impl LangfuseClient {
             base_url,
             configuration,
             api_version,
-            v4_state: Arc::default(),
+            v4_state: Arc::new(std::sync::Mutex::new(v4_state)),
         })
     }
 }
@@ -288,6 +289,8 @@ pub struct ClientBuilder {
     user_agent: Option<String>,
     http_client: Option<reqwest_middleware::ClientWithMiddleware>,
     api_version: Option<ApiVersion>,
+    v4_state_capacity: Option<usize>,
+    v4_state_max_bytes: Option<usize>,
 }
 
 impl ClientBuilder {
@@ -359,6 +362,25 @@ impl ClientBuilder {
         self
     }
 
+    /// How many spans, traces and batch events the Langfuse v4 write state remembers
+    /// (least recently used first out; default [`crate::otel::STATE_CAPACITY`]).
+    ///
+    /// The state lets updates re-send complete spans and propagates trace attributes; see
+    /// [`crate::otel`]. Updates of evicted spans fail with [`Error::Validation`].
+    #[must_use]
+    pub fn v4_state_capacity(mut self, value: usize) -> Self {
+        self.v4_state_capacity = Some(value);
+        self
+    }
+
+    /// Memory budget, in bytes of serialized JSON, for the full spans the Langfuse v4 write
+    /// state keeps (default [`crate::otel::STATE_MAX_BYTES`]). Ended spans are evicted first.
+    #[must_use]
+    pub fn v4_state_max_bytes(mut self, value: usize) -> Self {
+        self.v4_state_max_bytes = Some(value);
+        self
+    }
+
     /// Override the request timeout (defaults to 60 seconds).
     #[must_use]
     pub fn timeout(mut self, value: Duration) -> Self {
@@ -427,6 +449,12 @@ impl ClientBuilder {
             self.user_agent,
             self.http_client,
             self.api_version.unwrap_or_default(),
+            crate::otel::V4State::new(
+                self.v4_state_capacity
+                    .unwrap_or(crate::otel::STATE_CAPACITY),
+                self.v4_state_max_bytes
+                    .unwrap_or(crate::otel::STATE_MAX_BYTES),
+            ),
         )
     }
 }

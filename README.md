@@ -129,8 +129,12 @@ retries with backoff, `Retry-After` and splitting a batch on HTTP 413 in both
 modes. An OTLP export succeeds or fails as a whole, so in V4 there are no
 per-span 207 results. A successful export means Langfuse *queued* the spans;
 processing is asynchronous. Scores are sent one by one: a 429 waits for
-`Retry-After` and retries, a 401/403 stops the batch, and any other failure is
-reported for its own event.
+`Retry-After` and retries (the wait holds the batcher's flush lock), a 401/403
+stops the batch, and any other failure is reported for its own event.
+
+In V3, the observation builders' `user_id`/`session_id`/`tags` setters upsert
+the trace. Used before `trace()`, that upsert creates the trace and fixes its
+timestamp, which v3 does not change afterwards.
 
 ### Ids in V4
 
@@ -165,7 +169,14 @@ by its clones and batchers, to keep traces consistent:
 - Observations without a `parent_observation_id` become children of the
   trace's root span. If this client has not written the trace, the first such
   observation has no parent and becomes the root; a later `trace()` adds the
-  trace attributes to it instead of creating a second root.
+  trace attributes to it instead of creating a second root. Unlike V3, where
+  parentless observations were siblings, a second parentless observation
+  becomes a child of the first.
+- The state is per client and least-recently-used (`ClientBuilder::v4_state_capacity`
+  and `v4_state_max_bytes` set its size; ended spans are evicted first). When
+  several processes or clients write to one trace, attach observations to the
+  root written by `trace()` with
+  `parent_observation_id(otel::trace_root_span_id(trace_id))`.
 - The trace's user id, session id, tags, release and version are stamped on
   every observation span written after `trace()` (or after an observation
   builder's `user_id`/`session_id`/`tags` setters). Langfuse needs them on
@@ -181,6 +192,11 @@ the same id re-send the **full** span this client wrote, with the changes merged
 in and the **original start time** (a new start time is ignored). Updating an
 observation this client did not write, or no longer remembers, fails with
 `Error::Validation`.
+
+Langfuse keeps the row with the latest processing time, and separate exports of
+the same span are not ordered, so a `span()` followed by a separate
+`update_span()` can leave the older payload in place. Send create and update
+through one `Batcher` flush (it exports only the merged span), or better:
 
 **Preferred V4 pattern:** write each observation once, complete with its
 `end_time` and output, instead of creating it and updating it later.
