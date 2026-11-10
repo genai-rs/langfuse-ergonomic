@@ -197,7 +197,7 @@ pub use batcher::{
 };
 pub use client::{ClientBuilder, LangfuseClient};
 pub use error::{Error, EventError, IngestionResponse, Result};
-pub use observations::{ObservationsPage, ALL_OBSERVATION_FIELDS};
+pub use observations::{ObservationsPage, ALL_OBSERVATION_FIELDS, MAX_OBSERVATIONS_PAGE_SIZE};
 pub use traces::{IdGenerator, TraceResponse};
 
 // Re-export types from langfuse-client-base for convenience

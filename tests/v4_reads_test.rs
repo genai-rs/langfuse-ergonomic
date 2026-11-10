@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use chrono::{TimeZone, Utc};
 use langfuse_ergonomic::{
     otel, ApiVersion, ClientBuilder, Error, LangfuseClient, ObservationLevel,
-    ALL_OBSERVATION_FIELDS,
+    ALL_OBSERVATION_FIELDS, MAX_OBSERVATIONS_PAGE_SIZE,
 };
 use mockito::{Matcher, Server, ServerGuard};
 use serde_json::json;
@@ -67,7 +67,6 @@ async fn observations_sends_filters_as_query_parameters() {
             Matcher::UrlEncoded("fields".into(), ALL_OBSERVATION_FIELDS.into()),
             Matcher::UrlEncoded("limit".into(), "25".into()),
             Matcher::UrlEncoded("cursor".into(), "abc".into()),
-            Matcher::UrlEncoded("parseIoAsJson".into(), "true".into()),
         ]))
         .with_status(200)
         .with_header("content-type", "application/json")
@@ -98,7 +97,6 @@ async fn observations_sends_filters_as_query_parameters() {
         .fields(ALL_OBSERVATION_FIELDS)
         .limit(25)
         .cursor("abc")
-        .parse_io_as_json(true)
         .call()
         .await
         .unwrap();
@@ -164,6 +162,7 @@ async fn trace_observations_follows_the_cursor() {
         .match_query(Matcher::AllOf(vec![
             Matcher::UrlEncoded("traceId".into(), trace_hex.clone()),
             Matcher::UrlEncoded("fields".into(), ALL_OBSERVATION_FIELDS.into()),
+            Matcher::UrlEncoded("limit".into(), MAX_OBSERVATIONS_PAGE_SIZE.to_string()),
         ]))
         .with_status(200)
         .with_header("content-type", "application/json")
@@ -314,4 +313,79 @@ async fn delete_trace_works_in_v4_with_mapped_id() {
         .unwrap();
     single.assert_async().await;
     multiple.assert_async().await;
+}
+
+#[tokio::test]
+async fn observations_rejects_limits_above_the_server_maximum() {
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("GET", OBSERVATIONS_PATH)
+        .match_query(Matcher::Any)
+        .expect(0)
+        .create_async()
+        .await;
+    let client = client(&server, ApiVersion::V4);
+    for limit in [0, MAX_OBSERVATIONS_PAGE_SIZE + 1] {
+        let err = client.observations().limit(limit).call().await.unwrap_err();
+        assert!(matches!(err, Error::Validation(_)), "{limit}: {err:?}");
+    }
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn observations_rounds_non_integer_usage() {
+    let mut server = Server::new_async().await;
+    let mut item = observation("o1", "t");
+    item["usageDetails"] = json!({"input": 10, "output": 2.6});
+    let _mock = server
+        .mock("GET", OBSERVATIONS_PATH)
+        .match_query(Matcher::Any)
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(json!({"data": [item], "meta": {}}).to_string())
+        .create_async()
+        .await;
+    let page = client(&server, ApiVersion::V4)
+        .observations()
+        .call()
+        .await
+        .unwrap();
+    let usage = page.data[0].usage_details.clone().flatten().unwrap();
+    assert_eq!(usage["input"], 10);
+    assert_eq!(usage["output"], 3);
+}
+
+#[tokio::test]
+async fn trace_observations_keeps_the_latest_row_per_id() {
+    let mut server = Server::new_async().await;
+    let mut old = observation("o1", "t");
+    old["name"] = json!("old");
+    old["updatedAt"] = json!("2026-11-10T12:00:00.000Z");
+    let mut new = observation("o1", "t");
+    new["name"] = json!("new");
+    new["updatedAt"] = json!("2026-11-10T12:00:05.000Z");
+    let other = observation("o2", "t");
+    let _mock = server
+        .mock("GET", OBSERVATIONS_PATH)
+        .match_query(Matcher::Any)
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(json!({"data": [new, other, old], "meta": {}}).to_string())
+        .create_async()
+        .await;
+    let observations = client(&server, ApiVersion::V4)
+        .trace_observations("t")
+        .await
+        .unwrap();
+    let names: Vec<_> = observations
+        .iter()
+        .map(|o| (o.id.as_str(), o.name.clone().flatten()))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            ("o1", Some("new".to_owned())),
+            ("o2", Some("obs o2".to_owned()))
+        ]
+    );
 }
