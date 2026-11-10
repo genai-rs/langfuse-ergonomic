@@ -247,7 +247,6 @@ impl LangfuseClient {
 
         // The endpoint is deprecated upstream (Langfuse v3), but it is still what
         // this builder targets.
-        #[allow(deprecated)]
         let result = trace_api::trace_list()
             .configuration(self.configuration())
             .maybe_page(page.map(i64::from))
