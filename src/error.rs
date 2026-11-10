@@ -396,6 +396,28 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_retry_after_http_date() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        let future = (chrono::Utc::now() + chrono::Duration::seconds(120)).to_rfc2822();
+        headers.insert(
+            reqwest::header::RETRY_AFTER,
+            reqwest::header::HeaderValue::from_str(&future).unwrap(),
+        );
+        let delay = parse_retry_after(&headers).unwrap();
+        assert!(
+            (Duration::from_secs(115)..=Duration::from_secs(120)).contains(&delay),
+            "unexpected delay {delay:?}"
+        );
+
+        let past = (chrono::Utc::now() - chrono::Duration::seconds(120)).to_rfc2822();
+        headers.insert(
+            reqwest::header::RETRY_AFTER,
+            reqwest::header::HeaderValue::from_str(&past).unwrap(),
+        );
+        assert_eq!(parse_retry_after(&headers), None);
+    }
+
+    #[test]
     fn test_ingestion_response_success() {
         let response = IngestionResponse {
             success_ids: vec!["id1".to_string(), "id2".to_string()],
