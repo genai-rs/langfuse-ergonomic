@@ -109,7 +109,14 @@ impl LangfuseClient {
             .map_err(|e| crate::error::Error::Api(format!("Failed to list datasets: {e}")))
     }
 
-    /// Delete a dataset run
+    /// Delete a dataset run (Langfuse v3 only)
+    ///
+    /// Langfuse v4 replaces dataset runs with experiments and removed this endpoint
+    /// (Langfuse Cloud: 2026-11-16). With [`crate::ApiVersion::V4`] this returns
+    /// [`crate::Error::Configuration`] without a request.
+    #[deprecated(
+        note = "Langfuse v3 only; fails with ApiVersion::V4. Langfuse v4 replaces dataset runs with experiments."
+    )]
     pub async fn delete_dataset_run(
         &self,
         dataset_name: impl Into<String>,
@@ -119,6 +126,8 @@ impl LangfuseClient {
 
         let dataset_name = dataset_name.into();
         let run_name = run_name.into();
+
+        self.require_v3("delete_dataset_run", "use the Langfuse experiments API")?;
 
         datasets_api::datasets_delete_run()
             .configuration(self.configuration())
@@ -130,7 +139,14 @@ impl LangfuseClient {
             .map_err(|e| crate::error::Error::Api(format!("Failed to delete dataset run: {e}")))
     }
 
-    /// Get a dataset run
+    /// Get a dataset run (Langfuse v3 only)
+    ///
+    /// Langfuse v4 replaces dataset runs with experiments and removed this endpoint
+    /// (Langfuse Cloud: 2026-11-16). With [`crate::ApiVersion::V4`] this returns
+    /// [`crate::Error::Configuration`] without a request.
+    #[deprecated(
+        note = "Langfuse v3 only; fails with ApiVersion::V4. Langfuse v4 replaces dataset runs with experiments."
+    )]
     pub async fn get_dataset_run(
         &self,
         dataset_name: impl Into<String>,
@@ -141,6 +157,8 @@ impl LangfuseClient {
         let dataset_name = dataset_name.into();
         let run_name = run_name.into();
 
+        self.require_v3("get_dataset_run", "use the Langfuse experiments API")?;
+
         datasets_api::datasets_get_run()
             .configuration(self.configuration())
             .dataset_name(dataset_name.as_str())
@@ -150,7 +168,14 @@ impl LangfuseClient {
             .map_err(|e| crate::error::Error::Api(format!("Failed to get dataset run: {e}")))
     }
 
-    /// Get all runs for a dataset
+    /// Get all runs for a dataset (Langfuse v3 only)
+    ///
+    /// Langfuse v4 replaces dataset runs with experiments and removed this endpoint
+    /// (Langfuse Cloud: 2026-11-16). With [`crate::ApiVersion::V4`] this returns
+    /// [`crate::Error::Configuration`] without a request.
+    #[deprecated(
+        note = "Langfuse v3 only; fails with ApiVersion::V4. Langfuse v4 replaces dataset runs with experiments."
+    )]
     pub async fn get_dataset_runs(
         &self,
         dataset_name: impl Into<String>,
@@ -158,6 +183,8 @@ impl LangfuseClient {
         use langfuse_client_base::apis::datasets_api;
 
         let dataset_name = dataset_name.into();
+
+        self.require_v3("get_dataset_runs", "use the Langfuse experiments API")?;
 
         datasets_api::datasets_get_runs()
             .configuration(self.configuration())

@@ -1,5 +1,7 @@
 //! Protocol regressions for the client-base 0.15 migration, without live credentials.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+// These tests exercise the Langfuse v3 read methods, which are deprecated.
+#![allow(deprecated)]
 
 use chrono::{DateTime, Utc};
 use langfuse_ergonomic::{ClientBuilder, Error, LangfuseClient, ObservationsViewSingle};

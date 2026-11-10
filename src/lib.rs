@@ -38,10 +38,10 @@
 //!
 //! println!("Created trace: {}", trace.id);
 //!
-//! // List traces with strongly-typed response
-//! let traces = client.list_traces().limit(10).call().await?;
-//! for trace in &traces.data {
-//!     println!("Trace ID: {}, Name: {:?}", trace.id, trace.name);
+//! // Read the trace back (Langfuse v4 observations API)
+//! let observations = client.trace_observations(&trace.id).await?;
+//! for observation in &observations {
+//!     println!("Observation {}: {:?}", observation.id, observation.name);
 //! }
 //! # Ok(())
 //! # }
@@ -52,11 +52,11 @@
 //! All API methods return strongly-typed structs instead of JSON values:
 //!
 //! ```no_run
-//! # use langfuse_ergonomic::{ClientBuilder, Traces, Dataset, Prompt};
+//! # use langfuse_ergonomic::{ClientBuilder, ObservationsPage, Dataset, Prompt};
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! # let client = ClientBuilder::from_env()?.build()?;
-//! // Traces are strongly typed
-//! let traces: Traces = client.list_traces().call().await?;
+//! // Traces (root observations) are strongly typed
+//! let traces: ObservationsPage = client.observations().is_root_observation(true).call().await?;
 //! println!("Found {} traces", traces.data.len());
 //!
 //! // Datasets are strongly typed
@@ -115,6 +115,11 @@
 //! `LANGFUSE_API_VERSION=v3`. Langfuse Cloud removes the v3 ingestion of traces and
 //! observations on 2026-11-16. See [`ApiVersion`] and [`otel`] for what changes, including
 //! how ids are mapped to OpenTelemetry ids.
+//!
+//! Reads use the v2 observations API: [`LangfuseClient::observations`] (filters and cursor
+//! pagination) and [`LangfuseClient::trace_observations`]. The v3-only reads (`get_trace`,
+//! `list_traces`, `get_observation(s)`, dataset runs) are deprecated and return
+//! [`Error::Configuration`] with [`ApiVersion::V4`].
 //!
 //! ```no_run
 //! use langfuse_ergonomic::{ApiVersion, ClientBuilder};
@@ -192,6 +197,7 @@ pub use batcher::{
 };
 pub use client::{ClientBuilder, LangfuseClient};
 pub use error::{Error, EventError, IngestionResponse, Result};
+pub use observations::{ObservationsPage, ALL_OBSERVATION_FIELDS};
 pub use traces::{IdGenerator, TraceResponse};
 
 // Re-export types from langfuse-client-base for convenience
@@ -217,9 +223,10 @@ pub use traces::{IdGenerator, TraceResponse};
 pub use langfuse_client_base::models::{
     CreateEventBody, CreateGenerationBody, CreateSpanBody, Dataset, DatasetItem,
     DatasetRunWithItems, IngestionBatchRequest, IngestionEvent, LegacyObservationsViews,
-    ObservationLevel, ObservationsView, ObservationsViewSingle, PaginatedDatasetItems,
-    PaginatedDatasetRuns, PaginatedDatasets, Prompt, PromptMetaListResponse, ScoreDataType, Trace,
-    TraceBody, TraceWithDetails, TraceWithFullDetails, Traces,
+    ObservationLevel, ObservationV2, ObservationsV2Response, ObservationsView,
+    ObservationsViewSingle, PaginatedDatasetItems, PaginatedDatasetRuns, PaginatedDatasets, Prompt,
+    PromptMetaListResponse, ScoreDataType, Trace, TraceBody, TraceWithDetails,
+    TraceWithFullDetails, Traces,
 };
 
 /// Response from the legacy observations API, retaining the name used in 0.6.3.

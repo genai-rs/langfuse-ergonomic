@@ -1,5 +1,7 @@
 //! Integration tests for langfuse-ergonomic
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+// These tests exercise the Langfuse v3 read methods, which are deprecated.
+#![allow(deprecated)]
 
 use langfuse_ergonomic::{ClientBuilder, LangfuseClient};
 use serde_json::json;
