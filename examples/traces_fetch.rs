@@ -1,4 +1,8 @@
-//! Example demonstrating trace fetching functionality
+//! Example demonstrating how to read traces back with the Langfuse v4 observations API
+//!
+//! In Langfuse v4 a trace is read through its observations: the root observation carries the
+//! trace name, input and output. `trace_observations()` replaces `get_trace()`, and
+//! `observations().is_root_observation(true)` replaces `list_traces()`.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use langfuse_ergonomic::ClientBuilder;
@@ -23,55 +27,73 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "user_query": "How does trace fetching work?"
         }))
         .output(json!({
-            "response": "You can fetch traces using get_trace and list_traces methods"
+            "response": "Read traces through the v4 observations API"
         }))
         .user_id("example-user")
         .tags(vec!["example".to_string(), "fetch-demo".to_string()])
         .call()
         .await?;
+    client
+        .span()
+        .trace_id(&trace.id)
+        .name("lookup")
+        .call()
+        .await?;
 
     println!(" Created trace with ID: {}", trace.id);
 
-    // Get the specific trace
-    println!("\n2. Fetching the trace by ID...");
-    match client.get_trace(&trace.id).await {
-        Ok(fetched_trace) => {
-            println!(
-                " Fetched trace: {}",
-                serde_json::to_string_pretty(&fetched_trace)?
-            );
+    // Get every observation of the trace
+    println!("\n2. Fetching the trace's observations...");
+    match client.trace_observations(&trace.id).await {
+        Ok(observations) => {
+            for observation in &observations {
+                println!(
+                    "   {} {} {:?} root={:?}",
+                    observation.id,
+                    observation.r#type,
+                    observation.name,
+                    observation.is_root_observation
+                );
+            }
         }
         Err(e) => {
-            println!("  Could not fetch trace: {e}");
+            println!("  Could not fetch observations: {e}");
         }
     }
 
-    // List traces with filters
+    // List traces (root observations) with filters
     println!("\n3. Listing traces with filters...");
-    let traces = client
-        .list_traces()
-        .limit(5)
-        .page(1)
+    let page = client
+        .observations()
+        .is_root_observation(true)
         .user_id("example-user")
         .name("fetch-example-trace")
+        .from_start_time(chrono::Utc::now() - chrono::Duration::hours(1))
+        .limit(5)
         .call()
         .await?;
+    for root in &page.data {
+        println!("   trace {:?}: {:?}", root.trace_id, root.name);
+    }
 
-    println!(" Listed traces: {}", serde_json::to_string_pretty(&traces)?);
-
-    // List recent traces
-    println!("\n4. Listing recent traces...");
-    let recent_traces = client
-        .list_traces()
-        .limit(3)
-        .order_by("timestamp")
-        .call()
-        .await?;
-
-    println!(
-        " Recent traces: {}",
-        serde_json::to_string_pretty(&recent_traces)?
-    );
+    // Page through recent traces with the cursor
+    println!("\n4. Paging through recent traces...");
+    let mut cursor = None;
+    for page_number in 1..=3 {
+        let page = client
+            .observations()
+            .is_root_observation(true)
+            .from_start_time(chrono::Utc::now() - chrono::Duration::days(1))
+            .limit(3)
+            .maybe_cursor(cursor)
+            .call()
+            .await?;
+        println!("   page {page_number}: {} traces", page.data.len());
+        match page.next_cursor {
+            Some(next) => cursor = Some(next),
+            None => break,
+        }
+    }
 
     // Example of trace deletion (commented out to preserve data)
     println!("\n5. Trace deletion example (not executed):");

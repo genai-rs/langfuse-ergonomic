@@ -42,6 +42,18 @@ impl LangfuseClient {
         self
     }
 
+    /// Fail with a clear error when a Langfuse v3-only method is called in V4 mode.
+    pub(crate) fn require_v3(&self, method: &str, alternative: &str) -> Result<()> {
+        match self.api_version {
+            ApiVersion::V3 => Ok(()),
+            ApiVersion::V4 => Err(Error::Configuration(format!(
+                "{method}() uses a Langfuse v3 endpoint that Langfuse v4 removed \
+                 (Langfuse Cloud: 2026-11-16); {alternative}, or select ApiVersion::V3 \
+                 for a Langfuse v3 server"
+            ))),
+        }
+    }
+
     /// Trace attributes given on an observation builder (`user_id`, `session_id`, `tags`).
     ///
     /// V4 records them in the write state, which stamps them on every span of the trace. V3
