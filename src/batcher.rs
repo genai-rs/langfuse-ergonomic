@@ -455,12 +455,15 @@ impl Batcher {
             return Err(Error::Api("Batcher is shutting down".to_string()));
         }
 
-        if self.client.api_version == ApiVersion::V4 {
-            // Encode now: this rejects events the v4 transport cannot send (for example an
-            // update of an unknown span) and records the full span in the shared state, which
-            // the send step reads.
-            self.client.v4_state().apply(&event)?;
-        }
+        // V4: reject events the v4 transport cannot send (for example an update of an unknown
+        // span) now, but only record them in the shared state once the batcher accepted them,
+        // so a rejected event cannot become a trace root that is never sent.
+        let v4_event = if self.client.api_version == ApiVersion::V4 {
+            self.client.v4_state().validate(&event)?;
+            Some(event.clone())
+        } else {
+            None
+        };
 
         let id = Self::extract_event_id(&event);
 
@@ -521,6 +524,12 @@ impl Batcher {
                     Err(e) => return Err(Error::Api(format!("Failed to queue event: {e}"))),
                 }
             }
+        }
+
+        if let Some(event) = v4_event {
+            // The send step falls back to applying the event itself if it runs first; applying
+            // twice gives the same span.
+            self.client.v4_state().apply(&event)?;
         }
 
         Ok(())
@@ -960,6 +969,9 @@ impl Batcher {
     /// if it is still limited, it and the remaining scores are reported as retryable failures.
     /// A 401/403 stops the loop: the remaining scores fail, and the batch fails fast when
     /// nothing in it succeeded. Other score errors are reported for their own event.
+    ///
+    /// The `Retry-After` wait happens inside the flush, so it holds the flush lock: other
+    /// flushes of this batcher (and `shutdown`) wait for it, while `add` keeps queueing.
     async fn send_batch_v4(
         client: &LangfuseClient,
         config: &BatcherConfig,

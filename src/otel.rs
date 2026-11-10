@@ -44,12 +44,18 @@
 //! trace input and output (Langfuse v4 reads trace input and output from the root observation;
 //! `langfuse.trace.input`/`output` are sent too, for servers that still write v3 traces).
 //!
-//! The client keeps a bounded write state ([`STATE_CAPACITY`] entries per map), shared by its
-//! clones and batchers:
+//! The client keeps a bounded least-recently-used write state ([`STATE_CAPACITY`] entries per
+//! map and [`STATE_MAX_BYTES`] of cached spans by default, configurable on
+//! [`crate::ClientBuilder`]), shared by its clones and batchers:
 //!
 //! - Observations without a `parent_observation_id` become children of the trace's root span.
 //!   If this client has not written the trace, the first such observation has no parent and
-//!   becomes the root; a later `trace()` adds the trace attributes to it.
+//!   becomes the root; a later `trace()` adds the trace attributes to it. Unlike Langfuse v3,
+//!   where parentless observations were siblings, a second parentless observation therefore
+//!   becomes a child of the first.
+//! - The state is per client. When several processes or clients write to one trace, or the
+//!   root was evicted, each may create its own root. To attach to the root written by
+//!   `trace()` elsewhere, pass `parent_observation_id(otel::trace_root_span_id(trace_id))`.
 //! - The trace's user id, session id, tags, release and version (from `trace()`, or from the
 //!   `user_id`/`session_id`/`tags` setters of the observation builders) are stamped on every
 //!   observation span written after them. Langfuse needs them on every span to filter
@@ -75,7 +81,7 @@
 //! See the README section "Langfuse v3 and v4" for the full table. Attribute names follow
 //! <https://langfuse.com/integrations/native/opentelemetry>.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap};
 
 use chrono::{DateTime, FixedOffset, Utc};
 use langfuse_client_base::models::{
@@ -769,45 +775,119 @@ pub(crate) fn encode_event(event: &IngestionEvent) -> Result<V4Item> {
     Ok(V4Item::Span(span))
 }
 
-/// How many spans, traces and batch events the V4 state remembers (oldest entries are
-/// evicted first).
+/// Default number of spans, traces and batch events the V4 write state remembers. Set it
+/// with [`crate::ClientBuilder::v4_state_capacity`].
 pub const STATE_CAPACITY: usize = 10_000;
 
-/// Insertion-ordered map that evicts its oldest entries beyond `capacity`.
+/// Default budget, in bytes of serialized JSON, for the full spans the V4 write state keeps.
+/// Set it with [`crate::ClientBuilder::v4_state_max_bytes`].
+pub const STATE_MAX_BYTES: usize = 64 * 1024 * 1024;
+
+/// How many of the least recently used entries eviction inspects to find a preferred victim.
+const EVICTION_SCAN: usize = 64;
+
 #[derive(Debug)]
-struct Bounded<V> {
-    map: HashMap<String, V>,
-    order: VecDeque<String>,
-    capacity: usize,
+struct LruEntry<V> {
+    value: V,
+    tick: u64,
+    weight: usize,
 }
 
-impl<V> Bounded<V> {
-    fn new(capacity: usize) -> Self {
+/// Least-recently-used map bounded by entry count and total weight. Reads and writes refresh
+/// an entry. Eviction removes the least recently used entry, but first looks among the
+/// [`EVICTION_SCAN`] least recently used ones for an entry `prefer_evict` accepts.
+#[derive(Debug)]
+struct Lru<V> {
+    map: HashMap<String, LruEntry<V>>,
+    order: BTreeMap<u64, String>,
+    next_tick: u64,
+    capacity: usize,
+    max_weight: usize,
+    total_weight: usize,
+    prefer_evict: fn(&V) -> bool,
+}
+
+impl<V> Lru<V> {
+    fn new(capacity: usize, max_weight: usize, prefer_evict: fn(&V) -> bool) -> Self {
         Self {
             map: HashMap::new(),
-            order: VecDeque::new(),
-            capacity,
+            order: BTreeMap::new(),
+            next_tick: 0,
+            capacity: capacity.max(1),
+            max_weight,
+            total_weight: 0,
+            prefer_evict,
         }
     }
 
-    fn get(&self, key: &str) -> Option<&V> {
-        self.map.get(key)
+    fn touch(&mut self, key: &str) {
+        if let Some(entry) = self.map.get_mut(key) {
+            self.order.remove(&entry.tick);
+            entry.tick = self.next_tick;
+            self.order.insert(self.next_tick, key.to_owned());
+            self.next_tick += 1;
+        }
     }
 
-    fn insert(&mut self, key: String, value: V) {
-        if !self.map.contains_key(&key) {
-            self.order.push_back(key.clone());
+    /// Whether `key` is present, without marking it as used.
+    fn contains(&self, key: &str) -> bool {
+        self.map.contains_key(key)
+    }
+
+    /// Look up `key` and mark it as recently used.
+    fn get(&mut self, key: &str) -> Option<&V> {
+        self.touch(key);
+        self.map.get(key).map(|entry| &entry.value)
+    }
+
+    fn insert(&mut self, key: String, value: V, weight: usize) {
+        if let Some(old) = self.map.remove(&key) {
+            self.order.remove(&old.tick);
+            self.total_weight -= old.weight;
         }
-        self.map.insert(key, value);
-        while self.map.len() > self.capacity {
-            match self.order.pop_front() {
-                Some(oldest) => {
-                    self.map.remove(&oldest);
-                }
-                None => break,
+        let tick = self.next_tick;
+        self.next_tick += 1;
+        self.order.insert(tick, key.clone());
+        self.total_weight += weight;
+        self.map.insert(
+            key.clone(),
+            LruEntry {
+                value,
+                tick,
+                weight,
+            },
+        );
+        while self.map.len() > self.capacity
+            || (self.total_weight > self.max_weight && self.map.len() > 1)
+        {
+            let victim = self
+                .order
+                .values()
+                .take(EVICTION_SCAN)
+                .filter(|k| **k != key)
+                .find(|k| {
+                    self.map
+                        .get(*k)
+                        .is_some_and(|e| (self.prefer_evict)(&e.value))
+                })
+                .or_else(|| self.order.values().find(|k| **k != key))
+                .cloned();
+            let Some(victim) = victim else { break };
+            if let Some(entry) = self.map.remove(&victim) {
+                self.order.remove(&entry.tick);
+                self.total_weight -= entry.weight;
             }
         }
     }
+}
+
+fn always<V>(_: &V) -> bool {
+    true
+}
+
+/// A span that has ended is less likely to be updated again, so it is evicted first.
+fn span_has_ended(span: &Value) -> bool {
+    span.get("endTimeUnixNano").is_some()
 }
 
 /// What the client knows about a trace it wrote to.
@@ -836,22 +916,35 @@ struct TraceContext {
 ///   version), which are stamped on every observation span of the trace, as Langfuse
 ///   requires for filtering observations by them.
 ///
-/// Each map holds at most [`STATE_CAPACITY`] entries.
+/// Each map is a least-recently-used cache holding at most `capacity` entries (default
+/// [`STATE_CAPACITY`]); the cached spans also stay within `max_bytes` of serialized JSON
+/// (default [`STATE_MAX_BYTES`]), evicting ended spans first.
 #[derive(Debug)]
 pub(crate) struct V4State {
-    spans: Bounded<Value>,
-    traces: Bounded<TraceContext>,
+    spans: Lru<Value>,
+    traces: Lru<TraceContext>,
     /// Ingestion event id -> span id, for the batcher's send step.
-    events: Bounded<String>,
+    events: Lru<String>,
 }
 
 impl Default for V4State {
     fn default() -> Self {
+        Self::new(STATE_CAPACITY, STATE_MAX_BYTES)
+    }
+}
+
+impl V4State {
+    pub(crate) fn new(capacity: usize, max_bytes: usize) -> Self {
         Self {
-            spans: Bounded::new(STATE_CAPACITY),
-            traces: Bounded::new(STATE_CAPACITY),
-            events: Bounded::new(STATE_CAPACITY * 2),
+            spans: Lru::new(capacity, max_bytes, span_has_ended),
+            traces: Lru::new(capacity, usize::MAX, always),
+            events: Lru::new(capacity.saturating_mul(2), usize::MAX, always),
         }
+    }
+
+    fn store_span(&mut self, span_id: String, span: Value) {
+        let weight = serde_json::to_vec(&span).map_or(0, |bytes| bytes.len());
+        self.spans.insert(span_id, span, weight);
     }
 }
 
@@ -907,19 +1000,46 @@ fn merge_attribute(span: &mut Value, key: &str, value: &Value) {
             v.and_then(|v| v["stringValue"].as_str())
                 .and_then(|s| serde_json::from_str::<Map<String, Value>>(s).ok())
         };
-        if let (Some(mut existing), Some(update)) =
-            (parse(find_attribute(span, key)), parse(Some(value)))
-        {
-            existing.extend(update);
-            set_attribute(
-                span,
-                key,
-                json!({ "stringValue": Value::Object(existing).to_string() }),
-            );
+        let merged = match (parse(find_attribute(span, key)), parse(Some(value))) {
+            (Some(mut existing), Some(update)) => {
+                existing.extend(update);
+                Some(existing)
+            }
+            (None, update) => update,
+            (Some(existing), None) => Some(existing),
+        };
+        if let Some(merged) = merged {
+            replace_metadata(span, key, merged);
             return;
         }
     }
     set_attribute(span, key, value.clone());
+}
+
+/// Set the metadata object attribute `prefix` and rebuild its per-key attributes
+/// (`<prefix>.<key>`, string values only) from the object, so no stale per-key value can
+/// override the object on the server.
+fn replace_metadata(span: &mut Value, prefix: &str, object: Map<String, Value>) {
+    let key_prefix = format!("{prefix}.");
+    attributes_mut(span).retain(|a| {
+        !a["key"]
+            .as_str()
+            .is_some_and(|k| k.starts_with(&key_prefix))
+    });
+    for (key, value) in &object {
+        if let Value::String(s) = value {
+            set_attribute(
+                span,
+                &format!("{prefix}.{key}"),
+                json!({ "stringValue": s }),
+            );
+        }
+    }
+    set_attribute(
+        span,
+        prefix,
+        json!({ "stringValue": Value::Object(object).to_string() }),
+    );
 }
 
 /// Merge the changed fields of `update` into the full span `cached`. The start time of the
@@ -1039,7 +1159,29 @@ fn event_id(event: &IngestionEvent) -> &str {
     }
 }
 
+fn unknown_span_error(span_hex: &str) -> Error {
+    Error::Validation(format!(
+        "cannot update observation {span_hex} with Langfuse v4: this client has not written it \
+         (or no longer remembers it). Langfuse v4 stores each span as one complete row, so an \
+         update must re-send the whole span. Create the observation with this client first, or \
+         create it once with its end time and output instead of updating it"
+    ))
+}
+
 impl V4State {
+    /// Check that [`V4State::apply`] would accept `event`, without changing the state.
+    pub(crate) fn validate(&self, event: &IngestionEvent) -> Result<()> {
+        if let Some(raw) = raw_observation(event)? {
+            let span_hex = span_str(&raw.span, "spanId").unwrap_or_default();
+            if raw.is_update && !self.spans.contains(span_hex) {
+                return Err(unknown_span_error(span_hex));
+            }
+        } else {
+            encode_event(event)?;
+        }
+        Ok(())
+    }
+
     /// Translate one ingestion event, applying and updating the state.
     ///
     /// Spans come back complete: an update returns the cached span with the changes merged in
@@ -1063,16 +1205,14 @@ impl V4State {
     fn remember_event(&mut self, event: &IngestionEvent, span: &Value) {
         if let Some(span_id) = span_str(span, "spanId") {
             self.events
-                .insert(event_id(event).to_owned(), span_id.to_owned());
+                .insert(event_id(event).to_owned(), span_id.to_owned(), 0);
         }
     }
 
     /// The latest full span for a batched event, if the state still holds it.
-    pub(crate) fn span_for_event(&self, event_id: &str) -> Option<Value> {
-        self.events
-            .get(event_id)
-            .and_then(|span_id| self.spans.get(span_id))
-            .cloned()
+    pub(crate) fn span_for_event(&mut self, event_id: &str) -> Option<Value> {
+        let span_id = self.events.get(event_id)?.clone();
+        self.spans.get(&span_id).cloned()
     }
 
     /// Record trace attributes for `trace_id` (any Langfuse trace id), keeping values that are
@@ -1095,7 +1235,7 @@ impl V4State {
         if let Some(tags) = tags {
             context.tags = Some(tags.to_vec());
         }
-        self.traces.insert(trace_hex, context);
+        self.traces.insert(trace_hex, context, 0);
     }
 
     fn apply_observation(&mut self, raw: RawObservation) -> Result<Value> {
@@ -1107,15 +1247,7 @@ impl V4State {
 
         let mut span = match self.spans.get(&span_hex) {
             Some(cached) => merge_span(cached, &raw.span),
-            None if raw.is_update => {
-                return Err(Error::Validation(format!(
-                    "cannot update observation {span_hex} with Langfuse v4: this client has not \
-                     written it (or no longer remembers it). Langfuse v4 stores each span as one \
-                     complete row, so an update must re-send the whole span. Create the \
-                     observation with this client first, or create it once with its end time \
-                     and output instead of updating it"
-                )));
-            }
+            None if raw.is_update => return Err(unknown_span_error(&span_hex)),
             None => raw.span,
         };
 
@@ -1129,12 +1261,12 @@ impl V4State {
                     // No root known for this trace: this observation becomes the root.
                     context.root_span_id = Some(span_hex.clone());
                     context.root_is_synthetic = false;
-                    self.traces.insert(trace_hex.clone(), context.clone());
+                    self.traces.insert(trace_hex.clone(), context.clone(), 0);
                 }
             }
         }
         stamp_trace_context(&mut span, &context);
-        self.spans.insert(span_hex, span.clone());
+        self.store_span(span_hex, span.clone());
         Ok(span)
     }
 
@@ -1201,9 +1333,9 @@ impl V4State {
                 raw
             }
         };
-        self.traces.insert(trace_hex, context);
+        self.traces.insert(trace_hex, context, 0);
         if let Some(span_id) = span_str(&span, "spanId") {
-            self.spans.insert(span_id.to_owned(), span.clone());
+            self.store_span(span_id.to_owned(), span.clone());
         }
         Ok(span)
     }
@@ -1936,15 +2068,89 @@ mod tests {
     }
 
     #[test]
-    fn bounded_map_evicts_the_oldest_entries() {
-        let mut map = Bounded::new(2);
-        map.insert("a".to_owned(), 1);
-        map.insert("b".to_owned(), 2);
-        map.insert("a".to_owned(), 3);
-        map.insert("c".to_owned(), 4);
+    fn lru_refreshes_on_get_and_insert() {
+        let mut map: Lru<i32> = Lru::new(2, usize::MAX, always);
+        map.insert("a".to_owned(), 1, 0);
+        map.insert("b".to_owned(), 2, 0);
+        assert_eq!(map.get("a"), Some(&1)); // "a" is now the most recently used
+        map.insert("c".to_owned(), 3, 0);
+        assert!(map.get("b").is_none());
+        assert_eq!(map.get("a"), Some(&1));
+        map.insert("c".to_owned(), 4, 0); // re-insert refreshes too
+        map.insert("d".to_owned(), 5, 0);
         assert!(map.get("a").is_none());
-        assert_eq!(map.get("b"), Some(&2));
         assert_eq!(map.get("c"), Some(&4));
+        assert_eq!(map.get("d"), Some(&5));
+    }
+
+    #[test]
+    fn lru_prefers_evicting_ended_spans() {
+        let mut map: Lru<Value> = Lru::new(2, usize::MAX, span_has_ended);
+        map.insert("open".to_owned(), json!({"spanId": "open"}), 0);
+        map.insert(
+            "ended".to_owned(),
+            json!({"spanId": "ended", "endTimeUnixNano": "1"}),
+            0,
+        );
+        map.insert("new".to_owned(), json!({"spanId": "new"}), 0);
+        // "open" is the least recently used, but the ended span goes first.
+        assert!(map.get("ended").is_none());
+        assert!(map.get("open").is_some());
+        assert!(map.get("new").is_some());
+    }
+
+    #[test]
+    fn lru_stays_within_the_byte_budget() {
+        let mut map: Lru<i32> = Lru::new(100, 10, always);
+        map.insert("a".to_owned(), 1, 4);
+        map.insert("b".to_owned(), 2, 4);
+        map.insert("c".to_owned(), 3, 4);
+        assert!(map.get("a").is_none());
+        assert!(map.get("b").is_some());
+        assert!(map.get("c").is_some());
+        // A single entry over the budget is kept rather than leaving nothing.
+        map.insert("big".to_owned(), 4, 50);
+        assert_eq!(map.get("big"), Some(&4));
+    }
+
+    #[test]
+    fn metadata_type_change_drops_the_stale_per_key_value() {
+        let mut state = V4State::default();
+        applied(
+            &mut state,
+            create_span(
+                "span-1",
+                "trace-1",
+                CreateSpanBody {
+                    metadata: Some(Some(json!({"a": "x", "keep": "k"}))),
+                    ..CreateSpanBody::default()
+                },
+            ),
+        );
+        let mut update = UpdateSpanBody::new("span-1".into());
+        update.metadata = Some(Some(json!({"a": 5})));
+        let updated = applied(&mut state, update_span("span-1", "trace-1", update));
+        let a = attrs(&updated);
+        assert!(!a.contains_key("langfuse.observation.metadata.a"));
+        assert_eq!(string_attr(&a, "langfuse.observation.metadata.keep"), "k");
+        let object: Value =
+            serde_json::from_str(&string_attr(&a, "langfuse.observation.metadata")).unwrap();
+        assert_eq!(object, json!({"a": 5, "keep": "k"}));
+    }
+
+    #[test]
+    fn validate_does_not_change_the_state() {
+        let mut state = V4State::default();
+        let create = create_span("span-1", "trace-1", CreateSpanBody::default());
+        state.validate(&create).unwrap();
+        // Nothing was recorded: the span is unknown and no root was registered.
+        let update = update_span("span-1", "trace-1", UpdateSpanBody::new("span-1".into()));
+        assert!(matches!(state.validate(&update), Err(Error::Validation(_))));
+        let other = applied(
+            &mut state,
+            create_span("span-2", "trace-1", CreateSpanBody::default()),
+        );
+        assert!(other.get("parentSpanId").is_none());
     }
 
     #[test]

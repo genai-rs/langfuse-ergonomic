@@ -69,7 +69,8 @@ impl LangfuseClient {
     pub async fn span(
         &self,
         #[builder(into)] trace_id: String,
-        /// Trace user id. V4 stamps it on every span of the trace; V3 upserts the trace.
+        /// Trace user id. V4 stamps it on every span of the trace; V3 upserts the trace (which,
+        /// before `trace()`, fixes the trace timestamp: v3 does not change it afterwards).
         #[builder(into)]
         user_id: Option<String>,
         /// Trace session id. V4 stamps it on every span of the trace; V3 upserts the trace.
@@ -149,7 +150,8 @@ impl LangfuseClient {
     pub async fn generation(
         &self,
         #[builder(into)] trace_id: String,
-        /// Trace user id. V4 stamps it on every span of the trace; V3 upserts the trace.
+        /// Trace user id. V4 stamps it on every span of the trace; V3 upserts the trace (which,
+        /// before `trace()`, fixes the trace timestamp: v3 does not change it afterwards).
         #[builder(into)]
         user_id: Option<String>,
         /// Trace session id. V4 stamps it on every span of the trace; V3 upserts the trace.
@@ -243,7 +245,8 @@ impl LangfuseClient {
     pub async fn event(
         &self,
         #[builder(into)] trace_id: String,
-        /// Trace user id. V4 stamps it on every span of the trace; V3 upserts the trace.
+        /// Trace user id. V4 stamps it on every span of the trace; V3 upserts the trace (which,
+        /// before `trace()`, fixes the trace timestamp: v3 does not change it afterwards).
         #[builder(into)]
         user_id: Option<String>,
         /// Trace session id. V4 stamps it on every span of the trace; V3 upserts the trace.
@@ -364,6 +367,12 @@ impl LangfuseClient {
     /// It fails with [`Error::Validation`] if this client has not written the observation (or
     /// no longer remembers it, see [`crate::otel::STATE_CAPACITY`]). Prefer creating the
     /// observation once with its `end_time` and output. Returns the mapped id.
+    ///
+    /// Langfuse keeps the row with the latest processing time (`event_ts`, set when its worker
+    /// processes the export), and two separate exports of the same span are not ordered: if
+    /// the create and the update are sent as two requests (for example `span()` followed by
+    /// this method), the older payload can win. Write the span once, complete, or send create
+    /// and update through one [`crate::Batcher`] flush, which exports only the merged span.
     #[builder]
     pub async fn update_span(
         &self,
@@ -429,6 +438,12 @@ impl LangfuseClient {
     /// It fails with [`Error::Validation`] if this client has not written the observation (or
     /// no longer remembers it, see [`crate::otel::STATE_CAPACITY`]). Prefer creating the
     /// observation once with its `end_time` and output. Returns the mapped id.
+    ///
+    /// Langfuse keeps the row with the latest processing time (`event_ts`, set when its worker
+    /// processes the export), and two separate exports of the same span are not ordered: if
+    /// the create and the update are sent as two requests (for example `span()` followed by
+    /// this method), the older payload can win. Write the span once, complete, or send create
+    /// and update through one [`crate::Batcher`] flush, which exports only the merged span.
     #[builder]
     pub async fn update_generation(
         &self,
