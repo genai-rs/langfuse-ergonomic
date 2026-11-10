@@ -1,5 +1,7 @@
 //! Mock tests for offline development and testing without API credentials
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+// These tests exercise the Langfuse v3 read methods, which are deprecated.
+#![allow(deprecated)]
 
 use langfuse_ergonomic::{ClientBuilder, Error, LangfuseClient, ObservationsViews};
 use mockito::{Matcher, Server};

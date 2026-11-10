@@ -1,7 +1,7 @@
 //! Example demonstrating dataset management functionality
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use langfuse_ergonomic::ClientBuilder;
+use langfuse_ergonomic::{ApiVersion, ClientBuilder};
 use serde_json::json;
 
 #[tokio::main]
@@ -66,15 +66,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Get dataset runs
+    // Get dataset runs. Langfuse v4 replaces dataset runs with experiments, so this endpoint
+    // only exists on Langfuse v3 servers.
     println!("\n4. Getting dataset runs...");
-    match client.get_dataset_runs("example-dataset").await {
-        Ok(runs) => {
-            println!(" Dataset runs: {}", serde_json::to_string_pretty(&runs)?);
+    if client.api_version() == ApiVersion::V3 {
+        #[allow(deprecated)]
+        let runs = client.get_dataset_runs("example-dataset").await;
+        match runs {
+            Ok(runs) => {
+                println!(" Dataset runs: {}", serde_json::to_string_pretty(&runs)?);
+            }
+            Err(e) => {
+                println!("  Could not retrieve dataset runs: {e}");
+            }
         }
-        Err(e) => {
-            println!("  Could not retrieve dataset runs: {e}");
-        }
+    } else {
+        println!("  Skipped: dataset runs are a Langfuse v3 feature (v4 uses experiments)");
     }
 
     println!("\n Dataset management example completed!");

@@ -249,13 +249,22 @@ impl LangfuseClient {
 
     // ===== OBSERVATION UPDATES AND RETRIEVAL =====
 
-    /// Get a specific observation
+    /// Get a specific observation (Langfuse v3 only)
+    ///
+    /// Calls the legacy `GET /api/public/observations/{id}`, which Langfuse v4 removed
+    /// (Langfuse Cloud: 2026-11-16). With [`crate::ApiVersion::V4`] this returns
+    /// [`Error::Configuration`] without a request; use [`LangfuseClient::observations`] or
+    /// [`LangfuseClient::trace_observations`] instead.
+    #[deprecated(
+        note = "Langfuse v3 only; fails with ApiVersion::V4. Use `observations()` instead."
+    )]
     pub async fn get_observation(
         &self,
         observation_id: impl Into<String>,
     ) -> Result<langfuse_client_base::models::ObservationsViewSingle> {
         use langfuse_client_base::apis::legacy_observations_v1_api;
 
+        self.require_v3("get_observation", "use observations()")?;
         let observation_id = observation_id.into();
 
         legacy_observations_v1_api::legacy_observations_v1_get()
@@ -266,9 +275,24 @@ impl LangfuseClient {
             .map_err(|e| crate::error::Error::Api(format!("Failed to get observation: {e}")))
     }
 
-    /// Get multiple observations
-    #[builder]
-    pub async fn get_observations(
+    /// Get multiple observations (Langfuse v3 only)
+    ///
+    /// Calls the legacy `GET /api/public/observations`, which Langfuse v4 removed
+    /// (Langfuse Cloud: 2026-11-16). With [`crate::ApiVersion::V4`] this returns
+    /// [`Error::Configuration`] without a request; use [`LangfuseClient::observations`]
+    /// instead.
+    #[deprecated(
+        note = "Langfuse v3 only; fails with ApiVersion::V4. Use `observations()` instead."
+    )]
+    pub fn get_observations(&self) -> LangfuseClientGetObservationsBuilder<'_> {
+        self.get_observations_v3()
+    }
+
+    #[builder(
+        builder_type(name = LangfuseClientGetObservationsBuilder, vis = "pub"),
+        start_fn(name = get_observations_v3, vis = "pub(crate)")
+    )]
+    async fn get_observations_impl(
         &self,
         page: Option<i32>,
         limit: Option<i32>,
@@ -279,6 +303,8 @@ impl LangfuseClient {
         observation_type: Option<String>,
     ) -> Result<crate::ObservationsViews> {
         use langfuse_client_base::apis::legacy_observations_v1_api;
+
+        self.require_v3("get_observations", "use observations()")?;
 
         // Note: The API has more parameters but they're not all exposed in v0.2
         // Using the actual signature from the base client
@@ -425,4 +451,181 @@ impl LangfuseClient {
 
     // Note: UpdateEventBody exists in v0.2 but doesn't have a corresponding IngestionEvent variant
     // This functionality will need to wait for a later version
+}
+
+/// Every field group of `GET /api/public/v2/observations`, for the `fields` parameter.
+pub const ALL_OBSERVATION_FIELDS: &str =
+    "core,basic,time,io,metadata,model,usage,prompt,metrics,trace_context";
+
+/// Page size [`LangfuseClient::trace_observations`] requests.
+const TRACE_OBSERVATIONS_PAGE_SIZE: u32 = 100;
+
+/// One page of `GET /api/public/v2/observations`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObservationsPage {
+    /// The observations on this page. A page may hold fewer items than the limit, or none,
+    /// while a next page exists.
+    pub data: Vec<langfuse_client_base::models::ObservationV2>,
+    /// Cursor for the next page; `None` on the last page. Pass it to
+    /// [`LangfuseClientObservationsBuilder::cursor`].
+    pub next_cursor: Option<String>,
+}
+
+impl ObservationsPage {
+    /// Whether another page follows.
+    pub fn has_next_page(&self) -> bool {
+        self.next_cursor.is_some()
+    }
+}
+
+impl From<langfuse_client_base::models::ObservationsV2Response> for ObservationsPage {
+    fn from(response: langfuse_client_base::models::ObservationsV2Response) -> Self {
+        Self {
+            data: response.data,
+            next_cursor: response.meta.cursor.flatten().filter(|c| !c.is_empty()),
+        }
+    }
+}
+
+#[bon]
+impl LangfuseClient {
+    // ===== OBSERVATIONS API V2 (LANGFUSE V4 READS) =====
+
+    /// List observations with `GET /api/public/v2/observations` (cursor pagination).
+    ///
+    /// This is the Langfuse v4 read API for traces, observations and sessions. A trace is its
+    /// root observation (`.is_root_observation(true)`). Without `fields`, Langfuse returns the
+    /// `core` and `basic` field groups; pass [`ALL_OBSERVATION_FIELDS`] for everything.
+    ///
+    /// With [`crate::ApiVersion::V4`], `trace_id` and `parent_observation_id` go through the
+    /// same id mapping as writes (see [`crate::otel`]), so the ids you wrote with work here.
+    ///
+    /// ```no_run
+    /// # use langfuse_ergonomic::ClientBuilder;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ClientBuilder::from_env()?.build()?;
+    /// let mut cursor = None;
+    /// loop {
+    ///     let page = client
+    ///         .observations()
+    ///         .is_root_observation(true)
+    ///         .from_start_time(chrono::Utc::now() - chrono::Duration::days(1))
+    ///         .limit(50)
+    ///         .maybe_cursor(cursor)
+    ///         .call()
+    ///         .await?;
+    ///     for observation in &page.data {
+    ///         println!("{} {:?}", observation.id, observation.name);
+    ///     }
+    ///     match page.next_cursor {
+    ///         Some(next) => cursor = Some(next),
+    ///         None => break,
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[builder]
+    pub async fn observations(
+        &self,
+        /// Maximum number of items per page.
+        limit: Option<u32>,
+        /// Cursor from [`ObservationsPage::next_cursor`].
+        #[builder(into)]
+        cursor: Option<String>,
+        #[builder(into)] trace_id: Option<String>,
+        #[builder(into)] parent_observation_id: Option<String>,
+        /// Only root observations (`true`) or only children (`false`).
+        is_root_observation: Option<bool>,
+        /// Inclusive lower bound on the start time.
+        from_start_time: Option<DateTime<Utc>>,
+        /// Exclusive upper bound on the start time.
+        to_start_time: Option<DateTime<Utc>>,
+        #[builder(into)] user_id: Option<String>,
+        #[builder(into)] session_id: Option<String>,
+        /// Observation type, for example `GENERATION`.
+        #[builder(into)]
+        observation_type: Option<String>,
+        #[builder(into)] name: Option<String>,
+        level: Option<ObservationLevel>,
+        /// Environments to include.
+        environment: Option<Vec<String>>,
+        #[builder(into)] version: Option<String>,
+        /// Comma-separated field groups (see [`ALL_OBSERVATION_FIELDS`]).
+        #[builder(into)]
+        fields: Option<String>,
+        /// Comma-separated metadata keys to return untruncated.
+        #[builder(into)]
+        expand_metadata: Option<String>,
+        /// Parse input and output as JSON.
+        parse_io_as_json: Option<bool>,
+        /// Structured JSON filter; takes precedence over the individual filters.
+        #[builder(into)]
+        filter: Option<String>,
+    ) -> Result<ObservationsPage> {
+        use langfuse_client_base::apis::observations_api;
+
+        let trace_id = trace_id.map(|id| self.effective_trace_id(&id));
+        let parent_observation_id =
+            parent_observation_id.map(|id| self.effective_observation_id(&id));
+
+        observations_api::observations_get_many()
+            .configuration(self.configuration())
+            .maybe_fields(fields.as_deref())
+            .maybe_expand_metadata(expand_metadata.as_deref())
+            .maybe_limit(limit.map(i64::from))
+            .maybe_cursor(cursor.as_deref())
+            .maybe_parse_io_as_json(parse_io_as_json)
+            .maybe_name(name.as_deref())
+            .maybe_user_id(user_id.as_deref())
+            .maybe_session_id(session_id.as_deref())
+            .maybe_type(observation_type.as_deref())
+            .maybe_trace_id(trace_id.as_deref())
+            .maybe_level(level)
+            .maybe_parent_observation_id(parent_observation_id.as_deref())
+            .maybe_is_root_observation(is_root_observation)
+            .maybe_environment(environment)
+            .maybe_from_start_time(from_start_time.map(|t| t.fixed_offset()))
+            .maybe_to_start_time(to_start_time.map(|t| t.fixed_offset()))
+            .maybe_version(version.as_deref())
+            .maybe_filter(filter.as_deref())
+            .call()
+            .await
+            .map(ObservationsPage::from)
+            .map_err(crate::error::map_api_error)
+    }
+
+    /// Fetch every observation of a trace, following the cursor across pages.
+    ///
+    /// Requests all field groups ([`ALL_OBSERVATION_FIELDS`]). The trace's root observation
+    /// carries the trace-level input and output. This replaces [`LangfuseClient::get_trace`]
+    /// for Langfuse v4.
+    pub async fn trace_observations(
+        &self,
+        trace_id: impl Into<String>,
+    ) -> Result<Vec<langfuse_client_base::models::ObservationV2>> {
+        let trace_id = trace_id.into();
+        let mut observations = Vec::new();
+        let mut cursor: Option<String> = None;
+        loop {
+            let page = self
+                .observations()
+                .trace_id(trace_id.as_str())
+                .fields(ALL_OBSERVATION_FIELDS)
+                .limit(TRACE_OBSERVATIONS_PAGE_SIZE)
+                .maybe_cursor(cursor.clone())
+                .call()
+                .await?;
+            observations.extend(page.data);
+            match page.next_cursor {
+                Some(next) if cursor.as_deref() != Some(next.as_str()) => cursor = Some(next),
+                Some(_) => {
+                    return Err(Error::Api(
+                        "observations API returned the same cursor twice".to_string(),
+                    ))
+                }
+                None => return Ok(observations),
+            }
+        }
+    }
 }

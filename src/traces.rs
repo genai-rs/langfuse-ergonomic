@@ -118,8 +118,9 @@ pub use crate::datasets::{
 };
 pub use crate::observations::{
     LangfuseClientEventBuilder, LangfuseClientGenerationBuilder,
-    LangfuseClientGetObservationsBuilder, LangfuseClientSpanBuilder,
-    LangfuseClientUpdateGenerationBuilder, LangfuseClientUpdateSpanBuilder,
+    LangfuseClientGetObservationsBuilder, LangfuseClientObservationsBuilder,
+    LangfuseClientSpanBuilder, LangfuseClientUpdateGenerationBuilder,
+    LangfuseClientUpdateSpanBuilder,
 };
 pub use crate::prompts::{
     LangfuseClientCreateChatPromptBuilder, LangfuseClientCreatePromptBuilder,
@@ -213,13 +214,21 @@ impl LangfuseClient {
             })
     }
 
-    /// Get a trace by ID
+    /// Get a trace by ID (Langfuse v3 only)
+    ///
+    /// Calls `GET /api/public/traces/{id}`, which Langfuse v4 removed (Langfuse Cloud:
+    /// 2026-11-16). With [`crate::ApiVersion::V4`] this returns [`Error::Configuration`]
+    /// without a request; use [`LangfuseClient::trace_observations`] instead.
+    #[deprecated(
+        note = "Langfuse v3 only; fails with ApiVersion::V4. Use `trace_observations()` or `observations()` instead."
+    )]
     pub async fn get_trace(
         &self,
         trace_id: impl Into<String>,
     ) -> Result<langfuse_client_base::models::TraceWithFullDetails> {
         use langfuse_client_base::apis::trace_api;
 
+        self.require_v3("get_trace", "use trace_observations()")?;
         let trace_id = trace_id.into();
 
         trace_api::trace_get()
@@ -230,9 +239,24 @@ impl LangfuseClient {
             .map_err(crate::error::map_api_error)
     }
 
-    /// List traces with optional filters
-    #[builder]
-    pub async fn list_traces(
+    /// List traces with optional filters (Langfuse v3 only)
+    ///
+    /// Calls `GET /api/public/traces`, which Langfuse v4 removed (Langfuse Cloud:
+    /// 2026-11-16). With [`crate::ApiVersion::V4`] this returns [`Error::Configuration`]
+    /// without a request; use [`LangfuseClient::observations`] with
+    /// `.is_root_observation(true)` instead.
+    #[deprecated(
+        note = "Langfuse v3 only; fails with ApiVersion::V4. Use `observations().is_root_observation(true)` instead."
+    )]
+    pub fn list_traces(&self) -> LangfuseClientListTracesBuilder<'_> {
+        self.list_traces_v3()
+    }
+
+    #[builder(
+        builder_type(name = LangfuseClientListTracesBuilder, vis = "pub"),
+        start_fn(name = list_traces_v3, vis = "pub(crate)")
+    )]
+    async fn list_traces_impl(
         &self,
         page: Option<i32>,
         limit: Option<i32>,
@@ -247,6 +271,11 @@ impl LangfuseClient {
         #[builder(into)] tags: Option<String>,
     ) -> Result<langfuse_client_base::models::Traces> {
         use langfuse_client_base::apis::{trace_api, Error as ApiError};
+
+        self.require_v3(
+            "list_traces",
+            "use observations().is_root_observation(true)",
+        )?;
 
         let parse_timestamp = |value: String| {
             DateTime::parse_from_rfc3339(&value)
@@ -283,10 +312,13 @@ impl LangfuseClient {
     }
 
     /// Delete a trace
+    ///
+    /// Works with both API versions. With [`crate::ApiVersion::V4`] the id is mapped like
+    /// for writes (see [`crate::otel`]).
     pub async fn delete_trace(&self, trace_id: impl Into<String>) -> Result<()> {
         use langfuse_client_base::apis::trace_api;
 
-        let trace_id = trace_id.into();
+        let trace_id = self.effective_trace_id(&trace_id.into());
 
         trace_api::trace_delete()
             .configuration(self.configuration())
@@ -300,10 +332,17 @@ impl LangfuseClient {
     }
 
     /// Delete multiple traces
+    ///
+    /// Works with both API versions. With [`crate::ApiVersion::V4`] the ids are mapped like
+    /// for writes (see [`crate::otel`]).
     pub async fn delete_multiple_traces(&self, trace_ids: Vec<String>) -> Result<()> {
         use langfuse_client_base::apis::trace_api;
         use langfuse_client_base::models::TraceDeleteMultipleRequest;
 
+        let trace_ids: Vec<String> = trace_ids
+            .iter()
+            .map(|id| self.effective_trace_id(id))
+            .collect();
         let trace_count = trace_ids.len();
         let request = TraceDeleteMultipleRequest::builder()
             .trace_ids(trace_ids)

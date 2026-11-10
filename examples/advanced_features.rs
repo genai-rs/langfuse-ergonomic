@@ -189,14 +189,9 @@ async fn main() -> Result<()> {
         .await?;
     println!("Updated generation: {updated_gen}");
 
-    // Get observations
-    let observations = client
-        .get_observations()
-        .trace_id(&trace_id)
-        .limit(10)
-        .call()
-        .await?;
-    println!("Retrieved observations: {observations:?}");
+    // Get the trace's observations (Langfuse v4 observations API, all pages)
+    let observations = client.trace_observations(&trace_id).await?;
+    println!("Retrieved {} observations", observations.len());
 
     println!("\nAll advanced features tested successfully!");
 

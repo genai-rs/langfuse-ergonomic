@@ -40,7 +40,7 @@ langfuse-ergonomic = { version = "*", features = ["compression"] }
 ## Quick Start
 
 ```rust
-use langfuse_ergonomic::{ClientBuilder, LangfuseClient, Traces};
+use langfuse_ergonomic::{ClientBuilder, LangfuseClient};
 use serde_json::json;
 
 #[tokio::main]
@@ -60,18 +60,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Created trace: {}", trace.id);
 
-    // Fetch and list traces - returns strongly-typed structs
-    let fetched_trace = client.get_trace(&trace.id).await?;
-    let traces: Traces = client.list_traces()
-        .limit(10)
+    // Read a trace back: all of its observations (Langfuse v4 observations API)
+    let observations = client.trace_observations(&trace.id).await?;
+    println!("Trace has {} observations", observations.len());
+
+    // List traces: root observations, with filters and cursor pagination
+    let page = client.observations()
+        .is_root_observation(true)
         .user_id("user-123")
+        .limit(10)
         .call()
         .await?;
 
     // Access trace data with type safety
-    for trace in &traces.data {
-        println!("Trace ID: {}, Name: {:?}", trace.id, trace.name);
+    for root in &page.data {
+        println!("Trace ID: {:?}, Name: {:?}", root.trace_id, root.name);
     }
+    // page.next_cursor holds the cursor for the next page, if any
 
     // Create a dataset
     let dataset = client.create_dataset()
@@ -111,9 +116,11 @@ What changes with the version:
 | `score()` and its helpers | `score-create` ingestion event | `POST /api/public/scores` |
 | `Batcher` | ingestion batches, 207 per-event results | one OTLP export per batch, then one scores request per score |
 | Returned ids | as passed or generated | OpenTelemetry ids (see below) |
+| `get_trace`, `list_traces`, `get_observation(s)`, dataset runs (deprecated) | v3 read endpoints | `Error::Configuration`, no request |
+| `observations()`, `trace_observations()` | `GET /api/public/v2/observations` (if the v3 server has it) | `GET /api/public/v2/observations` |
 
-Reads (`get_trace`, `list_traces`, `get_observation(s)`) still call the v3
-endpoints in this release.
+Reads move to the v2 observations API (`GET /api/public/v2/observations`), see
+[Reading data](#reading-data).
 
 The builders and the batcher keep their signatures; only the transport changes.
 The batcher keeps batching, retries with backoff, `Retry-After` and splitting a
@@ -174,6 +181,57 @@ Metadata is written as one attribute per top-level key (strings unchanged,
 other values as JSON) so Langfuse can filter on it; non-object metadata is
 written under the key `value`.
 
+### Reading data
+
+Langfuse v4 reads traces, observations and sessions through
+`GET /api/public/v2/observations`. A trace is its root observation.
+
+```rust
+use langfuse_ergonomic::{ALL_OBSERVATION_FIELDS, ObservationLevel};
+
+// Every observation of one trace (all pages, all field groups)
+let observations = client.trace_observations(&trace_id).await?;
+
+// Filtered listing with cursor pagination
+let mut cursor = None;
+loop {
+    let page = client.observations()
+        .is_root_observation(true)          // traces only
+        .from_start_time(chrono::Utc::now() - chrono::Duration::days(1))
+        .user_id("user-123")
+        .level(ObservationLevel::Error)
+        .fields(ALL_OBSERVATION_FIELDS)     // default: core + basic
+        .limit(100)
+        .maybe_cursor(cursor)
+        .call()
+        .await?;
+    // ... use page.data ...
+    match page.next_cursor {
+        Some(next) => cursor = Some(next),
+        None => break,
+    }
+}
+```
+
+The other filters are `trace_id`, `parent_observation_id`, `to_start_time`,
+`session_id`, `observation_type`, `name`, `environment`, `version` and the
+structured JSON `filter`. In V4, `trace_id` and `parent_observation_id` go
+through the same id mapping as writes, so your own ids work.
+
+The v3-only reads stay available for Langfuse v3 servers, but are
+`#[deprecated]` and return `Error::Configuration` (without a request) when
+`ApiVersion::V4` is set:
+
+| v3 method | v4 replacement |
+|---|---|
+| `get_trace(id)` | `trace_observations(id)` |
+| `list_traces()` | `observations().is_root_observation(true)` |
+| `get_observation(id)` / `get_observations()` | `observations()` (with `trace_id`, `name`, ...) |
+| `get_dataset_run(s)`, `delete_dataset_run` | Langfuse experiments (not wrapped yet) |
+
+Deletes (`delete_trace`, `delete_multiple_traces`, datasets, prompts) work in
+both modes.
+
 ### Migrating to v4
 
 1. Self-hosted v3 server: set `.api_version(ApiVersion::V3)` or
@@ -186,6 +244,9 @@ written under the key `value`.
      `client.effective_trace_id("my-trace")`.
    - Call `trace()` for each trace; it creates the root span.
    - Batches no longer return 207 per-event results for spans.
+   - Replace `get_trace`/`list_traces`/`get_observation(s)` with
+     `trace_observations`/`observations` (see [Reading data](#reading-data)).
+     Data written with OpenTelemetry is available there in real time.
    - In Langfuse v4, user id, session id and tags are set on the trace's root
      span only. Filtering *observations* by them needs the attributes on every
      span, which this client does not propagate yet.
@@ -439,8 +500,8 @@ match batcher.flush().await {
 
 #### Traces
 - **Creation** - Full trace creation with metadata support
-- **Fetching** - Get individual traces by ID
-- **Listing** - List traces with filtering and pagination
+- **Fetching** - `trace_observations()` reads all observations of a trace (v4); `get_trace()` on v3
+- **Listing** - `observations()` with filters and cursor pagination (v4); `list_traces()` on v3
 - **Management** - Delete single or multiple traces
 - Session and user tracking
 - Tags and custom timestamps
