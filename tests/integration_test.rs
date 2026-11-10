@@ -7,6 +7,8 @@ use serde_json::json;
 /// Helper to create a client from environment variables
 fn create_test_client() -> LangfuseClient {
     ClientBuilder::from_env()
+        // These tests use the v3 ingestion and read APIs.
+        .map(|builder| builder.api_version(langfuse_ergonomic::ApiVersion::V3))
         .and_then(|builder| builder.build())
         .expect("Failed to create client from environment")
 }

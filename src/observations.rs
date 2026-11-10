@@ -18,6 +18,42 @@ use crate::client::LangfuseClient;
 use crate::error::{Error, Result};
 use crate::traces::parse_observation_level;
 
+/// Convert a JSON object of model parameters into the ingestion API's map type.
+pub(crate) fn model_parameters_map(
+    value: &Value,
+) -> Option<std::collections::HashMap<String, langfuse_client_base::models::MapValue>> {
+    use langfuse_client_base::models::MapValue;
+
+    let Value::Object(map) = value else {
+        tracing::warn!("model_parameters must be a JSON object; ignoring {value}");
+        return None;
+    };
+    let converted = map
+        .iter()
+        .filter(|(_, v)| !v.is_null())
+        .map(|(key, v)| {
+            let mapped = match v {
+                Value::String(s) => MapValue::String(s.clone()),
+                Value::Bool(b) => MapValue::Boolean(*b),
+                Value::Number(n) => match n.as_i64() {
+                    Some(i) => MapValue::Integer(i),
+                    #[allow(clippy::cast_possible_truncation)]
+                    None => MapValue::FloatNumber(n.as_f64().unwrap_or_default() as f32),
+                },
+                Value::Array(items) if items.iter().all(Value::is_string) => MapValue::Array(
+                    items
+                        .iter()
+                        .filter_map(|i| i.as_str().map(str::to_owned))
+                        .collect(),
+                ),
+                other => MapValue::String(other.to_string()),
+            };
+            (key.clone(), mapped)
+        })
+        .collect::<std::collections::HashMap<_, _>>();
+    (!converted.is_empty()).then_some(converted)
+}
+
 #[bon]
 impl LangfuseClient {
     // ===== OBSERVATIONS (SPANS, GENERATIONS, EVENTS) =====
@@ -71,7 +107,7 @@ impl LangfuseClient {
 
         self.ingest_events(vec![IngestionEvent::CreateSpanEvent(event)])
             .await
-            .map(|_| observation_id)
+            .map(|_| self.effective_observation_id(&observation_id))
             .map_err(|e| crate::error::Error::Api(format!("Failed to create span: {e}")))
     }
 
@@ -82,6 +118,9 @@ impl LangfuseClient {
     /// Only supplied counts are sent, including zeros. An explicit total is
     /// preserved; when omitted, Langfuse derives it from the supplied usage.
     /// If no counts are supplied, `usageDetails` is omitted.
+    ///
+    /// `model_parameters` must be a JSON object; its values are sent as strings, numbers,
+    /// booleans or string arrays (other values are sent as JSON strings).
     #[builder]
     pub async fn generation(
         &self,
@@ -125,6 +164,8 @@ impl LangfuseClient {
         let usage_details =
             (!usage_details.is_empty()).then_some(UsageDetails::Object(usage_details));
 
+        let model_parameters = _model_parameters.as_ref().and_then(model_parameters_map);
+
         let generation_body = CreateGenerationBody::builder()
             .id(Some(observation_id.clone()))
             .trace_id(Some(trace_id))
@@ -132,6 +173,7 @@ impl LangfuseClient {
             .maybe_name(name.map(Some))
             .maybe_end_time(end_time.map(Some))
             .maybe_model(model.map(Some))
+            .maybe_model_parameters(model_parameters.map(Some))
             .maybe_usage_details(usage_details)
             .maybe_input(input.map(Some))
             .maybe_output(output.map(Some))
@@ -150,7 +192,7 @@ impl LangfuseClient {
 
         self.ingest_events(vec![IngestionEvent::CreateGenerationEvent(event)])
             .await
-            .map(|_| observation_id)
+            .map(|_| self.effective_observation_id(&observation_id))
             .map_err(|e| crate::error::Error::Api(format!("Failed to create generation: {e}")))
     }
 
@@ -201,7 +243,7 @@ impl LangfuseClient {
 
         self.ingest_events(vec![IngestionEvent::CreateEventEvent(event)])
             .await
-            .map(|_| observation_id)
+            .map(|_| self.effective_observation_id(&observation_id))
             .map_err(|e| crate::error::Error::Api(format!("Failed to create event: {e}")))
     }
 
@@ -312,7 +354,7 @@ impl LangfuseClient {
             .await
             .map_err(|e| Error::Api(format!("Failed to update span: {e}")))?;
 
-        Ok(id)
+        Ok(self.effective_observation_id(&id))
     }
 
     /// Update an existing generation
@@ -378,7 +420,7 @@ impl LangfuseClient {
             .await
             .map_err(|e| Error::Api(format!("Failed to update generation: {e}")))?;
 
-        Ok(id)
+        Ok(self.effective_observation_id(&id))
     }
 
     // Note: UpdateEventBody exists in v0.2 but doesn't have a corresponding IngestionEvent variant

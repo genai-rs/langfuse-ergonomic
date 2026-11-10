@@ -12,6 +12,7 @@ fn create_mock_client(server: &Server) -> LangfuseClient {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
+        .api_version(langfuse_ergonomic::ApiVersion::V3)
         .build()
         .expect("mock credentials should be valid")
 }

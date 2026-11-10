@@ -157,6 +157,7 @@ async fn test_trace_with_custom_id() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
+        .api_version(langfuse_ergonomic::ApiVersion::V3)
         .build()
         .expect("mock credentials should be valid");
 
@@ -197,6 +198,7 @@ async fn test_trace_with_seed_based_id() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
+        .api_version(langfuse_ergonomic::ApiVersion::V3)
         .build()
         .expect("mock credentials should be valid");
 
@@ -241,6 +243,7 @@ async fn test_hierarchical_observations() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
+        .api_version(langfuse_ergonomic::ApiVersion::V3)
         .build()
         .expect("mock credentials should be valid");
 

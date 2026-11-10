@@ -3,13 +3,15 @@
 //! This example shows how to:
 //! - Use the batcher for efficient event ingestion
 //! - Handle partial failures (207 responses)
+//!
+//! Requires a Langfuse v3 server: the 207 responses come from the v3 ingestion API.
 //! - Configure batch size, flush intervals, and backpressure
 //! - Monitor metrics (queued, flushed, failed, dropped)
 //! - Graceful shutdown with guarantees
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
-use langfuse_ergonomic::{BackpressurePolicy, Batcher, ClientBuilder};
+use langfuse_ergonomic::{ApiVersion, BackpressurePolicy, Batcher, ClientBuilder};
 use serde_json::json;
 use std::time::Duration;
 
@@ -18,7 +20,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize from environment variables
     dotenvy::dotenv().ok();
 
-    let client = ClientBuilder::from_env()?.build()?;
+    // 207 Multi-Status responses come from the Langfuse v3 ingestion API, so this example
+    // pins the client to ApiVersion::V3 (it needs a Langfuse v3 server). With the default
+    // ApiVersion::V4 the batcher exports OTLP spans, which report success per request.
+    let client = ClientBuilder::from_env()?
+        .api_version(ApiVersion::V3)
+        .build()?;
 
     println!(" Starting batch ingestion example with advanced features...\n");
 
@@ -220,7 +227,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n Testing backpressure handling...");
     println!("  Creating a new batcher with DropNew policy and small queue...");
 
-    let client2 = ClientBuilder::from_env()?.build()?;
+    let client2 = ClientBuilder::from_env()?
+        .api_version(ApiVersion::V3)
+        .build()?;
     let backpressure_batcher = Batcher::builder()
         .client(client2)
         .max_queue_size(3)

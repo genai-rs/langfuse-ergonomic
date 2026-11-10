@@ -2,7 +2,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use chrono::Utc;
-use langfuse_ergonomic::ClientBuilder;
+use langfuse_ergonomic::{ApiVersion, ClientBuilder};
 use std::time::Duration;
 
 #[tokio::main]
@@ -18,6 +18,9 @@ async fn main() -> anyhow::Result<()> {
         .timeout(Duration::from_secs(30)) // Custom timeout for slower connections
         .connect_timeout(Duration::from_secs(5)) // Custom connection timeout
         .user_agent("my-app/1.0.0".to_string()) // Custom user agent
+        // Langfuse v4 is the default. Select V3 for a self-hosted server that is not
+        // upgraded yet (or set LANGFUSE_API_VERSION=v3 with `from_env`).
+        .api_version(ApiVersion::V4)
         .build()?;
 
     // Validate the connection
@@ -32,6 +35,7 @@ async fn main() -> anyhow::Result<()> {
     // LANGFUSE_PUBLIC_KEY=your-public-key
     // LANGFUSE_SECRET_KEY=your-secret-key
     // LANGFUSE_BASE_URL=https://langfuse.your-domain.com
+    // LANGFUSE_API_VERSION=v3   # only for servers still on Langfuse v3
 
     let env_client = ClientBuilder::from_env()
         .and_then(|builder| builder.build())
