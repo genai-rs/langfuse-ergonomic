@@ -321,6 +321,16 @@ both modes.
 
 ## Type Safety
 
+### Migrating to client-base 0.20
+
+`langfuse-client-base` 0.20 is generated with `timvw-rust` 0.22. The ergonomic
+builders are unchanged. In the base models `OpenAiCompletionUsageSchema` and
+`OpenAiResponseUsageSchema`, the four `*_tokens_details` maps now hold
+`Option<i64>` values, so code that builds them directly writes
+`("cached_tokens".into(), Some(1))`. In V4 mode a `null` count is skipped
+instead of being sent as a usage detail. See the base crate's
+`migration/api-diff-0.19.0-to-0.20.0.md`.
+
 ### Migrating to client-base 0.19
 
 `langfuse-client-base` 0.19 is generated with `timvw-rust` 0.21. The ergonomic
