@@ -389,3 +389,44 @@ async fn trace_observations_keeps_the_latest_row_per_id() {
         ]
     );
 }
+
+#[tokio::test]
+async fn observations_skips_the_unknown_level() {
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("GET", OBSERVATIONS_PATH)
+        .match_query(Matcher::Regex("^$".into()))
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"data":[],"meta":{}}"#)
+        .expect(1)
+        .create_async()
+        .await;
+    client(&server, ApiVersion::V4)
+        .observations()
+        .level(ObservationLevel::Unknown)
+        .call()
+        .await
+        .unwrap();
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn observations_maps_an_invalid_body_to_a_serialization_error() {
+    let mut server = Server::new_async().await;
+    let _mock = server
+        .mock("GET", OBSERVATIONS_PATH)
+        .match_query(Matcher::Any)
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body("not json")
+        .create_async()
+        .await;
+    let err = client(&server, ApiVersion::V4)
+        .observations()
+        .call()
+        .await
+        .unwrap_err();
+    assert!(matches!(err, Error::Serialization(_)), "{err:?}");
+    assert!(!err.is_retryable());
+}

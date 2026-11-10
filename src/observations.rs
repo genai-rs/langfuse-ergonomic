@@ -682,7 +682,13 @@ impl LangfuseClient {
         push("sessionId", session_id);
         push("type", observation_type);
         push("traceId", trace_id);
-        push("level", level.map(|l| l.to_string()));
+        // `Unknown` is the base crate's catch-all; the server rejects `level=unknown`.
+        push(
+            "level",
+            level
+                .filter(|l| *l != ObservationLevel::Unknown)
+                .map(|l| l.to_string()),
+        );
         push("parentObservationId", parent_observation_id);
         push(
             "isRootObservation",
@@ -720,7 +726,8 @@ impl LangfuseClient {
         if !response.status().is_success() {
             return Err(crate::error::error_from_response(response).await);
         }
-        let mut body: Value = response.json().await.map_err(Error::Network)?;
+        let text = response.text().await.map_err(Error::Network)?;
+        let mut body: Value = serde_json::from_str(&text)?;
         round_usage_details(&mut body);
         let response: langfuse_client_base::models::ObservationsV2Response =
             serde_json::from_value(body)?;
