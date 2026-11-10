@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.10.0...v0.11.0) - 2026-11-10
+
+### Added
+
+- [**breaking**] add the Langfuse v4 read path and deprecate v3-only reads
+- [**breaking**] add ApiVersion and the Langfuse v4 (OpenTelemetry) write path
+- [**breaking**] upgrade to langfuse-client-base 0.19
+
+### Fixed
+
+- skip unknown level and map invalid observation bodies to serialization errors
+- align v4 reads with the observations API limits
+- harden the v4 write state
+- keep v4 spans complete and propagate trace attributes
+
+### Other
+
+- drop ineffective allow(deprecated) on trace_list call
+- note list_traces behaviour changes with client-base 0.19
+- assert Retry-After and x-request-id on rate-limit errors
+- lock langfuse-client-base 0.19.0
+
 ## [0.10.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.9.0...v0.10.0) - 2026-11-07
 
 ### Added
