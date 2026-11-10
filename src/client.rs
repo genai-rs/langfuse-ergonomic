@@ -1,5 +1,6 @@
 //! Main client for interacting with the Langfuse API
 
+use crate::api_version::ApiVersion;
 use crate::batcher::{Batcher, BatcherConfig};
 use crate::error::{Error, Result};
 use langfuse_client_base::apis::configuration::Configuration;
@@ -23,9 +24,44 @@ pub struct LangfuseClient {
     pub(crate) secret_key: String,
     pub(crate) base_url: String,
     pub(crate) configuration: Configuration,
+    pub(crate) api_version: ApiVersion,
 }
 
 impl LangfuseClient {
+    /// The Langfuse API generation this client writes to (see [`ApiVersion`]).
+    pub fn api_version(&self) -> ApiVersion {
+        self.api_version
+    }
+
+    /// Return a copy of this client that uses `api_version`.
+    #[must_use]
+    pub fn with_api_version(mut self, api_version: ApiVersion) -> Self {
+        self.api_version = api_version;
+        self
+    }
+
+    /// The trace id Langfuse stores for `id` with this client's API version.
+    ///
+    /// V3 stores ids unchanged; V4 maps them to OpenTelemetry trace ids
+    /// (see [`crate::otel::trace_id`]).
+    pub fn effective_trace_id(&self, id: &str) -> String {
+        match self.api_version {
+            ApiVersion::V3 => id.to_owned(),
+            ApiVersion::V4 => crate::otel::trace_id(id),
+        }
+    }
+
+    /// The observation id Langfuse stores for `id` with this client's API version.
+    ///
+    /// V3 stores ids unchanged; V4 maps them to OpenTelemetry span ids
+    /// (see [`crate::otel::observation_id`]).
+    pub fn effective_observation_id(&self, id: &str) -> String {
+        match self.api_version {
+            ApiVersion::V3 => id.to_owned(),
+            ApiVersion::V4 => crate::otel::observation_id(id),
+        }
+    }
+
     /// Get the underlying API configuration
     pub fn configuration(&self) -> &Configuration {
         &self.configuration
@@ -90,21 +126,7 @@ impl LangfuseClient {
     /// # }
     /// ```
     pub async fn create_batcher(self: Arc<Self>, config: Option<BatcherConfig>) -> Batcher {
-        // Clone the Arc to avoid moving self
-        let client = LangfuseClient {
-            public_key: self.public_key.clone(),
-            secret_key: self.secret_key.clone(),
-            base_url: self.base_url.clone(),
-            configuration: Configuration {
-                base_path: self.configuration.base_path.clone(),
-                basic_auth: self.configuration.basic_auth.clone(),
-                api_key: self.configuration.api_key.clone(),
-                oauth_access_token: self.configuration.oauth_access_token.clone(),
-                bearer_access_token: self.configuration.bearer_access_token.clone(),
-                client: self.configuration.client.clone(),
-                user_agent: self.configuration.user_agent.clone(),
-            },
-        };
+        let client = (*self).clone();
 
         let config = config.unwrap_or_default();
 
@@ -137,6 +159,7 @@ impl LangfuseClient {
         connect_timeout: Option<Duration>,
         user_agent: Option<String>,
         http_client: Option<reqwest_middleware::ClientWithMiddleware>,
+        api_version: ApiVersion,
     ) -> Result<Self> {
         let client = match http_client {
             Some(client) => client,
@@ -175,6 +198,7 @@ impl LangfuseClient {
             secret_key,
             base_url,
             configuration,
+            api_version,
         })
     }
 }
@@ -202,6 +226,7 @@ pub struct ClientBuilder {
     connect_timeout: Option<Duration>,
     user_agent: Option<String>,
     http_client: Option<reqwest_middleware::ClientWithMiddleware>,
+    api_version: Option<ApiVersion>,
 }
 
 impl ClientBuilder {
@@ -212,6 +237,9 @@ impl ClientBuilder {
     }
 
     /// Create a builder pre-populated from environment variables.
+    ///
+    /// Reads `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` (required), `LANGFUSE_BASE_URL`
+    /// (optional) and `LANGFUSE_API_VERSION` (optional, `v3` or `v4`, default `v4`).
     pub fn from_env() -> Result<Self> {
         use std::env;
 
@@ -225,10 +253,16 @@ impl ClientBuilder {
 
         let base_url = env::var("LANGFUSE_BASE_URL").ok();
 
+        let api_version = match env::var(ApiVersion::ENV_VAR) {
+            Ok(value) if !value.trim().is_empty() => Some(value.parse::<ApiVersion>()?),
+            _ => None,
+        };
+
         Ok(Self {
             public_key: Some(public_key),
             secret_key: Some(secret_key),
             base_url,
+            api_version,
             ..Self::default()
         })
     }
@@ -251,6 +285,16 @@ impl ClientBuilder {
     #[must_use]
     pub fn base_url(mut self, value: impl Into<String>) -> Self {
         self.base_url = Some(value.into());
+        self
+    }
+
+    /// Select the Langfuse API generation (defaults to [`ApiVersion::V4`]).
+    ///
+    /// Use [`ApiVersion::V3`] for self-hosted Langfuse v3 servers. See [`ApiVersion`] for what
+    /// changes between the two.
+    #[must_use]
+    pub fn api_version(mut self, value: ApiVersion) -> Self {
+        self.api_version = Some(value);
         self
     }
 
@@ -321,6 +365,7 @@ impl ClientBuilder {
             self.connect_timeout,
             self.user_agent,
             self.http_client,
+            self.api_version.unwrap_or_default(),
         )
     }
 }

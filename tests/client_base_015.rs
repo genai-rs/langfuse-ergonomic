@@ -11,6 +11,7 @@ fn client(server: &Server) -> LangfuseClient {
         .public_key("pk-lf-test")
         .secret_key("sk-lf-test")
         .base_url(server.url())
+        .api_version(langfuse_ergonomic::ApiVersion::V3)
         .build()
         .unwrap()
 }

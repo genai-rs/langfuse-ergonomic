@@ -129,24 +129,34 @@ pub use crate::scores::LangfuseClientScoreBuilder;
 
 #[bon]
 impl LangfuseClient {
+    /// Send ingestion events with the transport of the configured [`crate::ApiVersion`].
     pub(crate) async fn ingest_events(
         &self,
         events: Vec<langfuse_client_base::models::IngestionEvent>,
-    ) -> Result<langfuse_client_base::models::IngestionResponse> {
+    ) -> Result<()> {
         use langfuse_client_base::apis::ingestion_api;
         use langfuse_client_base::models::IngestionBatchRequest;
 
+        if self.api_version == crate::ApiVersion::V4 {
+            return self.ingest_events_v4(events).await;
+        }
+
         let batch_request = IngestionBatchRequest::builder().batch(events).build();
 
+        // V3 keeps using the (upstream-deprecated) batch ingestion endpoint.
         ingestion_api::ingestion_batch()
             .configuration(self.configuration())
             .ingestion_batch_request(&batch_request)
             .call()
             .await
+            .map(|_| ())
             .map_err(crate::error::map_api_error)
     }
 
     /// Create a new trace
+    ///
+    /// With [`crate::ApiVersion::V4`] the trace is written as an OpenTelemetry root span and
+    /// the returned id is the mapped OTel trace id (see [`crate::otel`]).
     #[builder]
     pub async fn trace(
         &self,
@@ -198,7 +208,7 @@ impl LangfuseClient {
         self.ingest_events(vec![IngestionEvent::TraceEvent(event)])
             .await
             .map(|_| TraceResponse {
-                id: trace_id,
+                id: self.effective_trace_id(&trace_id),
                 base_url: self.configuration().base_path.clone(),
             })
     }

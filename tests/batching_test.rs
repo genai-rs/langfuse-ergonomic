@@ -58,6 +58,7 @@ async fn test_207_mixed_response() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
+        .api_version(langfuse_ergonomic::ApiVersion::V3)
         .build()
         .expect("mock credentials should be valid");
 
@@ -129,6 +130,7 @@ async fn test_retry_after_header() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
+        .api_version(langfuse_ergonomic::ApiVersion::V3)
         .build()
         .expect("mock credentials should be valid");
 
@@ -178,6 +180,7 @@ async fn test_413_payload_too_large() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
+        .api_version(langfuse_ergonomic::ApiVersion::V3)
         .build()
         .expect("mock credentials should be valid");
 
@@ -202,6 +205,7 @@ async fn test_413_single_event_too_large() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
+        .api_version(langfuse_ergonomic::ApiVersion::V3)
         .build()
         .expect("mock credentials should be valid");
 
@@ -233,6 +237,7 @@ async fn test_backpressure_drop_new() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
+        .api_version(langfuse_ergonomic::ApiVersion::V3)
         .build()
         .expect("mock credentials should be valid");
 
@@ -276,6 +281,7 @@ async fn test_concurrent_flush_protection() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
+        .api_version(langfuse_ergonomic::ApiVersion::V3)
         .build()
         .expect("mock credentials should be valid");
 
@@ -312,6 +318,7 @@ async fn test_shutdown_idempotency() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
+        .api_version(langfuse_ergonomic::ApiVersion::V3)
         .build()
         .expect("mock credentials should be valid");
 
@@ -357,6 +364,7 @@ async fn test_metrics_tracking() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
+        .api_version(langfuse_ergonomic::ApiVersion::V3)
         .build()
         .expect("mock credentials should be valid");
 
@@ -399,6 +407,7 @@ async fn test_auto_flush_on_size() {
         .public_key("pk-test")
         .secret_key("sk-test")
         .base_url(server.url())
+        .api_version(langfuse_ergonomic::ApiVersion::V3)
         .build()
         .expect("mock credentials should be valid");
 

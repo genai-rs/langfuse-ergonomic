@@ -1,5 +1,10 @@
 //! Batch ingestion with automatic chunking, retries, and 207 handling
 //!
+//! The batcher sends with the transport of the client's [`ApiVersion`]: v3 ingestion
+//! batches (with 207 per-event results), or, for V4, one OTLP export per batch for traces
+//! and observations plus one `POST /api/public/scores` request per score. Batching, retries,
+//! `Retry-After` and 413 splitting work the same in both modes.
+//!
 //! ## Default Configuration
 //!
 //! | Setting | Default Value | Description |
@@ -55,8 +60,10 @@ use std::time::Duration;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::interval;
 
+use crate::api_version::ApiVersion;
 use crate::client::LangfuseClient;
 use crate::error::{Error, EventError, IngestionResponse, Result};
+use crate::otel::V4Item;
 use langfuse_client_base::models::{IngestionBatchRequest, IngestionEvent};
 
 /// Maximum batch size in bytes (3.5 MB as per Langfuse docs)
@@ -448,6 +455,11 @@ impl Batcher {
             return Err(Error::Api("Batcher is shutting down".to_string()));
         }
 
+        if self.client.api_version == ApiVersion::V4 {
+            // Reject events the v4 transport cannot encode now rather than at flush time.
+            crate::otel::encode_event(&event)?;
+        }
+
         let id = Self::extract_event_id(&event);
 
         let batch_event = BatchEvent::new(event, id.clone())?;
@@ -824,12 +836,7 @@ impl Batcher {
                 delay = std::cmp::min(delay * 2, config.max_retry_delay);
             }
 
-            let batch_request = IngestionBatchRequest {
-                batch: events.iter().map(|e| e.event.clone()).collect(),
-                metadata: None,
-            };
-
-            match Self::send_batch_internal(client, batch_request, config, events).await {
+            match Self::send_batch_internal(client, config, events).await {
                 Ok(response) => return Ok((response, attempt)),
                 Err(Error::Client { status: 413, .. }) => {
                     // Payload too large - should be handled at the chunk level
@@ -920,8 +927,119 @@ impl Batcher {
         })
     }
 
-    /// Send a single batch and handle 207 responses
+    /// Send a single batch with the transport of the client's [`ApiVersion`].
     async fn send_batch_internal(
+        client: &LangfuseClient,
+        config: &BatcherConfig,
+        events: &[BatchEvent],
+    ) -> Result<IngestionResponse> {
+        match client.api_version {
+            ApiVersion::V3 => {
+                let batch = IngestionBatchRequest {
+                    batch: events.iter().map(|e| e.event.clone()).collect(),
+                    metadata: None,
+                };
+                Self::send_batch_v3(client, batch, config, events).await
+            }
+            ApiVersion::V4 => Self::send_batch_v4(client, config, events).await,
+        }
+    }
+
+    /// Send a batch through the Langfuse v4 APIs.
+    ///
+    /// Observation and trace events go out as one OTLP export request. OTLP reports no
+    /// per-span outcome, so the export succeeds or fails as a whole; a status error is handled
+    /// like a failed v3 batch (retries, `Retry-After`, 413 splitting). Scores are then sent one by
+    /// one to `POST /api/public/scores`, and each failure is reported for its event. Events that
+    /// cannot be encoded (for example without a trace id) fail without retry.
+    async fn send_batch_v4(
+        client: &LangfuseClient,
+        config: &BatcherConfig,
+        events: &[BatchEvent],
+    ) -> Result<IngestionResponse> {
+        let mut span_ids = Vec::new();
+        let mut spans = Vec::new();
+        let mut scores = Vec::new();
+        let mut failures = Vec::new();
+        for event in events {
+            match crate::otel::encode_event(&event.event) {
+                Ok(V4Item::Span(span)) => {
+                    span_ids.push(event.id.clone());
+                    spans.push(span);
+                }
+                Ok(V4Item::Score(score)) => scores.push((event.id.clone(), *score)),
+                Err(error) => failures.push(EventError {
+                    event_id: event.id.clone(),
+                    message: error.to_string(),
+                    code: None,
+                    retryable: false,
+                }),
+            }
+        }
+
+        let mut success_ids = Vec::new();
+        if !spans.is_empty() {
+            let response = client.post_otlp(spans).await?;
+            if response.status().is_success() {
+                crate::otel::log_partial_success(response).await;
+                success_ids.extend(span_ids);
+            } else {
+                return Err(Self::status_error(response, config, events).await);
+            }
+        }
+
+        for (id, score) in scores {
+            match client.create_score_v4(score).await {
+                Ok(()) => success_ids.push(id),
+                Err(error) => failures.push(EventError {
+                    event_id: id,
+                    code: match &error {
+                        Error::Client { status, .. } | Error::Server { status, .. } => {
+                            Some(status.to_string())
+                        }
+                        Error::RateLimit { .. } => Some("429".to_owned()),
+                        _ => None,
+                    },
+                    retryable: error.is_retryable(),
+                    message: error.to_string(),
+                }),
+            }
+        }
+
+        Ok(IngestionResponse {
+            success_count: success_ids.len(),
+            failure_count: failures.len(),
+            success_ids,
+            failures,
+        })
+    }
+
+    /// Map a non-success batch response to an error; 413 becomes a split request when the
+    /// batch holds more than one event.
+    async fn status_error(
+        response: reqwest::Response,
+        config: &BatcherConfig,
+        events: &[BatchEvent],
+    ) -> Error {
+        if response.status().as_u16() == 413 {
+            let request_id = crate::error::parse_request_id(response.headers());
+            if events.len() == 1 {
+                return Error::BatchSizeExceeded {
+                    size: events[0].size,
+                    max_size: config.max_bytes,
+                };
+            }
+            return Error::Client {
+                status: 413,
+                message: "Payload too large - will retry with smaller chunks".to_string(),
+                request_id,
+            };
+        }
+        crate::error::error_from_response(response).await
+    }
+
+    /// Send a single v3 ingestion batch and handle 207 responses
+    async fn send_batch_v3(
         client: &LangfuseClient,
         batch: IngestionBatchRequest,
         config: &BatcherConfig,
@@ -1183,6 +1301,7 @@ mod shutdown_retry_tests {
                 .public_key("pk-test")
                 .secret_key("sk-test")
                 .base_url(server.url())
+                .api_version(crate::ApiVersion::V3)
                 .build()
                 .unwrap();
             let batcher = Batcher::builder()

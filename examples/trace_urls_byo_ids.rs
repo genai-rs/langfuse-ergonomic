@@ -49,6 +49,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
+    // With ApiVersion::V4 (the default) Langfuse stores OpenTelemetry ids, so the returned id
+    // is derived deterministically from the custom id (see `langfuse_ergonomic::otel`).
+    // Passing the custom id again (for example as a trace_id) resolves to the same trace.
+    println!("   Custom ID: {custom_id}");
     println!("   Trace ID: {}", response.id);
     println!("   Trace URL: {}", response.url());
     println!();

@@ -244,6 +244,39 @@ pub(crate) fn parse_request_id(headers: &reqwest::header::HeaderMap) -> Option<S
         .map(ToString::to_string)
 }
 
+/// Map a non-success HTTP response to an [`Error`], keeping `Retry-After` and `x-request-id`.
+pub(crate) async fn error_from_response(response: reqwest::Response) -> Error {
+    let status = response.status().as_u16();
+    let request_id = parse_request_id(response.headers());
+    let retry_after = parse_retry_after(response.headers());
+    let body = response.text().await.unwrap_or_default();
+    let message = if body.is_empty() {
+        format!("status {status}")
+    } else {
+        body
+    };
+    match status {
+        401 | 403 => Error::Auth {
+            message,
+            request_id,
+        },
+        429 => Error::RateLimit {
+            retry_after,
+            request_id,
+        },
+        500..=599 => Error::Server {
+            status,
+            message,
+            request_id,
+        },
+        _ => Error::Client {
+            status,
+            message,
+            request_id,
+        },
+    }
+}
+
 /// Helper to map API errors to appropriate error types based on status code
 pub fn map_api_error<T>(err: langfuse_client_base::apis::Error<T>) -> Error {
     use langfuse_client_base::apis::Error as ApiError;

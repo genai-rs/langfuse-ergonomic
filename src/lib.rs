@@ -88,6 +88,7 @@
 //! LANGFUSE_PUBLIC_KEY=pk-lf-...
 //! LANGFUSE_SECRET_KEY=sk-lf-...
 //! LANGFUSE_BASE_URL=https://cloud.langfuse.com  # Optional
+//! LANGFUSE_API_VERSION=v4                        # Optional: v3 or v4 (default v4)
 //! ```
 //!
 //! Or configure explicitly:
@@ -101,6 +102,25 @@
 //!     .secret_key("sk-lf-...")
 //!     .base_url("https://cloud.langfuse.com".to_string())
 //!     .timeout(Duration::from_secs(30))
+//!     .build()?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Langfuse v3 and v4
+//!
+//! The client writes to Langfuse v4 by default: traces and observations are sent as
+//! OpenTelemetry spans and scores go to the v4 scores API. Select [`ApiVersion::V3`] for a
+//! self-hosted Langfuse v3 server, either with [`ClientBuilder::api_version`] or with
+//! `LANGFUSE_API_VERSION=v3`. Langfuse Cloud removes the v3 ingestion of traces and
+//! observations on 2026-11-16. See [`ApiVersion`] and [`otel`] for what changes, including
+//! how ids are mapped to OpenTelemetry ids.
+//!
+//! ```no_run
+//! use langfuse_ergonomic::{ApiVersion, ClientBuilder};
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let client = ClientBuilder::from_env()?
+//!     .api_version(ApiVersion::V3)
 //!     .build()?;
 //! # Ok(())
 //! # }
@@ -153,16 +173,19 @@
 #![warn(rustdoc::broken_intra_doc_links)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+pub mod api_version;
 pub mod batcher;
 pub mod client;
 pub mod datasets;
 pub mod error;
 pub mod observations;
+pub mod otel;
 pub mod prompts;
 pub mod scores;
 pub mod traces;
 
 // Re-export commonly used types at the crate root for convenience
+pub use api_version::ApiVersion;
 pub use batcher::{
     BackpressurePolicy, BatchEvent, Batcher, BatcherBuilderWithClient, BatcherConfig,
     BatcherMetrics, BatcherMetricsSnapshot,

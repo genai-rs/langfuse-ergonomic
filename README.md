@@ -84,6 +84,114 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+## Langfuse v3 and v4
+
+The client talks to either a Langfuse v3 or a Langfuse v4 server. You choose which
+with an explicit setting; the client never probes the server.
+
+```rust
+use langfuse_ergonomic::{ApiVersion, ClientBuilder};
+
+let client = ClientBuilder::from_env()?        // also reads LANGFUSE_API_VERSION=v3|v4
+    .api_version(ApiVersion::V3)               // only for servers still on Langfuse v3
+    .build()?;
+```
+
+**The default is `ApiVersion::V4`.** Langfuse Cloud shuts down the v3 ingestion of
+traces and observations (`POST /api/public/ingestion` accepts only `score-create`
+events from then on) and the v3 trace, observation and session reads on
+**2026-11-16**. Self-hosted v3 servers keep the v3 endpoints until they are
+upgraded; set `ApiVersion::V3` (or `LANGFUSE_API_VERSION=v3`) for them.
+
+What changes with the version:
+
+| | `ApiVersion::V3` | `ApiVersion::V4` (default) |
+|---|---|---|
+| `trace()`, `span()`, `generation()`, `event()`, `update_*()` | `POST /api/public/ingestion` | OTLP/HTTP JSON to `POST /api/public/otel/v1/traces` with `x-langfuse-ingestion-version: 4` |
+| `score()` and its helpers | `score-create` ingestion event | `POST /api/public/scores` |
+| `Batcher` | ingestion batches, 207 per-event results | one OTLP export per batch, then one scores request per score |
+| Returned ids | as passed or generated | OpenTelemetry ids (see below) |
+
+Reads (`get_trace`, `list_traces`, `get_observation(s)`) still call the v3
+endpoints in this release.
+
+The builders and the batcher keep their signatures; only the transport changes.
+The batcher keeps batching, retries with backoff, `Retry-After` and splitting a
+batch on HTTP 413 in both modes. An OTLP export succeeds or fails as a whole, so
+in V4 there are no per-span 207 results; a failed score is reported for its own
+event.
+
+### Ids in V4
+
+Langfuse v4 stores the OpenTelemetry ids: a 32-hex-character trace id and a
+16-hex-character observation (span) id. The client maps every id
+deterministically (`langfuse_ergonomic::otel::{trace_id, observation_id}`):
+
+- a trace id that is already 32 hex characters, or any UUID, is used as is
+  (lowercase, without hyphens);
+- an observation id that is already 16 hex characters is used as is;
+- any other string is hashed (UUID v5 in a fixed namespace) to the right length.
+
+The mapping is idempotent, so you can pass either your own id or the id the
+client returned: both resolve to the same trace or observation. Parent links and
+score targets keep working. The builders return the mapped id, and
+`TraceResponse::url()` points at it. `client.effective_trace_id(..)` and
+`client.effective_observation_id(..)` give the stored id for any input.
+
+### Traces in V4
+
+OpenTelemetry has no trace record of its own. `trace()` writes a zero-duration
+root span (id `otel::trace_root_span_id(trace_id)`) that carries the trace
+attributes and the trace input and output. Observations without a
+`parent_observation_id` become children of that root span. Call `trace()` for
+every trace you write to, as before.
+
+### Attribute mapping
+
+Attribute names follow Langfuse's
+[OpenTelemetry property mapping](https://langfuse.com/integrations/native/opentelemetry).
+
+| Field | OTel attribute |
+|---|---|
+| trace name | `langfuse.trace.name` (and the root span name) |
+| trace user id / session id | `user.id` / `session.id` |
+| trace tags | `langfuse.trace.tags` (string array) |
+| trace public | `langfuse.trace.public` (bool) |
+| trace metadata | `langfuse.trace.metadata.<key>` |
+| trace input / output | `langfuse.observation.input` / `.output` on the root span |
+| observation type | `langfuse.observation.type` (`span`, `generation`, `event`, ...) |
+| input / output | `langfuse.observation.input` / `langfuse.observation.output` (JSON) |
+| observation metadata | `langfuse.observation.metadata.<key>` |
+| level / status message | `langfuse.observation.level` / `langfuse.observation.status_message`; `ERROR` also sets the span status to error |
+| model / model parameters | `langfuse.observation.model.name` / `langfuse.observation.model.parameters` (JSON) |
+| usage / cost | `langfuse.observation.usage_details` / `langfuse.observation.cost_details` (JSON) |
+| completion start time | `langfuse.observation.completion_start_time` (ISO 8601) |
+| prompt name / version | `langfuse.observation.prompt.name` / `langfuse.observation.prompt.version` |
+| version / release / environment | `langfuse.version` / `langfuse.release` / `langfuse.environment` |
+| start / end time | `startTimeUnixNano` / `endTimeUnixNano` (events: end = start) |
+
+Metadata is written as one attribute per top-level key (strings unchanged,
+other values as JSON) so Langfuse can filter on it; non-object metadata is
+written under the key `value`.
+
+### Migrating to v4
+
+1. Self-hosted v3 server: set `.api_version(ApiVersion::V3)` or
+   `LANGFUSE_API_VERSION=v3` and nothing else changes. Switch to V4 when the
+   server is upgraded.
+2. Langfuse Cloud or a v4 server: keep the default. Then:
+   - Store and reuse the ids the builders return (or keep passing your own: the
+     mapping is deterministic). Ids that are not OTel ids, such as
+     `"my-trace"`, are stored as their hashed form, so look them up with
+     `client.effective_trace_id("my-trace")`.
+   - Call `trace()` for each trace; it creates the root span.
+   - Batches no longer return 207 per-event results for spans.
+   - In Langfuse v4, user id, session id and tags are set on the trace's root
+     span only. Filtering *observations* by them needs the attributes on every
+     span, which this client does not propagate yet.
+3. `generation().model_parameters(json!({...}))` is now sent (it was ignored
+   before) in both modes.
+
 ## Type Safety
 
 ### Migrating to client-base 0.19
@@ -181,12 +289,13 @@ Set these environment variables:
 LANGFUSE_PUBLIC_KEY=pk-lf-...
 LANGFUSE_SECRET_KEY=sk-lf-...
 LANGFUSE_BASE_URL=https://cloud.langfuse.com  # Optional
+LANGFUSE_API_VERSION=v4                        # Optional: v3 or v4 (default v4)
 ```
 
 Or configure explicitly with advanced options:
 
 ```rust
-use langfuse_ergonomic::ClientBuilder;
+use langfuse_ergonomic::{ApiVersion, ClientBuilder};
 use std::time::Duration;
 
 let client = ClientBuilder::new()
@@ -196,6 +305,7 @@ let client = ClientBuilder::new()
     .timeout(Duration::from_secs(30))        // Custom timeout
     .connect_timeout(Duration::from_secs(5)) // Connection timeout
     .user_agent("my-app/1.0.0")              // Custom user agent
+    .api_version(ApiVersion::V4)             // Langfuse server API (default V4)
     .build()?;
 ```
 
@@ -285,7 +395,7 @@ let final_response = batcher.shutdown().await?;
 
 #### Advanced Features
 
-**207 Multi-Status Handling**: Automatically handles partial failures where some events succeed and others fail.
+**207 Multi-Status Handling** (V3): Automatically handles partial failures where some events succeed and others fail. In V4 an OTLP export succeeds or fails as a whole, and scores are reported one by one.
 
 **Backpressure Policies**:
 - `Block`: Wait when queue is full (default)

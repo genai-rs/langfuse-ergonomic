@@ -45,6 +45,8 @@ async fn wait_for_usage(
 #[ignore = "writes synthetic traces to a real Langfuse instance; requires API credentials"]
 async fn generation_token_usage_persists_in_langfuse() {
     let client = ClientBuilder::from_env()
+        // These tests use the v3 ingestion and read APIs.
+        .map(|builder| builder.api_version(langfuse_ergonomic::ApiVersion::V3))
         .and_then(|builder| builder.build())
         .expect("configure Langfuse test-project credentials");
     let trace = client
