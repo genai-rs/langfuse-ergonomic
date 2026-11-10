@@ -25,6 +25,8 @@ pub struct LangfuseClient {
     pub(crate) base_url: String,
     pub(crate) configuration: Configuration,
     pub(crate) api_version: ApiVersion,
+    /// Langfuse v4 write state (span cache, trace attributes), shared by clones and batchers.
+    pub(crate) v4_state: Arc<std::sync::Mutex<crate::otel::V4State>>,
 }
 
 impl LangfuseClient {
@@ -38,6 +40,52 @@ impl LangfuseClient {
     pub fn with_api_version(mut self, api_version: ApiVersion) -> Self {
         self.api_version = api_version;
         self
+    }
+
+    /// Trace attributes given on an observation builder (`user_id`, `session_id`, `tags`).
+    ///
+    /// V4 records them in the write state, which stamps them on every span of the trace. V3
+    /// returns a trace upsert event to send with the observation.
+    pub(crate) fn trace_attribute_events(
+        &self,
+        trace_id: &str,
+        user_id: Option<String>,
+        session_id: Option<String>,
+        tags: Option<Vec<String>>,
+    ) -> Vec<langfuse_client_base::models::IngestionEvent> {
+        use langfuse_client_base::models::{
+            ingestion_event_trace_event::Type, IngestionEvent, IngestionEventTraceEvent, TraceBody,
+        };
+
+        if user_id.is_none() && session_id.is_none() && tags.is_none() {
+            return Vec::new();
+        }
+        match self.api_version {
+            ApiVersion::V4 => {
+                self.v4_state().remember_trace_attributes(
+                    trace_id,
+                    user_id.as_deref(),
+                    session_id.as_deref(),
+                    tags.as_deref(),
+                );
+                Vec::new()
+            }
+            ApiVersion::V3 => {
+                let body = TraceBody {
+                    id: Some(Some(trace_id.to_owned())),
+                    user_id: user_id.map(Some),
+                    session_id: session_id.map(Some),
+                    tags: tags.map(Some),
+                    ..TraceBody::default()
+                };
+                vec![IngestionEvent::TraceEvent(IngestionEventTraceEvent::new(
+                    uuid::Uuid::new_v4().to_string(),
+                    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                    body,
+                    Type::TraceCreate,
+                ))]
+            }
+        }
     }
 
     /// The trace id Langfuse stores for `id` with this client's API version.
@@ -199,6 +247,7 @@ impl LangfuseClient {
             base_url,
             configuration,
             api_version,
+            v4_state: Arc::default(),
         })
     }
 }

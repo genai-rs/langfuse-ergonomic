@@ -59,10 +59,24 @@ impl LangfuseClient {
     // ===== OBSERVATIONS (SPANS, GENERATIONS, EVENTS) =====
 
     /// Create a span observation
+    ///
+    /// With [`crate::ApiVersion::V4`] the returned id is the mapped OpenTelemetry span id (see
+    /// [`crate::otel`]); passing your own id again resolves to the same observation. A
+    /// parentless observation becomes a child of the trace's root span, or the root itself if
+    /// this client has not written the trace yet. Writing it once, complete with `end_time`
+    /// and output, is the preferred V4 pattern; the export only means Langfuse queued it.
     #[builder]
     pub async fn span(
         &self,
         #[builder(into)] trace_id: String,
+        /// Trace user id. V4 stamps it on every span of the trace; V3 upserts the trace.
+        #[builder(into)]
+        user_id: Option<String>,
+        /// Trace session id. V4 stamps it on every span of the trace; V3 upserts the trace.
+        #[builder(into)]
+        session_id: Option<String>,
+        /// Trace tags. V4 stamps them on every span of the trace; V3 upserts the trace.
+        tags: Option<Vec<String>>,
         #[builder(into)] id: Option<String>,
         #[builder(into)] parent_observation_id: Option<String>,
         #[builder(into)] name: Option<String>,
@@ -80,13 +94,14 @@ impl LangfuseClient {
         };
 
         let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
+        let trace_id_for_context = trace_id;
         let timestamp = start_time.unwrap_or_else(Utc::now);
         let level = level.map(|l| parse_observation_level(&l));
         let end_time = end_time.map(|t| t.fixed_offset());
 
         let span_body = CreateSpanBody::builder()
             .id(Some(observation_id.clone()))
-            .trace_id(Some(trace_id))
+            .trace_id(Some(trace_id_for_context.clone()))
             .start_time(Some(timestamp.fixed_offset()))
             .maybe_end_time(end_time.map(Some))
             .maybe_name(name.map(Some))
@@ -105,7 +120,10 @@ impl LangfuseClient {
             .r#type(SpanEventType::SpanCreate)
             .build();
 
-        self.ingest_events(vec![IngestionEvent::CreateSpanEvent(event)])
+        let mut events =
+            self.trace_attribute_events(&trace_id_for_context, user_id, session_id, tags);
+        events.push(IngestionEvent::CreateSpanEvent(event));
+        self.ingest_events(events)
             .await
             .map(|_| self.effective_observation_id(&observation_id))
             .map_err(|e| crate::error::Error::Api(format!("Failed to create span: {e}")))
@@ -119,12 +137,26 @@ impl LangfuseClient {
     /// preserved; when omitted, Langfuse derives it from the supplied usage.
     /// If no counts are supplied, `usageDetails` is omitted.
     ///
+    /// With [`crate::ApiVersion::V4`] the returned id is the mapped OpenTelemetry span id (see
+    /// [`crate::otel`]); passing your own id again resolves to the same observation. A
+    /// parentless observation becomes a child of the trace's root span, or the root itself if
+    /// this client has not written the trace yet. Writing it once, complete with `end_time`
+    /// and output, is the preferred V4 pattern; the export only means Langfuse queued it.
+    ///
     /// `model_parameters` must be a JSON object; its values are sent as strings, numbers,
     /// booleans or string arrays (other values are sent as JSON strings).
     #[builder]
     pub async fn generation(
         &self,
         #[builder(into)] trace_id: String,
+        /// Trace user id. V4 stamps it on every span of the trace; V3 upserts the trace.
+        #[builder(into)]
+        user_id: Option<String>,
+        /// Trace session id. V4 stamps it on every span of the trace; V3 upserts the trace.
+        #[builder(into)]
+        session_id: Option<String>,
+        /// Trace tags. V4 stamps them on every span of the trace; V3 upserts the trace.
+        tags: Option<Vec<String>>,
         #[builder(into)] id: Option<String>,
         #[builder(into)] parent_observation_id: Option<String>,
         #[builder(into)] name: Option<String>,
@@ -148,6 +180,7 @@ impl LangfuseClient {
         };
 
         let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
+        let trace_id_for_context = trace_id;
         let timestamp = start_time.unwrap_or_else(Utc::now);
 
         let level = level.map(|l| parse_observation_level(&l));
@@ -168,7 +201,7 @@ impl LangfuseClient {
 
         let generation_body = CreateGenerationBody::builder()
             .id(Some(observation_id.clone()))
-            .trace_id(Some(trace_id))
+            .trace_id(Some(trace_id_for_context.clone()))
             .start_time(Some(timestamp.fixed_offset()))
             .maybe_name(name.map(Some))
             .maybe_end_time(end_time.map(Some))
@@ -190,17 +223,34 @@ impl LangfuseClient {
             .r#type(GenerationEventType::GenerationCreate)
             .build();
 
-        self.ingest_events(vec![IngestionEvent::CreateGenerationEvent(event)])
+        let mut events =
+            self.trace_attribute_events(&trace_id_for_context, user_id, session_id, tags);
+        events.push(IngestionEvent::CreateGenerationEvent(event));
+        self.ingest_events(events)
             .await
             .map(|_| self.effective_observation_id(&observation_id))
             .map_err(|e| crate::error::Error::Api(format!("Failed to create generation: {e}")))
     }
 
     /// Create an event observation
+    ///
+    /// With [`crate::ApiVersion::V4`] the returned id is the mapped OpenTelemetry span id (see
+    /// [`crate::otel`]); passing your own id again resolves to the same observation. A
+    /// parentless observation becomes a child of the trace's root span, or the root itself if
+    /// this client has not written the trace yet. Writing it once, complete with `end_time`
+    /// and output, is the preferred V4 pattern; the export only means Langfuse queued it.
     #[builder]
     pub async fn event(
         &self,
         #[builder(into)] trace_id: String,
+        /// Trace user id. V4 stamps it on every span of the trace; V3 upserts the trace.
+        #[builder(into)]
+        user_id: Option<String>,
+        /// Trace session id. V4 stamps it on every span of the trace; V3 upserts the trace.
+        #[builder(into)]
+        session_id: Option<String>,
+        /// Trace tags. V4 stamps them on every span of the trace; V3 upserts the trace.
+        tags: Option<Vec<String>>,
         #[builder(into)] id: Option<String>,
         #[builder(into)] parent_observation_id: Option<String>,
         #[builder(into)] name: Option<String>,
@@ -217,13 +267,14 @@ impl LangfuseClient {
         };
 
         let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
+        let trace_id_for_context = trace_id;
         let timestamp = start_time.unwrap_or_else(Utc::now);
 
         let level = level.map(|l| parse_observation_level(&l));
 
         let event_body = CreateEventBody::builder()
             .id(Some(observation_id.clone()))
-            .trace_id(Some(trace_id))
+            .trace_id(Some(trace_id_for_context.clone()))
             .start_time(Some(timestamp.fixed_offset()))
             .maybe_name(name.map(Some))
             .maybe_input(input.map(Some))
@@ -241,7 +292,10 @@ impl LangfuseClient {
             .r#type(EventEventType::EventCreate)
             .build();
 
-        self.ingest_events(vec![IngestionEvent::CreateEventEvent(event)])
+        let mut events =
+            self.trace_attribute_events(&trace_id_for_context, user_id, session_id, tags);
+        events.push(IngestionEvent::CreateEventEvent(event));
+        self.ingest_events(events)
             .await
             .map(|_| self.effective_observation_id(&observation_id))
             .map_err(|e| crate::error::Error::Api(format!("Failed to create event: {e}")))
@@ -303,6 +357,13 @@ impl LangfuseClient {
     }
 
     /// Update an existing span
+    ///
+    /// With [`crate::ApiVersion::V4`], Langfuse stores each span as one complete row keyed by
+    /// its start time, so this re-sends the full span this client wrote earlier, with the
+    /// changes merged in and the original start time (a different `start_time` is ignored).
+    /// It fails with [`Error::Validation`] if this client has not written the observation (or
+    /// no longer remembers it, see [`crate::otel::STATE_CAPACITY`]). Prefer creating the
+    /// observation once with its `end_time` and output. Returns the mapped id.
     #[builder]
     pub async fn update_span(
         &self,
@@ -352,12 +413,22 @@ impl LangfuseClient {
 
         self.ingest_events(vec![IngestionEvent::UpdateSpanEvent(event)])
             .await
-            .map_err(|e| Error::Api(format!("Failed to update span: {e}")))?;
+            .map_err(|e| match e {
+                Error::Validation(_) => e,
+                other => Error::Api(format!("Failed to update span: {other}")),
+            })?;
 
         Ok(self.effective_observation_id(&id))
     }
 
     /// Update an existing generation
+    ///
+    /// With [`crate::ApiVersion::V4`], Langfuse stores each span as one complete row keyed by
+    /// its start time, so this re-sends the full span this client wrote earlier, with the
+    /// changes merged in and the original start time (a different `start_time` is ignored).
+    /// It fails with [`Error::Validation`] if this client has not written the observation (or
+    /// no longer remembers it, see [`crate::otel::STATE_CAPACITY`]). Prefer creating the
+    /// observation once with its `end_time` and output. Returns the mapped id.
     #[builder]
     pub async fn update_generation(
         &self,
@@ -418,7 +489,10 @@ impl LangfuseClient {
 
         self.ingest_events(vec![IngestionEvent::UpdateGenerationEvent(event)])
             .await
-            .map_err(|e| Error::Api(format!("Failed to update generation: {e}")))?;
+            .map_err(|e| match e {
+                Error::Validation(_) => e,
+                other => Error::Api(format!("Failed to update generation: {other}")),
+            })?;
 
         Ok(self.effective_observation_id(&id))
     }

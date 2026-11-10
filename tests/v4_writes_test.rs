@@ -215,7 +215,7 @@ async fn trace_is_sent_as_otlp_root_span_with_v4_header() {
 }
 
 #[tokio::test]
-async fn observations_link_to_parent_and_trace_root() {
+async fn observations_link_to_parent_and_unknown_trace_root() {
     let mut server = Server::new_async().await;
     let (otlp, recorded) = capture(&mut server, OTLP_PATH, 200, "{}", 3).await;
     let client = v4_client(&server);
@@ -265,7 +265,9 @@ async fn observations_link_to_parent_and_trace_root() {
         assert_eq!(s["traceId"], trace_hex);
     }
     assert_eq!(span["spanId"], span_id);
-    assert_eq!(span["parentSpanId"], otel::trace_root_span_id("my-trace"));
+    // This client never called trace() for "my-trace", so the first parentless
+    // observation becomes the root.
+    assert!(span.get("parentSpanId").is_none());
     assert_eq!(string_attr(span, "langfuse.observation.type"), "span");
 
     assert_eq!(generation["spanId"], generation_id);
@@ -559,4 +561,275 @@ async fn batcher_rejects_unencodable_events_in_v4() {
         Err(Error::Validation(_))
     ));
     batcher.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn update_resends_the_full_span_with_the_original_start() {
+    let mut server = Server::new_async().await;
+    let (otlp, recorded) = capture(&mut server, OTLP_PATH, 200, "{}", 3).await;
+    let client = v4_client(&server);
+    let start = chrono::DateTime::parse_from_rfc3339("2026-11-10T12:00:00.000Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+
+    client.trace().id("t1").name("chat").call().await.unwrap();
+    let span_id = client
+        .span()
+        .trace_id("t1")
+        .id("s1")
+        .name("retrieve")
+        .input(json!({"q": "hi"}))
+        .start_time(start)
+        .call()
+        .await
+        .unwrap();
+    let updated_id = client
+        .update_span()
+        .id("s1")
+        .trace_id("t1")
+        .output(json!({"done": true}))
+        .end_time(start + chrono::Duration::seconds(2))
+        .call()
+        .await
+        .unwrap();
+    otlp.assert_async().await;
+    assert_eq!(updated_id, span_id);
+
+    let bodies = recorded.bodies();
+    let created = &spans(&bodies[1])[0];
+    let updated = &spans(&bodies[2])[0];
+    assert_eq!(updated["spanId"], span_id);
+    assert_eq!(updated["startTimeUnixNano"], created["startTimeUnixNano"]);
+    assert_eq!(updated["startTimeUnixNano"], "1794312000000000000");
+    assert_eq!(updated["endTimeUnixNano"], "1794312002000000000");
+    assert_eq!(updated["name"], "retrieve");
+    assert_eq!(updated["parentSpanId"], created["parentSpanId"]);
+    assert_eq!(
+        string_attr(updated, "langfuse.observation.input"),
+        r#"{"q":"hi"}"#
+    );
+    assert_eq!(
+        string_attr(updated, "langfuse.observation.output"),
+        r#"{"done":true}"#
+    );
+}
+
+#[tokio::test]
+async fn update_of_an_unknown_span_fails_without_a_request() {
+    let mut server = Server::new_async().await;
+    let otlp = server
+        .mock("POST", OTLP_PATH)
+        .expect(0)
+        .create_async()
+        .await;
+    let err = v4_client(&server)
+        .update_span()
+        .id("never-created")
+        .trace_id("t1")
+        .output(json!("x"))
+        .call()
+        .await
+        .unwrap_err();
+    assert!(matches!(err, Error::Validation(_)), "{err:?}");
+    otlp.assert_async().await;
+}
+
+#[tokio::test]
+async fn trace_attributes_are_stamped_on_child_spans() {
+    let mut server = Server::new_async().await;
+    let (otlp, recorded) = capture(&mut server, OTLP_PATH, 200, "{}", 3).await;
+    let client = v4_client(&server);
+
+    client
+        .trace()
+        .id("t1")
+        .user_id("user-1")
+        .session_id("session-1")
+        .tags(vec!["a".to_owned()])
+        .release("r1")
+        .call()
+        .await
+        .unwrap();
+    client
+        .span()
+        .trace_id("t1")
+        .name("child")
+        .call()
+        .await
+        .unwrap();
+    // A trace created elsewhere: the builder setters supply the trace attributes.
+    client
+        .generation()
+        .trace_id("other-trace")
+        .user_id("user-2")
+        .session_id("session-2")
+        .tags(vec!["b".to_owned()])
+        .call()
+        .await
+        .unwrap();
+    otlp.assert_async().await;
+
+    let bodies = recorded.bodies();
+    let root = &spans(&bodies[0])[0];
+    let child = &spans(&bodies[1])[0];
+    assert_eq!(child["parentSpanId"], root["spanId"]);
+    assert_eq!(string_attr(child, "user.id"), "user-1");
+    assert_eq!(string_attr(child, "session.id"), "session-1");
+    assert_eq!(string_attr(child, "langfuse.release"), "r1");
+    assert_eq!(
+        attr(child, "langfuse.trace.tags").unwrap()["arrayValue"]["values"][0]["stringValue"],
+        "a"
+    );
+    let other = &spans(&bodies[2])[0];
+    assert_eq!(string_attr(other, "user.id"), "user-2");
+    assert_eq!(string_attr(other, "session.id"), "session-2");
+    assert_eq!(
+        attr(other, "langfuse.trace.tags").unwrap()["arrayValue"]["values"][0]["stringValue"],
+        "b"
+    );
+}
+
+#[tokio::test]
+async fn v3_observation_trace_setters_upsert_the_trace() {
+    let mut server = Server::new_async().await;
+    let (ingestion, recorded) = capture(
+        &mut server,
+        "/api/public/ingestion",
+        200,
+        r#"{"successes":[],"errors":[]}"#,
+        1,
+    )
+    .await;
+    let client = v4_client(&server).with_api_version(ApiVersion::V3);
+    client
+        .span()
+        .trace_id("t1")
+        .user_id("user-1")
+        .call()
+        .await
+        .unwrap();
+    ingestion.assert_async().await;
+    let batch = &recorded.bodies()[0]["batch"];
+    assert_eq!(batch[0]["type"], "trace-create");
+    assert_eq!(batch[0]["body"]["id"], "t1");
+    assert_eq!(batch[0]["body"]["userId"], "user-1");
+    assert_eq!(batch[1]["type"], "span-create");
+}
+
+#[tokio::test]
+async fn batcher_sends_one_merged_span_for_create_and_update() {
+    use langfuse_client_base::models::{
+        ingestion_event_update_span_event, IngestionEventUpdateSpanEvent, UpdateSpanBody,
+    };
+    let mut server = Server::new_async().await;
+    let (otlp, recorded) = capture(&mut server, OTLP_PATH, 200, "{}", 1).await;
+    let batcher = v4_batcher(&server, 1).await;
+
+    batcher.add(span_event("s1", "t1")).await.unwrap();
+    let mut update = UpdateSpanBody::new("s1".to_owned());
+    update.trace_id = Some(Some("t1".to_owned()));
+    update.output = Some(Some(json!("done")));
+    batcher
+        .add(IngestionEvent::UpdateSpanEvent(
+            IngestionEventUpdateSpanEvent::new(
+                "ev-s1-update".to_owned(),
+                "2026-11-10T12:00:05.000Z".to_owned(),
+                update,
+                ingestion_event_update_span_event::Type::SpanUpdate,
+            ),
+        ))
+        .await
+        .unwrap();
+    let result = batcher.shutdown().await.unwrap();
+    assert_eq!(result.success_count, 2);
+    otlp.assert_async().await;
+
+    let exported = spans(&recorded.bodies()[0]);
+    assert_eq!(exported.len(), 1);
+    assert_eq!(exported[0]["startTimeUnixNano"], "1794312000000000000");
+    assert_eq!(
+        string_attr(&exported[0], "langfuse.observation.output"),
+        "done"
+    );
+}
+
+#[tokio::test]
+async fn batcher_waits_for_retry_after_on_score_rate_limit() {
+    let mut server = Server::new_async().await;
+    let limited = server
+        .mock("POST", "/api/public/scores")
+        .with_status(429)
+        .with_header("retry-after", "1")
+        .expect(1)
+        .create_async()
+        .await;
+    let ok = server
+        .mock("POST", "/api/public/scores")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"id":"x"}"#)
+        .expect(2)
+        .create_async()
+        .await;
+
+    let batcher = v4_batcher(&server, 2).await;
+    batcher.add(score_event("sc1", "t1")).await.unwrap();
+    batcher.add(score_event("sc2", "t1")).await.unwrap();
+    let started = std::time::Instant::now();
+    let result = batcher.shutdown().await.unwrap();
+
+    assert!(
+        started.elapsed() >= Duration::from_secs(1),
+        "Retry-After ignored"
+    );
+    assert_eq!(result.success_count, 2);
+    assert_eq!(result.failure_count, 0);
+    limited.assert_async().await;
+    ok.assert_async().await;
+}
+
+#[tokio::test]
+async fn batcher_stops_scores_when_still_rate_limited() {
+    let mut server = Server::new_async().await;
+    let limited = server
+        .mock("POST", "/api/public/scores")
+        .with_status(429)
+        .with_header("retry-after", "0")
+        .expect(1)
+        .create_async()
+        .await;
+
+    // max_retries(0): no retry, so the remaining scores are not sent at all.
+    let batcher = v4_batcher(&server, 0).await;
+    batcher.add(score_event("sc1", "t1")).await.unwrap();
+    batcher.add(score_event("sc2", "t1")).await.unwrap();
+    let result = batcher.shutdown().await.unwrap();
+
+    assert_eq!(result.failure_count, 2);
+    assert!(result.failures.iter().all(|f| f.retryable));
+    assert!(result
+        .failures
+        .iter()
+        .all(|f| f.code.as_deref() == Some("429")));
+    limited.assert_async().await;
+}
+
+#[tokio::test]
+async fn batcher_fails_fast_on_score_auth_error() {
+    let mut server = Server::new_async().await;
+    let denied = server
+        .mock("POST", "/api/public/scores")
+        .with_status(401)
+        .with_body(r#"{"message":"invalid key"}"#)
+        .expect(1)
+        .create_async()
+        .await;
+
+    let batcher = v4_batcher(&server, 2).await;
+    batcher.add(score_event("sc1", "t1")).await.unwrap();
+    batcher.add(score_event("sc2", "t1")).await.unwrap();
+    let err = batcher.shutdown().await.unwrap_err();
+
+    assert!(matches!(err, Error::Auth { .. }), "{err:?}");
+    denied.assert_async().await;
 }
