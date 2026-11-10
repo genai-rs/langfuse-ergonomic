@@ -399,6 +399,7 @@ async fn test_rate_limiting_handling() {
         .with_status(429)
         .with_header("content-type", "application/json")
         .with_header("Retry-After", "60")
+        .with_header("x-request-id", "req-rate-limited")
         .with_body(r#"{"error": "Too many requests"}"#)
         .create_async()
         .await;
@@ -425,6 +426,11 @@ async fn test_rate_limiting_handling() {
             error_str.contains("Rate limit"),
             "Expected rate limit error, got: {error_str}"
         );
+        assert_eq!(
+            error.retry_after(),
+            Some(std::time::Duration::from_secs(60))
+        );
+        assert_eq!(error.request_id(), Some("req-rate-limited"));
     }
 }
 
