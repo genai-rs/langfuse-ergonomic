@@ -253,6 +253,14 @@ The other filters are `trace_id`, `parent_observation_id`, `to_start_time`,
 structured JSON `filter`. In V4, `trace_id` and `parent_observation_id` go
 through the same id mapping as writes, so your own ids work.
 
+- `limit` is at most `MAX_OBSERVATIONS_PAGE_SIZE` (1000, the server maximum);
+  larger values fail with `Error::Validation` before the request.
+  `trace_observations()` uses pages of 1000.
+- The API does not de-duplicate rows. `trace_observations()` keeps one
+  observation per id (the latest `updated_at`) as a safety net.
+- `usage_details` holds integers; non-integer usage counts from the server are
+  rounded.
+
 The v3-only reads stay available for Langfuse v3 servers, but are
 `#[deprecated]` and return `Error::Configuration` (without a request) when
 `ApiVersion::V4` is set:
@@ -260,9 +268,16 @@ The v3-only reads stay available for Langfuse v3 servers, but are
 | v3 method | v4 replacement |
 |---|---|
 | `get_trace(id)` | `trace_observations(id)` |
-| `list_traces()` | `observations().is_root_observation(true)` |
+| `list_traces()` | `observations().is_root_observation(true)` (see the note below) |
 | `get_observation(id)` / `get_observations()` | `observations()` (with `trace_id`, `name`, ...) |
 | `get_dataset_run(s)`, `delete_dataset_run` | Langfuse experiments (not wrapped yet) |
+
+A trace is listed through its **root observation**. With this client that is the
+span written by `trace()`, or, when the trace was not created with `trace()`,
+its first parentless observation (see [Traces in V4](#traces-in-v4)). Traces
+whose root span never reached Langfuse (for example, every span has a parent
+that was not exported) have no root observation, so
+`is_root_observation(true)` does not list them; read them by `trace_id`.
 
 Deletes (`delete_trace`, `delete_multiple_traces`, datasets, prompts) work in
 both modes.

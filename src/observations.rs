@@ -531,8 +531,9 @@ impl LangfuseClient {
 pub const ALL_OBSERVATION_FIELDS: &str =
     "core,basic,time,io,metadata,model,usage,prompt,metrics,trace_context";
 
-/// Page size [`LangfuseClient::trace_observations`] requests.
-const TRACE_OBSERVATIONS_PAGE_SIZE: u32 = 100;
+/// Largest `limit` the observations API accepts; [`LangfuseClient::trace_observations`]
+/// requests pages of this size.
+pub const MAX_OBSERVATIONS_PAGE_SIZE: u32 = 1000;
 
 /// One page of `GET /api/public/v2/observations`.
 #[derive(Debug, Clone, PartialEq)]
@@ -574,6 +575,11 @@ impl LangfuseClient {
     /// With [`crate::ApiVersion::V4`], `trace_id` and `parent_observation_id` go through the
     /// same id mapping as writes (see [`crate::otel`]), so the ids you wrote with work here.
     ///
+    /// `limit` must be at most [`MAX_OBSERVATIONS_PAGE_SIZE`] (checked before the request).
+    /// The API does not de-duplicate rows. Usage counts that are not integers are rounded,
+    /// because [`ObservationV2::usage_details`](langfuse_client_base::models::ObservationV2)
+    /// holds integers.
+    ///
     /// ```no_run
     /// # use langfuse_ergonomic::ClientBuilder;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -602,7 +608,7 @@ impl LangfuseClient {
     #[builder]
     pub async fn observations(
         &self,
-        /// Maximum number of items per page.
+        /// Maximum number of items per page (1 to [`MAX_OBSERVATIONS_PAGE_SIZE`]).
         limit: Option<u32>,
         /// Cursor from [`ObservationsPage::next_cursor`].
         #[builder(into)]
@@ -631,49 +637,88 @@ impl LangfuseClient {
         /// Comma-separated metadata keys to return untruncated.
         #[builder(into)]
         expand_metadata: Option<String>,
-        /// Parse input and output as JSON.
-        parse_io_as_json: Option<bool>,
         /// Structured JSON filter; takes precedence over the individual filters.
         #[builder(into)]
         filter: Option<String>,
     ) -> Result<ObservationsPage> {
-        use langfuse_client_base::apis::observations_api;
-
+        if let Some(limit) = limit {
+            if limit == 0 || limit > MAX_OBSERVATIONS_PAGE_SIZE {
+                return Err(Error::Validation(format!(
+                    "observations limit must be between 1 and {MAX_OBSERVATIONS_PAGE_SIZE}, got {limit}"
+                )));
+            }
+        }
         let trace_id = trace_id.map(|id| self.effective_trace_id(&id));
         let parent_observation_id =
             parent_observation_id.map(|id| self.effective_observation_id(&id));
 
-        observations_api::observations_get_many()
-            .configuration(self.configuration())
-            .maybe_fields(fields.as_deref())
-            .maybe_expand_metadata(expand_metadata.as_deref())
-            .maybe_limit(limit.map(i64::from))
-            .maybe_cursor(cursor.as_deref())
-            .maybe_parse_io_as_json(parse_io_as_json)
-            .maybe_name(name.as_deref())
-            .maybe_user_id(user_id.as_deref())
-            .maybe_session_id(session_id.as_deref())
-            .maybe_type(observation_type.as_deref())
-            .maybe_trace_id(trace_id.as_deref())
-            .maybe_level(level)
-            .maybe_parent_observation_id(parent_observation_id.as_deref())
-            .maybe_is_root_observation(is_root_observation)
-            .maybe_environment(environment)
-            .maybe_from_start_time(from_start_time.map(|t| t.fixed_offset()))
-            .maybe_to_start_time(to_start_time.map(|t| t.fixed_offset()))
-            .maybe_version(version.as_deref())
-            .maybe_filter(filter.as_deref())
-            .call()
-            .await
-            .map(ObservationsPage::from)
-            .map_err(crate::error::map_api_error)
+        let mut query: Vec<(&str, String)> = Vec::new();
+        let mut push = |key: &'static str, value: Option<String>| {
+            if let Some(value) = value {
+                query.push((key, value));
+            }
+        };
+        push("fields", fields);
+        push("expandMetadata", expand_metadata);
+        push("limit", limit.map(|l| l.to_string()));
+        push("cursor", cursor);
+        push("name", name);
+        push("userId", user_id);
+        push("sessionId", session_id);
+        push("type", observation_type);
+        push("traceId", trace_id);
+        push("level", level.map(|l| l.to_string()));
+        push("parentObservationId", parent_observation_id);
+        push(
+            "isRootObservation",
+            is_root_observation.map(|b| b.to_string()),
+        );
+        for environment in environment.into_iter().flatten() {
+            push("environment", Some(environment));
+        }
+        push(
+            "fromStartTime",
+            from_start_time.map(|t| t.fixed_offset().to_rfc3339()),
+        );
+        push(
+            "toStartTime",
+            to_start_time.map(|t| t.fixed_offset().to_rfc3339()),
+        );
+        push("version", version);
+        push("filter", filter);
+
+        // A raw request instead of the generated client, so that non-integer usage counts
+        // (which the server allows) can be rounded instead of failing deserialization.
+        let mut request = self
+            .configuration
+            .client
+            .get(format!(
+                "{}/api/public/v2/observations",
+                self.configuration.base_path
+            ))
+            .basic_auth(&self.public_key, Some(&self.secret_key))
+            .query(&query);
+        if let Some(user_agent) = &self.configuration.user_agent {
+            request = request.header(reqwest::header::USER_AGENT, user_agent);
+        }
+        let response = request.send().await.map_err(Error::Middleware)?;
+        if !response.status().is_success() {
+            return Err(crate::error::error_from_response(response).await);
+        }
+        let mut body: Value = response.json().await.map_err(Error::Network)?;
+        round_usage_details(&mut body);
+        let response: langfuse_client_base::models::ObservationsV2Response =
+            serde_json::from_value(body)?;
+        Ok(ObservationsPage::from(response))
     }
 
     /// Fetch every observation of a trace, following the cursor across pages.
     ///
-    /// Requests all field groups ([`ALL_OBSERVATION_FIELDS`]). The trace's root observation
-    /// carries the trace-level input and output. This replaces [`LangfuseClient::get_trace`]
-    /// for Langfuse v4.
+    /// Requests all field groups ([`ALL_OBSERVATION_FIELDS`]) in pages of
+    /// [`MAX_OBSERVATIONS_PAGE_SIZE`]. The trace's root observation carries the trace-level
+    /// input and output. The API does not de-duplicate rows, so as a safety net this keeps one
+    /// observation per id (the one with the latest `updated_at`), in first-seen order. This
+    /// replaces [`LangfuseClient::get_trace`] for Langfuse v4.
     pub async fn trace_observations(
         &self,
         trace_id: impl Into<String>,
@@ -686,7 +731,7 @@ impl LangfuseClient {
                 .observations()
                 .trace_id(trace_id.as_str())
                 .fields(ALL_OBSERVATION_FIELDS)
-                .limit(TRACE_OBSERVATIONS_PAGE_SIZE)
+                .limit(MAX_OBSERVATIONS_PAGE_SIZE)
                 .maybe_cursor(cursor.clone())
                 .call()
                 .await?;
@@ -698,8 +743,59 @@ impl LangfuseClient {
                         "observations API returned the same cursor twice".to_string(),
                     ))
                 }
-                None => return Ok(observations),
+                None => return Ok(dedupe_observations(observations)),
             }
         }
     }
+}
+
+/// Round non-integer usage counts in an observations response, since `usage_details` is a
+/// map of integers.
+fn round_usage_details(body: &mut Value) {
+    let Some(data) = body.get_mut("data").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for observation in data {
+        if let Some(Value::Object(usage)) = observation.get_mut("usageDetails") {
+            for value in usage.values_mut() {
+                if let Value::Number(n) = value {
+                    if !n.is_i64() {
+                        if let Some(f) = n.as_f64() {
+                            #[allow(clippy::cast_possible_truncation)]
+                            let rounded = f.round() as i64;
+                            *value = Value::from(rounded);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Keep one observation per id (the latest `updated_at`), in first-seen order.
+fn dedupe_observations(
+    observations: Vec<langfuse_client_base::models::ObservationV2>,
+) -> Vec<langfuse_client_base::models::ObservationV2> {
+    let mut order: Vec<String> = Vec::new();
+    let mut latest: std::collections::HashMap<String, langfuse_client_base::models::ObservationV2> =
+        std::collections::HashMap::new();
+    for observation in observations {
+        match latest.get(&observation.id) {
+            None => {
+                order.push(observation.id.clone());
+                latest.insert(observation.id.clone(), observation);
+            }
+            Some(existing) => {
+                let updated =
+                    |o: &langfuse_client_base::models::ObservationV2| o.updated_at.flatten();
+                if updated(&observation) >= updated(existing) {
+                    latest.insert(observation.id.clone(), observation);
+                }
+            }
+        }
+    }
+    order
+        .into_iter()
+        .filter_map(|id| latest.remove(&id))
+        .collect()
 }
