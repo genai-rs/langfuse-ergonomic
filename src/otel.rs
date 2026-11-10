@@ -355,7 +355,10 @@ fn usage_details_json(
                 ("output", flat(&schema.completion_tokens_details)),
             ] {
                 for (key, value) in details.into_iter().flatten() {
-                    usage.insert(format!("{prefix}_{key}"), json!(value));
+                    // A `null` count is not a usage figure: send only real numbers.
+                    if let Some(value) = value {
+                        usage.insert(format!("{prefix}_{key}"), json!(value));
+                    }
                 }
             }
         }
@@ -368,7 +371,10 @@ fn usage_details_json(
                 ("output", flat(&schema.output_tokens_details)),
             ] {
                 for (key, value) in details.into_iter().flatten() {
-                    usage.insert(format!("{prefix}_{key}"), json!(value));
+                    // A `null` count is not a usage figure: send only real numbers.
+                    if let Some(value) = value {
+                        usage.insert(format!("{prefix}_{key}"), json!(value));
+                    }
                 }
             }
         }
@@ -1757,7 +1763,7 @@ mod tests {
             prompt_tokens: 3,
             completion_tokens: 4,
             total_tokens: 7,
-            prompt_tokens_details: Some(Some(HashMap::from([("cached_tokens".into(), 1)]))),
+            prompt_tokens_details: Some(Some(HashMap::from([("cached_tokens".into(), Some(1))]))),
             completion_tokens_details: None,
         });
         let (usage, cost) = usage_details_json(Some(&schema), None);
@@ -1779,6 +1785,47 @@ mod tests {
         let (usage, cost) = usage_details_json(None, Some(&legacy));
         assert_eq!(usage.unwrap(), json!({"input": 1, "output": 2, "total": 3}));
         assert_eq!(cost.unwrap(), json!({"input": 0.1, "total": 0.3}));
+    }
+
+    #[test]
+    fn null_token_detail_counts_are_skipped() {
+        use langfuse_client_base::models::{
+            OpenAiCompletionUsageSchema, OpenAiResponseUsageSchema,
+        };
+        let completion = UsageDetails::OpenAiCompletionUsageSchema(OpenAiCompletionUsageSchema {
+            prompt_tokens: 3,
+            completion_tokens: 4,
+            total_tokens: 7,
+            prompt_tokens_details: Some(Some(HashMap::from([
+                ("cached_tokens".into(), Some(1)),
+                ("audio_tokens".into(), None),
+            ]))),
+            completion_tokens_details: Some(Some(HashMap::from([(
+                "reasoning_tokens".into(),
+                None,
+            )]))),
+        });
+        let (usage, _) = usage_details_json(Some(&completion), None);
+        assert_eq!(
+            usage.unwrap(),
+            json!({"input": 3, "output": 4, "total": 7, "input_cached_tokens": 1})
+        );
+
+        let response = UsageDetails::OpenAiResponseUsageSchema(OpenAiResponseUsageSchema {
+            input_tokens: 5,
+            output_tokens: 6,
+            total_tokens: 11,
+            input_tokens_details: Some(Some(HashMap::from([("cached_tokens".into(), None)]))),
+            output_tokens_details: Some(Some(HashMap::from([(
+                "reasoning_tokens".into(),
+                Some(2),
+            )]))),
+        });
+        let (usage, _) = usage_details_json(Some(&response), None);
+        assert_eq!(
+            usage.unwrap(),
+            json!({"input": 5, "output": 6, "total": 11, "output_reasoning_tokens": 2})
+        );
     }
 
     #[test]
