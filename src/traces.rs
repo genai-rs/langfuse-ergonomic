@@ -157,7 +157,12 @@ impl LangfuseClient {
     /// Create a new trace
     ///
     /// With [`crate::ApiVersion::V4`] the trace is written as an OpenTelemetry root span and
-    /// the returned id is the mapped OTel trace id (see [`crate::otel`]).
+    /// the returned id is the mapped OTel trace id (see [`crate::otel`]). Call it before the
+    /// trace's observations: its user id, session id, tags, release and version are then
+    /// stamped on every observation span. Calling it again with the same id re-sends the root
+    /// span with the original start time and the new values merged in. If an observation of
+    /// the trace was written first, that observation is the root and receives the trace
+    /// attributes instead.
     #[builder]
     pub async fn trace(
         &self,

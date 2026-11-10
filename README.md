@@ -123,10 +123,14 @@ Reads move to the v2 observations API (`GET /api/public/v2/observations`), see
 [Reading data](#reading-data).
 
 The builders and the batcher keep their signatures; only the transport changes.
-The batcher keeps batching, retries with backoff, `Retry-After` and splitting a
-batch on HTTP 413 in both modes. An OTLP export succeeds or fails as a whole, so
-in V4 there are no per-span 207 results; a failed score is reported for its own
-event.
+The span, generation and event builders gain optional `user_id`, `session_id`
+and `tags` setters for traces created elsewhere. The batcher keeps batching,
+retries with backoff, `Retry-After` and splitting a batch on HTTP 413 in both
+modes. An OTLP export succeeds or fails as a whole, so in V4 there are no
+per-span 207 results. A successful export means Langfuse *queued* the spans;
+processing is asynchronous. Scores are sent one by one: a 429 waits for
+`Retry-After` and retries, a 401/403 stops the batch, and any other failure is
+reported for its own event.
 
 ### Ids in V4
 
@@ -145,13 +149,41 @@ score targets keep working. The builders return the mapped id, and
 `TraceResponse::url()` points at it. `client.effective_trace_id(..)` and
 `client.effective_observation_id(..)` give the stored id for any input.
 
+Data written under Langfuse v3 with ids that are not OTel ids keeps those raw
+ids. A V4 client maps every id, so it cannot address that data (scores,
+`delete_trace`, the `trace_id` read filter); use a V3 client for it.
+
 ### Traces in V4
 
 OpenTelemetry has no trace record of its own. `trace()` writes a zero-duration
 root span (id `otel::trace_root_span_id(trace_id)`) that carries the trace
-attributes and the trace input and output. Observations without a
-`parent_observation_id` become children of that root span. Call `trace()` for
-every trace you write to, as before.
+attributes and the trace input and output.
+
+The client keeps a bounded write state (`otel::STATE_CAPACITY` entries), shared
+by its clones and batchers, to keep traces consistent:
+
+- Observations without a `parent_observation_id` become children of the
+  trace's root span. If this client has not written the trace, the first such
+  observation has no parent and becomes the root; a later `trace()` adds the
+  trace attributes to it instead of creating a second root.
+- The trace's user id, session id, tags, release and version are stamped on
+  every observation span written after `trace()` (or after an observation
+  builder's `user_id`/`session_id`/`tags` setters). Langfuse needs them on
+  every span to filter observations, sessions and dashboards by them. Call
+  `trace()` before the trace's observations.
+
+### Updates in V4
+
+Langfuse v4 stores each span as one complete row keyed by its start time and
+does not merge rows field by field; a partial span would become a duplicate
+row. So `update_span()`, `update_generation()` and calling `trace()` again with
+the same id re-send the **full** span this client wrote, with the changes merged
+in and the **original start time** (a new start time is ignored). Updating an
+observation this client did not write, or no longer remembers, fails with
+`Error::Validation`.
+
+**Preferred V4 pattern:** write each observation once, complete with its
+`end_time` and output, instead of creating it and updating it later.
 
 ### Attribute mapping
 
@@ -164,22 +196,25 @@ Attribute names follow Langfuse's
 | trace user id / session id | `user.id` / `session.id` |
 | trace tags | `langfuse.trace.tags` (string array) |
 | trace public | `langfuse.trace.public` (bool) |
-| trace metadata | `langfuse.trace.metadata.<key>` |
-| trace input / output | `langfuse.observation.input` / `.output` on the root span |
+| trace metadata | `langfuse.trace.metadata` (JSON object) and `langfuse.trace.metadata.<key>` |
+| trace input / output | `langfuse.observation.input` / `.output` and `langfuse.trace.input` / `.output` on the root span |
 | observation type | `langfuse.observation.type` (`span`, `generation`, `event`, ...) |
 | input / output | `langfuse.observation.input` / `langfuse.observation.output` (JSON) |
-| observation metadata | `langfuse.observation.metadata.<key>` |
+| observation metadata | `langfuse.observation.metadata` (JSON object) and `langfuse.observation.metadata.<key>` |
 | level / status message | `langfuse.observation.level` / `langfuse.observation.status_message`; `ERROR` also sets the span status to error |
 | model / model parameters | `langfuse.observation.model.name` / `langfuse.observation.model.parameters` (JSON) |
 | usage / cost | `langfuse.observation.usage_details` / `langfuse.observation.cost_details` (JSON) |
 | completion start time | `langfuse.observation.completion_start_time` (ISO 8601) |
 | prompt name / version | `langfuse.observation.prompt.name` / `langfuse.observation.prompt.version` |
 | version / release / environment | `langfuse.version` / `langfuse.release` / `langfuse.environment` |
+| trace user id, session id, tags, release, version on child spans | stamped from the trace (see above) |
 | start / end time | `startTimeUnixNano` / `endTimeUnixNano` (events: end = start) |
 
-Metadata is written as one attribute per top-level key (strings unchanged,
-other values as JSON) so Langfuse can filter on it; non-object metadata is
-written under the key `value`.
+Metadata is written twice: the whole object as a JSON string, which keeps value
+types and nesting, and each string value as its own attribute, the form Langfuse
+filters on. Non-object metadata is wrapped as `{"value": ...}`. The keys
+`attributes`, `resourceAttributes` and `scope` collide with fields the Langfuse
+server adds to OTel metadata, so they are renamed to `user_<key>`.
 
 ### Reading data
 
@@ -242,14 +277,14 @@ both modes.
      mapping is deterministic). Ids that are not OTel ids, such as
      `"my-trace"`, are stored as their hashed form, so look them up with
      `client.effective_trace_id("my-trace")`.
-   - Call `trace()` for each trace; it creates the root span.
+   - Call `trace()` for each trace, before its observations; it creates the
+     root span and the trace attributes propagate to the observations.
+   - Write observations once, complete, rather than create-then-update.
+     Updates only work for observations this client wrote.
    - Batches no longer return 207 per-event results for spans.
    - Replace `get_trace`/`list_traces`/`get_observation(s)` with
      `trace_observations`/`observations` (see [Reading data](#reading-data)).
      Data written with OpenTelemetry is available there in real time.
-   - In Langfuse v4, user id, session id and tags are set on the trace's root
-     span only. Filtering *observations* by them needs the attributes on every
-     span, which this client does not propagate yet.
 3. `generation().model_parameters(json!({...}))` is now sent (it was ignored
    before) in both modes.
 
