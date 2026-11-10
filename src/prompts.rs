@@ -41,7 +41,7 @@ impl LangfuseClient {
 
         prompts_api::prompts_create()
             .configuration(self.configuration())
-            .create_prompt_request(prompt_request)
+            .create_prompt_request(&prompt_request)
             .call()
             .await
             .map_err(|e| crate::error::Error::Api(format!("Failed to create prompt: {e}")))
@@ -110,7 +110,7 @@ impl LangfuseClient {
 
         prompts_api::prompts_create()
             .configuration(self.configuration())
-            .create_prompt_request(prompt_request)
+            .create_prompt_request(&prompt_request)
             .call()
             .await
             .map_err(|e| crate::error::Error::Api(format!("Failed to create chat prompt: {e}")))
@@ -133,7 +133,7 @@ impl LangfuseClient {
             .configuration(self.configuration())
             .name(name.as_str())
             .version(i64::from(version))
-            .prompt_version_update_request(update_request)
+            .prompt_version_update_request(&update_request)
             .call()
             .await
             .map_err(|e| crate::error::Error::Api(format!("Failed to update prompt version: {e}")))

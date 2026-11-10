@@ -68,7 +68,7 @@ impl LangfuseClient {
 
         datasets_api::datasets_create()
             .configuration(self.configuration())
-            .create_dataset_request(request)
+            .create_dataset_request(&request)
             .call()
             .await
             .map_err(|e| crate::error::Error::Api(format!("Failed to create dataset: {e}")))
@@ -198,7 +198,7 @@ impl LangfuseClient {
 
         dataset_items_api::dataset_items_create()
             .configuration(self.configuration())
-            .create_dataset_item_request(item_request)
+            .create_dataset_item_request(&item_request)
             .call()
             .await
             .map_err(|e| crate::error::Error::Api(format!("Failed to create dataset item: {e}")))

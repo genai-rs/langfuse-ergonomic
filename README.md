@@ -86,6 +86,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Type Safety
 
+### Migrating to client-base 0.19
+
+`langfuse-client-base` 0.19 is generated with `timvw-rust` 0.21. The ergonomic
+builders keep their signatures. Code that calls the base API directly (for
+example through `client.configuration()`) changes:
+
+- Request bodies are passed by reference: `.ingestion_batch_request(&request)`.
+- `apis::Error::ResponseError` holds a `Box<ResponseContent<T>>`, and
+  `ResponseContent` has a `headers` field.
+- Every base model implements `models::validation::Validate`.
+
+For errors mapped by status (`Error::Auth`, `RateLimit`, `Client`, `Server`)
+from unbatched calls such as `trace()` and `get_trace()`, `Error::request_id()`
+and `Error::retry_after()` now return the `x-request-id` and `Retry-After`
+response headers instead of `None`. See
+the base crate's `migration/api-diff-0.18.0-to-0.19.0.md`.
+
 ### Migrating to client-base 0.18
 
 `langfuse-client-base` 0.18 adds role-based auth for blob storage integrations:

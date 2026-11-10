@@ -859,29 +859,6 @@ impl Batcher {
         ))
     }
 
-    /// Parse the `Retry-After` header, either as seconds or as an HTTP-date.
-    fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
-        headers
-            .get("retry-after")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|s| {
-                // Try parsing as seconds (integer)
-                s.parse::<u64>().ok().or_else(|| {
-                    // Try parsing as HTTP-date (RFC2616)
-                    chrono::DateTime::parse_from_rfc2822(s).ok().and_then(|dt| {
-                        let now = chrono::Utc::now();
-                        let retry_time = dt.with_timezone(&chrono::Utc);
-                        if retry_time > now {
-                            Some((retry_time - now).num_seconds() as u64)
-                        } else {
-                            None
-                        }
-                    })
-                })
-            })
-            .map(Duration::from_secs)
-    }
-
     /// Parse a 207 Multi-Status ingestion response into per-event successes and failures.
     async fn parse_multi_status(response: reqwest::Response) -> Result<IngestionResponse> {
         #[derive(serde::Deserialize)]
@@ -968,11 +945,7 @@ impl Batcher {
             .map_err(Error::Middleware)?;
 
         let status = response.status();
-        let request_id = response
-            .headers()
-            .get("x-request-id")
-            .and_then(|v| v.to_str().ok())
-            .map(ToString::to_string);
+        let request_id = crate::error::parse_request_id(response.headers());
 
         // Handle different status codes
         match status.as_u16() {
@@ -1012,7 +985,7 @@ impl Batcher {
                 }
             }
             429 => {
-                let retry_after = Self::parse_retry_after(response.headers());
+                let retry_after = crate::error::parse_retry_after(response.headers());
 
                 Err(Error::RateLimit {
                     retry_after,

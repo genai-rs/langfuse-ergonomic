@@ -140,7 +140,7 @@ impl LangfuseClient {
 
         ingestion_api::ingestion_batch()
             .configuration(self.configuration())
-            .ingestion_batch_request(batch_request)
+            .ingestion_batch_request(&batch_request)
             .call()
             .await
             .map_err(crate::error::map_api_error)
@@ -236,60 +236,41 @@ impl LangfuseClient {
         #[builder(into)] order_by: Option<String>,
         #[builder(into)] tags: Option<String>,
     ) -> Result<langfuse_client_base::models::Traces> {
+        use langfuse_client_base::apis::{trace_api, Error as ApiError};
+
         let parse_timestamp = |value: String| {
             DateTime::parse_from_rfc3339(&value)
-                .map(|timestamp| timestamp.to_rfc3339())
                 .map_err(|e| Error::Validation(format!("Trace timestamp must be RFC3339: {e}")))
         };
         let from_timestamp = from_timestamp.map(parse_timestamp).transpose()?;
         let to_timestamp = to_timestamp.map(parse_timestamp).transpose()?;
 
-        // client-base 0.15 formats date query parameters with Display, which
-        // inserts spaces instead of the RFC3339 `T`. Keep valid query dates
-        // here while using the configured transport, middleware and auth.
-        let query: Vec<_> = [
-            ("page", page.map(|value| value.to_string())),
-            ("limit", limit.map(|value| value.to_string())),
-            ("userId", user_id),
-            ("name", name),
-            ("sessionId", session_id),
-            ("version", version),
-            ("release", release),
-            ("orderBy", order_by),
-            ("fromTimestamp", from_timestamp),
-            ("toTimestamp", to_timestamp),
-            ("tags", tags),
-        ]
-        .into_iter()
-        .filter_map(|(key, value)| value.map(|value| (key, value)))
-        .collect();
-        let configuration = self.configuration();
-        let mut request = configuration
-            .client
-            .get(format!("{}/api/public/traces", configuration.base_path))
-            .query(&query);
-        if let Some(user_agent) = &configuration.user_agent {
-            request = request.header(reqwest::header::USER_AGENT, user_agent);
-        }
-        if let Some((username, password)) = &configuration.basic_auth {
-            request = request.basic_auth(username, password.as_ref());
-        }
-        let response = request
-            .send()
-            .await
-            .map_err(|e| Error::Api(format!("Failed to list traces: {e}")))?;
-        let status = response.status();
-        let content = response
-            .text()
-            .await
-            .map_err(|e| Error::Api(format!("Failed to list traces: {e}")))?;
-        if status.is_client_error() || status.is_server_error() {
-            return Err(Error::Api(format!(
-                "Failed to list traces: status {status}: {content}"
-            )));
-        }
-        serde_json::from_str(&content)
-            .map_err(|e| Error::Api(format!("Failed to list traces: {e}")))
+        // The endpoint is deprecated upstream (Langfuse v3), but it is still what
+        // this builder targets.
+        #[allow(deprecated)]
+        let result = trace_api::trace_list()
+            .configuration(self.configuration())
+            .maybe_page(page.map(i64::from))
+            .maybe_limit(limit.map(i64::from))
+            .maybe_user_id(user_id.as_deref())
+            .maybe_name(name.as_deref())
+            .maybe_session_id(session_id.as_deref())
+            .maybe_from_timestamp(from_timestamp)
+            .maybe_to_timestamp(to_timestamp)
+            .maybe_order_by(order_by.as_deref())
+            .maybe_tags(tags.map(|tag| vec![tag]))
+            .maybe_version(version.as_deref())
+            .maybe_release(release.as_deref())
+            .call()
+            .await;
+
+        result.map_err(|e| match e {
+            ApiError::ResponseError(response) => Error::Api(format!(
+                "Failed to list traces: status {}: {}",
+                response.status, response.content
+            )),
+            other => Error::Api(format!("Failed to list traces: {other}")),
+        })
     }
 
     /// Delete a trace
@@ -321,7 +302,7 @@ impl LangfuseClient {
 
         trace_api::trace_delete_multiple()
             .configuration(self.configuration())
-            .trace_delete_multiple_request(request)
+            .trace_delete_multiple_request(&request)
             .call()
             .await
             .map(|_| ())

@@ -213,6 +213,37 @@ impl IngestionResponse {
     }
 }
 
+/// Parse a `Retry-After` header, given either as seconds or as an HTTP-date.
+pub(crate) fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
+    headers
+        .get(reqwest::header::RETRY_AFTER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| {
+            // Try parsing as seconds (integer)
+            s.parse::<u64>().ok().or_else(|| {
+                // Try parsing as HTTP-date (RFC2616)
+                chrono::DateTime::parse_from_rfc2822(s).ok().and_then(|dt| {
+                    let now = chrono::Utc::now();
+                    let retry_time = dt.with_timezone(&chrono::Utc);
+                    if retry_time > now {
+                        Some((retry_time - now).num_seconds() as u64)
+                    } else {
+                        None
+                    }
+                })
+            })
+        })
+        .map(Duration::from_secs)
+}
+
+/// Read the `x-request-id` header, if present.
+pub(crate) fn parse_request_id(headers: &reqwest::header::HeaderMap) -> Option<String> {
+    headers
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .map(ToString::to_string)
+}
+
 /// Helper to map API errors to appropriate error types based on status code
 pub fn map_api_error<T>(err: langfuse_client_base::apis::Error<T>) -> Error {
     use langfuse_client_base::apis::Error as ApiError;
@@ -224,30 +255,31 @@ pub fn map_api_error<T>(err: langfuse_client_base::apis::Error<T>) -> Error {
         ApiError::Io(e) => Error::Api(format!("IO error: {e}")),
         ApiError::ResponseError(response) => {
             let status = response.status.as_u16();
+            let request_id = parse_request_id(&response.headers);
             let message = if response.content.is_empty() {
                 format!("status {status}")
             } else {
-                response.content.clone()
+                response.content
             };
 
             match status {
                 401 | 403 => Error::Auth {
                     message,
-                    request_id: None,
+                    request_id,
                 },
                 429 => Error::RateLimit {
-                    retry_after: None,
-                    request_id: None,
+                    retry_after: parse_retry_after(&response.headers),
+                    request_id,
                 },
                 400..=499 => Error::Client {
                     status,
                     message,
-                    request_id: None,
+                    request_id,
                 },
                 500..=599 => Error::Server {
                     status,
                     message,
-                    request_id: None,
+                    request_id,
                 },
                 _ => Error::Api(message),
             }
@@ -324,6 +356,43 @@ mod tests {
             request_id: None,
         };
         assert_eq!(auth_error.retry_after(), None);
+    }
+
+    fn response_error(
+        status: u16,
+        headers: &[(&'static str, &'static str)],
+    ) -> langfuse_client_base::apis::Error<()> {
+        let mut header_map = reqwest::header::HeaderMap::new();
+        for (name, value) in headers {
+            header_map.insert(*name, reqwest::header::HeaderValue::from_static(value));
+        }
+        langfuse_client_base::apis::Error::ResponseError(Box::new(
+            langfuse_client_base::apis::ResponseContent {
+                status: reqwest::StatusCode::from_u16(status).unwrap(),
+                content: "body".to_string(),
+                entity: None,
+                headers: header_map,
+            },
+        ))
+    }
+
+    #[test]
+    fn test_map_api_error_reads_response_headers() {
+        let error = map_api_error(response_error(
+            429,
+            &[("retry-after", "7"), ("x-request-id", "req-429")],
+        ));
+        assert!(matches!(error, Error::RateLimit { .. }));
+        assert_eq!(error.retry_after(), Some(Duration::from_secs(7)));
+        assert_eq!(error.request_id(), Some("req-429"));
+
+        let error = map_api_error(response_error(503, &[("x-request-id", "req-503")]));
+        assert!(matches!(error, Error::Server { status: 503, .. }));
+        assert_eq!(error.request_id(), Some("req-503"));
+
+        let error = map_api_error(response_error(401, &[]));
+        assert!(matches!(error, Error::Auth { .. }));
+        assert_eq!(error.request_id(), None);
     }
 
     #[test]
