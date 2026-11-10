@@ -103,6 +103,10 @@ and `Error::retry_after()` now return the `x-request-id` and `Retry-After`
 response headers instead of `None`. See
 the base crate's `migration/api-diff-0.18.0-to-0.19.0.md`.
 
+`list_traces()` now goes through the generated client. A 2xx response must have a
+JSON content type, and transport and serde errors read
+`Failed to list traces: error in reqwest: ...` (or `error in serde: ...`).
+
 ### Migrating to client-base 0.18
 
 `langfuse-client-base` 0.18 adds role-based auth for blob storage integrations:
