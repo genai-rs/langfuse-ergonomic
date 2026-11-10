@@ -456,8 +456,10 @@ impl Batcher {
         }
 
         if self.client.api_version == ApiVersion::V4 {
-            // Reject events the v4 transport cannot encode now rather than at flush time.
-            crate::otel::encode_event(&event)?;
+            // Encode now: this rejects events the v4 transport cannot send (for example an
+            // update of an unknown span) and records the full span in the shared state, which
+            // the send step reads.
+            self.client.v4_state().apply(&event)?;
         }
 
         let id = Self::extract_event_id(&event);
@@ -947,11 +949,17 @@ impl Batcher {
 
     /// Send a batch through the Langfuse v4 APIs.
     ///
-    /// Observation and trace events go out as one OTLP export request. OTLP reports no
-    /// per-span outcome, so the export succeeds or fails as a whole; a status error is handled
-    /// like a failed v3 batch (retries, `Retry-After`, 413 splitting). Scores are then sent one by
-    /// one to `POST /api/public/scores`, and each failure is reported for its event. Events that
-    /// cannot be encoded (for example without a trace id) fail without retry.
+    /// Observation and trace events go out as one OTLP export request carrying the latest
+    /// full span of each (from the client's V4 state, so updates re-send complete spans with
+    /// their original start time). OTLP reports no per-span outcome, so the export succeeds or
+    /// fails as a whole, and a status error is handled like a failed v3 batch (retries,
+    /// `Retry-After`, 413 splitting). A successful export means Langfuse queued the spans.
+    ///
+    /// Scores are then sent one by one to `POST /api/public/scores`. A 429 pauses for
+    /// `Retry-After` (or the backoff delay) and retries the score up to `max_retries` times;
+    /// if it is still limited, it and the remaining scores are reported as retryable failures.
+    /// A 401/403 stops the loop: the remaining scores fail, and the batch fails fast when
+    /// nothing in it succeeded. Other score errors are reported for their own event.
     async fn send_batch_v4(
         client: &LangfuseClient,
         config: &BatcherConfig,
@@ -961,25 +969,36 @@ impl Batcher {
         let mut spans = Vec::new();
         let mut scores = Vec::new();
         let mut failures = Vec::new();
-        for event in events {
-            match crate::otel::encode_event(&event.event) {
-                Ok(V4Item::Span(span)) => {
-                    span_ids.push(event.id.clone());
-                    spans.push(span);
+        {
+            let mut state = client.v4_state();
+            for event in events {
+                let item = match &event.event {
+                    IngestionEvent::ScoreEvent(_) => crate::otel::encode_event(&event.event),
+                    other => match state.span_for_event(&event.id) {
+                        Some(span) => Ok(V4Item::Span(span)),
+                        // Evicted from the state (or never added through `add`).
+                        None => state.apply(other),
+                    },
+                };
+                match item {
+                    Ok(V4Item::Span(span)) => {
+                        span_ids.push(event.id.clone());
+                        spans.push(span);
+                    }
+                    Ok(V4Item::Score(score)) => scores.push((event.id.clone(), *score)),
+                    Err(error) => failures.push(EventError {
+                        event_id: event.id.clone(),
+                        message: error.to_string(),
+                        code: None,
+                        retryable: false,
+                    }),
                 }
-                Ok(V4Item::Score(score)) => scores.push((event.id.clone(), *score)),
-                Err(error) => failures.push(EventError {
-                    event_id: event.id.clone(),
-                    message: error.to_string(),
-                    code: None,
-                    retryable: false,
-                }),
             }
         }
 
         let mut success_ids = Vec::new();
         if !spans.is_empty() {
-            let response = client.post_otlp(spans).await?;
+            let response = client.post_otlp(crate::otel::dedupe_spans(spans)).await?;
             if response.status().is_success() {
                 crate::otel::log_partial_success(response).await;
                 success_ids.extend(span_ids);
@@ -988,22 +1007,56 @@ impl Batcher {
             }
         }
 
-        for (id, score) in scores {
-            match client.create_score_v4(score).await {
-                Ok(()) => success_ids.push(id),
+        let mut index = 0;
+        while index < scores.len() {
+            let (id, score) = &scores[index];
+            let mut attempt = 0;
+            let mut delay = config.initial_retry_delay;
+            let outcome = loop {
+                match client.create_score_v4(score.clone()).await {
+                    Err(Error::RateLimit { retry_after, .. }) if attempt < config.max_retries => {
+                        attempt += 1;
+                        let wait = retry_after.map_or(delay, |r| r.max(delay));
+                        tokio::time::sleep(wait).await;
+                        delay = std::cmp::min(delay * 2, config.max_retry_delay);
+                    }
+                    other => break other,
+                }
+            };
+            match outcome {
+                Ok(()) => success_ids.push(id.clone()),
+                Err(error @ (Error::RateLimit { .. } | Error::Auth { .. })) => {
+                    let retryable = error.is_retryable();
+                    let code = match &error {
+                        Error::RateLimit { .. } => "429".to_owned(),
+                        _ => "auth".to_owned(),
+                    };
+                    for (remaining_id, _) in &scores[index..] {
+                        failures.push(EventError {
+                            event_id: remaining_id.clone(),
+                            message: error.to_string(),
+                            code: Some(code.clone()),
+                            retryable,
+                        });
+                    }
+                    if matches!(error, Error::Auth { .. }) && success_ids.is_empty() {
+                        return Err(error);
+                    }
+                    break;
+                }
                 Err(error) => failures.push(EventError {
-                    event_id: id,
+                    event_id: id.clone(),
                     code: match &error {
                         Error::Client { status, .. } | Error::Server { status, .. } => {
                             Some(status.to_string())
                         }
-                        Error::RateLimit { .. } => Some("429".to_owned()),
                         _ => None,
                     },
                     retryable: error.is_retryable(),
                     message: error.to_string(),
                 }),
             }
+            index += 1;
         }
 
         Ok(IngestionResponse {
