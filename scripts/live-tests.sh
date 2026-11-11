@@ -14,6 +14,9 @@ cd "$(dirname "$0")/.."
 compose=(docker compose -f docker/langfuse/compose.yml)
 port="${LANGFUSE_PORT:-3000}"
 base_url="http://localhost:${port}"
+# Test keys created by the headless initialization in docker/langfuse/compose.yml.
+public_key=pk-lf-live-test
+secret_key=sk-lf-live-test
 live_tests=(--test integration_test --test generation_usage_e2e)
 
 up() {
@@ -22,7 +25,7 @@ up() {
   local deadline=$((SECONDS + ${LANGFUSE_STARTUP_TIMEOUT:-300}))
   # The public health endpoint answers once migrations ran; the authenticated project call
   # proves the headless initialization created the test keys.
-  until curl -fsS -u pk-lf-live-test:sk-lf-live-test "${base_url}/api/public/projects" >/dev/null 2>&1; do
+  until curl -fsS --user "${public_key}:${secret_key}" "${base_url}/api/public/projects" >/dev/null 2>&1; do
     if ((SECONDS > deadline)); then
       echo "Langfuse did not become ready in time" >&2
       "${compose[@]}" ps >&2
@@ -38,8 +41,8 @@ run_tests() {
   (($#)) || set -- v3 v4
   for version in "$@"; do
     echo "=== Live tests with LANGFUSE_API_VERSION=${version} ==="
-    LANGFUSE_PUBLIC_KEY=pk-lf-live-test \
-      LANGFUSE_SECRET_KEY=sk-lf-live-test \
+    LANGFUSE_PUBLIC_KEY="${public_key}" \
+      LANGFUSE_SECRET_KEY="${secret_key}" \
       LANGFUSE_BASE_URL="${base_url}" \
       LANGFUSE_API_VERSION="${version}" \
       cargo test "${live_tests[@]}" -- --ignored --test-threads 4
