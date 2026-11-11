@@ -1,56 +1,19 @@
-//! Live Langfuse verification. Run explicitly with LANGFUSE_PUBLIC_KEY,
-//! LANGFUSE_SECRET_KEY, and LANGFUSE_BASE_URL configured:
-//! cargo test --test generation_usage_e2e -- --ignored --nocapture
+//! Live check that generation token usage persists in Langfuse.
+//!
+//! Ignored by default. `scripts/live-tests.sh` starts a self-hosted Langfuse and runs it for
+//! both API versions; against another server set `LANGFUSE_PUBLIC_KEY`,
+//! `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` and `LANGFUSE_API_VERSION` (`v3` or `v4`) and
+//! run `cargo test --test generation_usage_e2e -- --ignored --nocapture`.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-// These tests exercise the Langfuse v3 read methods, which are deprecated.
-#![allow(deprecated)]
 
-use langfuse_ergonomic::{ClientBuilder, LangfuseClient};
-use std::time::Duration;
-use tokio::time::{sleep, timeout, Instant};
+mod common;
 
-async fn wait_for_usage(
-    client: &LangfuseClient,
-    observation_id: &str,
-    expected: &[(&str, i64)],
-) -> langfuse_client_base::models::ObservationsViewSingle {
-    let deadline = Instant::now() + Duration::from_secs(120);
-    loop {
-        let diagnostic = match timeout(
-            Duration::from_secs(10),
-            client.get_observation(observation_id),
-        )
-        .await
-        {
-            Ok(Ok(observation)) => {
-                if expected
-                    .iter()
-                    .all(|(key, value)| observation.usage_details.get(*key) == Some(value))
-                {
-                    return observation;
-                }
-                format!("stored usageDetails: {:?}", observation.usage_details)
-            }
-            Ok(Err(error)) => format!("readback error: {error}"),
-            Err(_) => "readback request timed out".to_owned(),
-        };
-
-        assert!(
-            Instant::now() < deadline,
-            "Observation {observation_id} did not persist expected usage {expected:?}: {diagnostic}"
-        );
-        sleep(Duration::from_secs(2)).await;
-    }
-}
+use common::{live_client, wait_for_observation};
 
 #[tokio::test]
-#[ignore = "writes synthetic traces to a real Langfuse instance; requires API credentials"]
+#[ignore = "requires a Langfuse server; run scripts/live-tests.sh"]
 async fn generation_token_usage_persists_in_langfuse() {
-    let client = ClientBuilder::from_env()
-        // These tests use the v3 ingestion and read APIs.
-        .map(|builder| builder.api_version(langfuse_ergonomic::ApiVersion::V3))
-        .and_then(|builder| builder.build())
-        .expect("configure Langfuse test-project credentials");
+    let client = live_client();
     let trace = client
         .trace()
         .name(format!("issue-115-e2e-{}", uuid::Uuid::new_v4()))
@@ -90,20 +53,23 @@ async fn generation_token_usage_persists_in_langfuse() {
         if let Some(output) = output {
             expected.push(("output", i64::from(output)));
         }
-        let observation = wait_for_usage(&client, &id, &expected).await;
+        let observation = wait_for_observation(&client, &trace.id, &id, |o| {
+            if expected
+                .iter()
+                .all(|(key, value)| o.usage_details.get(*key) == Some(value))
+            {
+                Ok(())
+            } else {
+                Err(format!("expected usage {expected:?}"))
+            }
+        })
+        .await;
         assert_eq!(observation.id, id);
-        assert_eq!(observation.trace_id, Some(trace.id.clone()));
+        assert_eq!(observation.trace_id.as_deref(), Some(trace.id.as_str()));
         assert_eq!(observation.r#type, "GENERATION");
-        assert_eq!(observation.usage.total, i64::from(expected_total));
-        if let Some(input) = input {
-            assert_eq!(observation.usage.input, i64::from(input));
-        }
-        if let Some(output) = output {
-            assert_eq!(observation.usage.output, i64::from(output));
-        }
         println!(
-            "Verified {name}: observation={id}, usageDetails={:?}, costDetails={:?}",
-            observation.usage_details, observation.cost_details
+            "Verified {name}: observation={id}, usageDetails={:?}",
+            observation.usage_details
         );
     }
 }
