@@ -10,6 +10,8 @@
 # ApiVersion::V3 and ApiVersion::V4. In the v4 default `events_only` mode the v3 endpoints
 # return 404 (trace/observation ingestion events get 400).
 # https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4
+#
+# Every image is pinned to a tag and digest, kept current by Renovate (docker-compose manager).
 
 name: langfuse-ergonomic-live
 
@@ -57,13 +59,13 @@ x-langfuse-depends-on: &langfuse-depends-on
 
 services:
   langfuse-worker:
-    image: docker.io/langfuse/langfuse-worker:${LANGFUSE_IMAGE_TAG:-4.78.0}
+    image: docker.io/langfuse/langfuse-worker:4.78.0@sha256:175a32200b9908b283104e67b84d080381e841daa8ee6692f5bb26538df1a59e
     depends_on: *langfuse-depends-on
     environment:
       <<: *langfuse-env
 
   langfuse-web:
-    image: docker.io/langfuse/langfuse:${LANGFUSE_IMAGE_TAG:-4.78.0}
+    image: docker.io/langfuse/langfuse:4.78.0@sha256:037188385ac6612d3494319fa060052da407b235502874c7ea79ade583c29002
     depends_on: *langfuse-depends-on
     ports:
       - 127.0.0.1:${LANGFUSE_PORT:-3000}:3000
@@ -81,7 +83,7 @@ services:
       LANGFUSE_INIT_USER_PASSWORD: live-test-password
 
   clickhouse:
-    image: docker.io/clickhouse/clickhouse-server:26.3.62.3
+    image: docker.io/clickhouse/clickhouse-server:26.3.62.3@sha256:de3e47c64078aa196dae2349e048fc98ba81947f651f5c20e06e46baea8ae40a
     user: "101:101"
     environment:
       CLICKHOUSE_DB: default
@@ -94,7 +96,8 @@ services:
       retries: 30
 
   minio:
-    image: cgr.dev/chainguard/minio
+    # Chainguard publishes only `latest` for free; the digest pins it.
+    image: cgr.dev/chainguard/minio:latest@sha256:fb893e36fc369d41e92f678b17ec27378fa5bf0576aeef7ac15460c13629ab5a
     entrypoint: sh
     command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
     environment:
@@ -107,7 +110,7 @@ services:
       retries: 30
 
   redis:
-    image: docker.io/redis:7
+    image: docker.io/redis:7.4.11@sha256:44960b3100c48159a66d28c18b0588c193492e25f7551d60e51dd464fc3eca5b
     command: --requirepass myredissecret --maxmemory-policy noeviction
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "myredissecret", "ping"]
@@ -116,7 +119,7 @@ services:
       retries: 30
 
   postgres:
-    image: docker.io/postgres:17
+    image: docker.io/postgres:17.11@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
