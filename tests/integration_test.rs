@@ -1,28 +1,55 @@
-//! Integration tests for langfuse-ergonomic
+//! Live integration tests against a real Langfuse server.
+//!
+//! Ignored by default. `scripts/live-tests.sh` starts a self-hosted Langfuse and runs them for
+//! both API versions; against another server set `LANGFUSE_PUBLIC_KEY`,
+//! `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` and `LANGFUSE_API_VERSION` (`v3` or `v4`) and
+//! run `cargo test --test integration_test -- --ignored`.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-// These tests exercise the Langfuse v3 read methods, which are deprecated.
+// The v3 read methods are deprecated; these tests call them in V3 mode and check that they
+// fail cleanly in V4 mode.
 #![allow(deprecated)]
 
-use langfuse_ergonomic::{ClientBuilder, LangfuseClient};
+mod common;
+
+use common::{live_client, wait_for_observation, wait_for_trace};
+use langfuse_ergonomic::{ApiVersion, Error, LangfuseClient};
 use serde_json::json;
 
-/// Helper to create a client from environment variables
-fn create_test_client() -> LangfuseClient {
-    ClientBuilder::from_env()
-        // These tests use the v3 ingestion and read APIs.
-        .map(|builder| builder.api_version(langfuse_ergonomic::ApiVersion::V3))
-        .and_then(|builder| builder.build())
-        .expect("Failed to create client from environment")
+fn unique(prefix: &str) -> String {
+    format!("{prefix}-{}", uuid::Uuid::new_v4())
+}
+
+async fn new_trace(client: &LangfuseClient, name: &str) -> String {
+    client
+        .trace()
+        .name(unique(name))
+        .call()
+        .await
+        .expect("Failed to create trace")
+        .id
+}
+
+fn expect_type(
+    expected: &'static str,
+) -> impl Fn(&common::StoredObservation) -> Result<(), String> {
+    move |o| {
+        if o.r#type == expected {
+            Ok(())
+        } else {
+            Err(format!("type is {}, expected {expected}", o.r#type))
+        }
+    }
 }
 
 #[tokio::test]
-#[ignore = "requires Langfuse API credentials"]
+#[ignore = "requires a Langfuse server; run scripts/live-tests.sh"]
 async fn test_trace_creation() {
-    let client = create_test_client();
+    let client = live_client();
+    let name = unique("integration-test-trace");
 
-    let result = client
+    let trace = client
         .trace()
-        .name("integration-test-trace")
+        .name(name.clone())
         .input(json!({"test": "input"}))
         .output(json!({"test": "output"}))
         .tags(vec!["test".to_string(), "integration".to_string()])
@@ -30,30 +57,31 @@ async fn test_trace_creation() {
         .session_id("test-session")
         .metadata(json!({"test_key": "test_value"}))
         .call()
-        .await;
-
-    assert!(result.is_ok(), "Failed to create trace: {:?}", result.err());
-    let trace = result.unwrap();
-    assert!(!trace.id.is_empty(), "Trace ID should not be empty");
-}
-
-#[tokio::test]
-#[ignore = "requires Langfuse API credentials"]
-async fn test_span_creation() {
-    let client = create_test_client();
-
-    // First create a trace
-    let trace = client
-        .trace()
-        .name("test-trace-for-span")
-        .call()
         .await
         .expect("Failed to create trace");
 
-    // Then create a span
-    let result = client
+    assert!(!trace.id.is_empty(), "Trace ID should not be empty");
+    if client.api_version() == ApiVersion::V4 {
+        assert_eq!(trace.id.len(), 32, "V4 trace ids are OTel trace ids");
+    }
+    let stored = wait_for_trace(&client, &trace.id).await;
+    assert_eq!(stored.name, Some(name));
+    assert_eq!(stored.user_id.as_deref(), Some("test-user"));
+    assert_eq!(stored.session_id.as_deref(), Some("test-session"));
+    let mut tags = stored.tags;
+    tags.sort();
+    assert_eq!(tags, ["integration", "test"]);
+}
+
+#[tokio::test]
+#[ignore = "requires a Langfuse server; run scripts/live-tests.sh"]
+async fn test_span_creation() {
+    let client = live_client();
+    let trace_id = new_trace(&client, "test-trace-for-span").await;
+
+    let span_id = client
         .span()
-        .trace_id(trace.id.clone())
+        .trace_id(trace_id.clone())
         .name("test-span")
         .input(json!({"span": "input"}))
         .output(json!({"span": "output"}))
@@ -61,30 +89,24 @@ async fn test_span_creation() {
         .status_message("Test span created")
         .metadata(json!({"span_key": "span_value"}))
         .call()
-        .await;
+        .await
+        .expect("Failed to create span");
 
-    assert!(result.is_ok(), "Failed to create span: {:?}", result.err());
-    let span_id = result.unwrap();
     assert!(!span_id.is_empty(), "Span ID should not be empty");
+    let stored = wait_for_observation(&client, &trace_id, &span_id, expect_type("SPAN")).await;
+    assert_eq!(stored.trace_id.as_deref(), Some(trace_id.as_str()));
+    assert_eq!(stored.name.as_deref(), Some("test-span"));
 }
 
 #[tokio::test]
-#[ignore = "requires Langfuse API credentials"]
+#[ignore = "requires a Langfuse server; run scripts/live-tests.sh"]
 async fn test_generation_creation() {
-    let client = create_test_client();
+    let client = live_client();
+    let trace_id = new_trace(&client, "test-trace-for-generation").await;
 
-    // First create a trace
-    let trace = client
-        .trace()
-        .name("test-trace-for-generation")
-        .call()
-        .await
-        .expect("Failed to create trace");
-
-    // Then create a generation
-    let result = client
+    let generation_id = client
         .generation()
-        .trace_id(trace.id.clone())
+        .trace_id(trace_id.clone())
         .name("test-generation")
         .model("gpt-4")
         .input(json!({"prompt": "Hello, world!"}))
@@ -93,153 +115,109 @@ async fn test_generation_creation() {
         .completion_tokens(5)
         .metadata(json!({"model_version": "1.0"}))
         .call()
-        .await;
+        .await
+        .expect("Failed to create generation");
 
-    assert!(
-        result.is_ok(),
-        "Failed to create generation: {:?}",
-        result.err()
-    );
-    let generation_id = result.unwrap();
     assert!(
         !generation_id.is_empty(),
         "Generation ID should not be empty"
     );
+    let stored = wait_for_observation(
+        &client,
+        &trace_id,
+        &generation_id,
+        expect_type("GENERATION"),
+    )
+    .await;
+    assert_eq!(stored.name.as_deref(), Some("test-generation"));
 }
 
 #[tokio::test]
-#[ignore = "requires Langfuse API credentials"]
+#[ignore = "requires a Langfuse server; run scripts/live-tests.sh"]
 async fn test_event_creation() {
-    let client = create_test_client();
+    let client = live_client();
+    let trace_id = new_trace(&client, "test-trace-for-event").await;
 
-    // First create a trace
-    let trace = client
-        .trace()
-        .name("test-trace-for-event")
-        .call()
-        .await
-        .expect("Failed to create trace");
-
-    // Then create an event
-    let result = client
+    let event_id = client
         .event()
-        .trace_id(trace.id.clone())
+        .trace_id(trace_id.clone())
         .name("test-event")
         .input(json!({"event": "data"}))
         .level("WARNING")
         .status_message("Test event occurred")
         .metadata(json!({"event_type": "test"}))
         .call()
-        .await;
+        .await
+        .expect("Failed to create event");
 
-    assert!(result.is_ok(), "Failed to create event: {:?}", result.err());
-    let event_id = result.unwrap();
     assert!(!event_id.is_empty(), "Event ID should not be empty");
+    let stored = wait_for_observation(&client, &trace_id, &event_id, expect_type("EVENT")).await;
+    assert_eq!(stored.name.as_deref(), Some("test-event"));
 }
 
 #[tokio::test]
-#[ignore = "requires Langfuse API credentials"]
+#[ignore = "requires a Langfuse server; run scripts/live-tests.sh"]
 async fn test_numeric_score_creation() {
-    let client = create_test_client();
+    let client = live_client();
+    let trace_id = new_trace(&client, "test-trace-for-score").await;
 
-    // First create a trace
-    let trace = client
-        .trace()
-        .name("test-trace-for-score")
-        .call()
-        .await
-        .expect("Failed to create trace");
-
-    // Then create a numeric score
-    let result = client
+    let score_id = client
         .score()
-        .trace_id(trace.id.clone())
+        .trace_id(trace_id)
         .name("accuracy")
         .value(0.95)
         .comment("High accuracy score")
         .metadata(json!({"threshold": 0.9}))
         .call()
-        .await;
-
-    assert!(
-        result.is_ok(),
-        "Failed to create numeric score: {:?}",
-        result.err()
-    );
-    let score_id = result.unwrap();
+        .await
+        .expect("Failed to create numeric score");
     assert!(!score_id.is_empty(), "Score ID should not be empty");
 }
 
 #[tokio::test]
-#[ignore = "requires Langfuse API credentials"]
+#[ignore = "requires a Langfuse server; run scripts/live-tests.sh"]
 async fn test_categorical_score_creation() {
-    let client = create_test_client();
+    let client = live_client();
+    let trace_id = new_trace(&client, "test-trace-for-categorical-score").await;
 
-    // First create a trace
-    let trace = client
-        .trace()
-        .name("test-trace-for-categorical-score")
-        .call()
-        .await
-        .expect("Failed to create trace");
-
-    // Then create a categorical score
-    let result = client
+    let score_id = client
         .score()
-        .trace_id(trace.id.clone())
+        .trace_id(trace_id)
         .name("sentiment")
         .string_value("positive")
         .comment("User sentiment analysis")
         .call()
-        .await;
-
-    assert!(
-        result.is_ok(),
-        "Failed to create categorical score: {:?}",
-        result.err()
-    );
-    let score_id = result.unwrap();
+        .await
+        .expect("Failed to create categorical score");
     assert!(!score_id.is_empty(), "Score ID should not be empty");
 }
 
 #[tokio::test]
-#[ignore = "requires Langfuse API credentials"]
+#[ignore = "requires a Langfuse server; run scripts/live-tests.sh"]
 async fn test_nested_observations() {
-    let client = create_test_client();
+    let client = live_client();
+    let trace_id = new_trace(&client, "test-trace-nested").await;
 
-    // Create a trace
-    let trace = client
-        .trace()
-        .name("test-trace-nested")
-        .call()
-        .await
-        .expect("Failed to create trace");
-
-    // Create a parent span
     let parent_span = client
         .span()
-        .trace_id(trace.id.clone())
+        .trace_id(trace_id.clone())
         .name("parent-span")
         .call()
         .await
         .expect("Failed to create parent span");
 
-    // Create a child span
     let child_span = client
         .span()
-        .trace_id(trace.id.clone())
+        .trace_id(trace_id.clone())
         .parent_observation_id(&parent_span)
         .name("child-span")
         .call()
         .await
         .expect("Failed to create child span");
 
-    assert!(!child_span.is_empty(), "Child span ID should not be empty");
-
-    // Create a generation under the child span
     let generation = client
         .generation()
-        .trace_id(trace.id.clone())
+        .trace_id(trace_id.clone())
         .parent_observation_id(&child_span)
         .name("nested-generation")
         .model("gpt-3.5-turbo")
@@ -247,126 +225,139 @@ async fn test_nested_observations() {
         .await
         .expect("Failed to create nested generation");
 
-    assert!(!generation.is_empty(), "Generation ID should not be empty");
+    let parent_is = |expected: String| {
+        move |o: &common::StoredObservation| {
+            if o.parent_observation_id.as_deref() == Some(expected.as_str()) {
+                Ok(())
+            } else {
+                Err(format!("parent is not {expected}"))
+            }
+        }
+    };
+    wait_for_observation(&client, &trace_id, &child_span, parent_is(parent_span)).await;
+    wait_for_observation(&client, &trace_id, &generation, parent_is(child_span)).await;
 }
 
 #[tokio::test]
-#[ignore = "requires Langfuse API credentials"]
+#[ignore = "requires a Langfuse server; run scripts/live-tests.sh"]
 async fn test_score_helpers() {
-    let client = create_test_client();
+    let client = live_client();
+    let trace_id = new_trace(&client, "test-trace-score-helpers").await;
 
-    // Create a trace
-    let trace = client
-        .trace()
-        .name("test-trace-score-helpers")
-        .call()
-        .await
-        .expect("Failed to create trace");
-
-    // Test binary score
     let binary_score = client
-        .binary_score(trace.id.clone(), "success", true)
+        .binary_score(trace_id.clone(), "success", true)
         .await
         .expect("Failed to create binary score");
     assert!(!binary_score.is_empty());
 
-    // Test rating score
     let rating_score = client
-        .rating_score(trace.id.clone(), "quality", 4, 5)
+        .rating_score(trace_id.clone(), "quality", 4, 5)
         .await
         .expect("Failed to create rating score");
     assert!(!rating_score.is_empty());
 
-    // Test categorical score
     let categorical_score = client
-        .categorical_score(trace.id.clone(), "category", "excellent")
+        .categorical_score(trace_id, "category", "excellent")
         .await
         .expect("Failed to create categorical score");
     assert!(!categorical_score.is_empty());
 }
 
-// ===== NEW FEATURES TESTS =====
-
 #[tokio::test]
-#[ignore = "requires Langfuse API credentials"]
+#[ignore = "requires a Langfuse server; run scripts/live-tests.sh"]
 async fn test_trace_fetching() {
-    let client = create_test_client();
+    let client = live_client();
+    let trace_id = new_trace(&client, "fetch-test-trace").await;
+    wait_for_trace(&client, &trace_id).await;
 
-    // First create a trace
-    let trace = client
-        .trace()
-        .name("fetch-test-trace")
-        .call()
-        .await
-        .expect("Failed to create trace");
-
-    // Test get_trace
-    let fetched_trace = client.get_trace(&trace.id).await;
-    assert!(
-        fetched_trace.is_ok(),
-        "Failed to fetch trace: {:?}",
-        fetched_trace.err()
-    );
-
-    // Test list_traces
-    let traces = client.list_traces().limit(5).call().await;
-    assert!(traces.is_ok(), "Failed to list traces: {:?}", traces.err());
+    match client.api_version() {
+        ApiVersion::V3 => {
+            let trace = client
+                .get_trace(&trace_id)
+                .await
+                .expect("Failed to fetch trace");
+            assert_eq!(trace.id, trace_id);
+            client
+                .list_traces()
+                .limit(5)
+                .call()
+                .await
+                .expect("Failed to list traces");
+        }
+        ApiVersion::V4 => {
+            // The v3 reads fail before sending a request.
+            assert!(matches!(
+                client.get_trace(&trace_id).await,
+                Err(Error::Configuration(_))
+            ));
+            assert!(matches!(
+                client.list_traces().limit(5).call().await,
+                Err(Error::Configuration(_))
+            ));
+            let roots = client
+                .observations()
+                .is_root_observation(true)
+                .limit(5)
+                .call()
+                .await
+                .expect("Failed to list root observations");
+            assert!(!roots.data.is_empty(), "expected at least one trace");
+        }
+    }
 }
 
 #[tokio::test]
-#[ignore = "requires Langfuse API credentials"]
+#[ignore = "requires a Langfuse server; run scripts/live-tests.sh"]
 async fn test_dataset_management() {
-    let client = create_test_client();
+    let client = live_client();
+    let name = unique("test-integration-dataset");
 
-    // Test create_dataset
-    let dataset_result = client
+    client
         .create_dataset()
-        .name("test-integration-dataset")
+        .name(name.clone())
         .description("Integration test dataset")
         .call()
-        .await;
-    assert!(
-        dataset_result.is_ok(),
-        "Failed to create dataset: {:?}",
-        dataset_result.err()
-    );
+        .await
+        .expect("Failed to create dataset");
 
-    // Test get_dataset
-    let _get_result = client.get_dataset("test-integration-dataset").await;
-    // Note: This might fail if dataset doesn't exist, but we still test the API call structure
+    let dataset = client
+        .get_dataset(name.clone())
+        .await
+        .expect("Failed to get dataset");
+    assert_eq!(dataset.name, name);
 
-    // Test list_datasets
-    let list_result = client.list_datasets().limit(10).call().await;
-    assert!(
-        list_result.is_ok(),
-        "Failed to list datasets: {:?}",
-        list_result.err()
-    );
+    client
+        .list_datasets()
+        .limit(10)
+        .call()
+        .await
+        .expect("Failed to list datasets");
 }
 
 #[tokio::test]
-#[ignore = "requires Langfuse API credentials"]
+#[ignore = "requires a Langfuse server; run scripts/live-tests.sh"]
 async fn test_prompt_management() {
-    let client = create_test_client();
+    let client = live_client();
+    let name = unique("test-integration-prompt");
 
-    // Test get_prompt (might fail if prompt doesn't exist, but tests API structure)
-    let _get_result = client.get_prompt("test-prompt", None, None).await;
-    // We don't assert success here since the prompt might not exist
-
-    // Test list_prompts
-    let list_result = client.list_prompts().limit("5".to_string()).call().await;
-    assert!(
-        list_result.is_ok(),
-        "Failed to list prompts: {:?}",
-        list_result.err()
-    );
-
-    // Test create_prompt (placeholder implementation)
-    let _create_result = client
+    client
         .create_prompt()
-        .name("test-integration-prompt")
+        .name(name.clone())
         .prompt("Test prompt: {{input}}")
+        .labels(vec!["production".to_string()])
         .call()
-        .await;
-    // Note: This is a placeholder implementation, so it might not actually create a prompt
+        .await
+        .expect("Failed to create prompt");
+
+    client
+        .get_prompt(name.as_str(), None, None)
+        .await
+        .expect("Failed to get prompt");
+
+    client
+        .list_prompts()
+        .limit("5".to_string())
+        .call()
+        .await
+        .expect("Failed to list prompts");
 }
