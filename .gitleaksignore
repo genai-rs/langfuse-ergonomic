@@ -1,2 +1,0 @@
-# Public test keys of the throwaway Langfuse in docker/langfuse/compose.yml (not secrets).
-d78908685a2f34955571ea530a5506b6d62de6ce:scripts/live-tests.sh:curl-auth-user:25

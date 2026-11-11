@@ -1,0 +1,7 @@
+# gitleaks configuration (picked up from the repository root by gitleaks and gitleaks-action).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public test API keys of the throwaway Langfuse in docker/langfuse/compose.yml"
+regexes = ['''\b[ps]k-lf-live-test\b''']
