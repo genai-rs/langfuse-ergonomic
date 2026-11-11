@@ -670,9 +670,10 @@ CI runs the same tests for both versions on every pull request.
 
 To run them against another server, set `LANGFUSE_PUBLIC_KEY`,
 `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` and `LANGFUSE_API_VERSION` (`v3` or
-`v4`, default `v4`) and run
+`v4`; required here, so a missing variable cannot silently test the default) and run
 `cargo test --test integration_test --test generation_usage_e2e -- --ignored`.
-The tests create uniquely named traces, datasets and prompts.
+The tests create uniquely named traces, scores, datasets and prompts and read
+them back (scores through `GET /api/public/v2/scores/{id}`).
 
 ## License
 

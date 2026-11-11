@@ -1,6 +1,6 @@
 //! Helpers for the live tests, which run against a real Langfuse server.
 //!
-//! The API version comes from `LANGFUSE_API_VERSION` (`v3` or `v4`, default `v4`), so the same
+//! The API version comes from `LANGFUSE_API_VERSION` (`v3` or `v4`, required), so the same
 //! tests cover both write and read paths. `scripts/live-tests.sh` starts a self-hosted
 //! Langfuse v4 that serves both (see `docker/langfuse/compose.yml`).
 #![allow(dead_code, clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -21,11 +21,23 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// A client from `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` and
 /// `LANGFUSE_API_VERSION`.
+///
+/// `LANGFUSE_API_VERSION` must be set: a missing or mistyped variable would otherwise run the
+/// default version and silently skip the other one.
 pub fn live_client() -> LangfuseClient {
+    let expected: ApiVersion = std::env::var(ApiVersion::ENV_VAR)
+        .expect("set LANGFUSE_API_VERSION to v3 or v4 for the live tests")
+        .parse()
+        .expect("LANGFUSE_API_VERSION must be v3 or v4");
     let client = ClientBuilder::from_env()
         .and_then(|builder| builder.build())
         .expect("configure LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY and LANGFUSE_BASE_URL");
-    eprintln!("live tests use Langfuse API {}", client.api_version());
+    assert_eq!(
+        client.api_version(),
+        expected,
+        "the client does not use LANGFUSE_API_VERSION"
+    );
+    eprintln!("live tests use Langfuse API {expected}");
     client
 }
 
@@ -165,6 +177,38 @@ pub async fn wait_for_trace(client: &LangfuseClient, trace_id: &str) -> StoredTr
                 })
             }
         }
+    })
+    .await
+}
+
+/// Wait until the score is readable and return it: `GET /api/public/v2/scores/{id}`.
+///
+/// The crate has no score reads, so this is a raw request. A self-hosted Langfuse v4 serves
+/// the endpoint in every write mode, and it returns scores written with either API version.
+pub async fn wait_for_score(client: &LangfuseClient, score_id: &str) -> serde_json::Value {
+    let configuration = client.configuration();
+    let url = format!(
+        "{}/api/public/v2/scores/{score_id}",
+        configuration.base_path.trim_end_matches('/')
+    );
+    eventually(&format!("score {score_id}"), || async {
+        let mut request = configuration.client.get(&url);
+        if let Some((user, password)) = &configuration.basic_auth {
+            request = request.basic_auth(user, password.as_deref());
+        }
+        let response = request
+            .send()
+            .await
+            .map_err(|e| format!("readback error: {e}"))?;
+        let status = response.status();
+        let body = response
+            .text()
+            .await
+            .map_err(|e| format!("readback error: {e}"))?;
+        if !status.is_success() {
+            return Err(format!("status {status}: {body}"));
+        }
+        serde_json::from_str(&body).map_err(|e| format!("invalid score JSON: {e}: {body}"))
     })
     .await
 }
