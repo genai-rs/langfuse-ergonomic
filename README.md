@@ -657,8 +657,8 @@ scripts/live-tests.sh test v3    #   run the tests (repeat as needed),
 scripts/live-tests.sh down       #   stop and delete all data
 ```
 
-`LANGFUSE_PORT` changes the host port (default 3000), `LANGFUSE_IMAGE_TAG` the
-pinned Langfuse release. The UI is at `http://localhost:3000`
+`LANGFUSE_PORT` changes the host port (default 3000). The images are pinned
+by tag and digest in the compose file. The UI is at `http://localhost:3000`
 (`live-test@example.com` / `live-test-password`).
 
 The server runs with `LANGFUSE_MIGRATION_V4_WRITE_MODE=dual`, which keeps the

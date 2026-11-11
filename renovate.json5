@@ -1,6 +1,9 @@
 {
   $schema: 'https://docs.renovatebot.com/renovate-schema.json',
   extends: ['github>genai-rs/.github:renovate-default'],
+  // The shared preset enables cargo and github-actions; docker-compose keeps the pinned
+  // images of the live-test stack (docker/langfuse/compose.yml) current.
+  enabledManagers: ['cargo', 'github-actions', 'docker-compose'],
   packageRules: [
     {
       description: 'Keep UUID updates within the Rust 1.88 compatible range',
@@ -20,6 +23,12 @@
       matchPackageNames: ['langfuse-client-base'],
       labels: ['dependencies', 'langfuse-base'],
       automerge: true,
+    },
+    {
+      description: 'Update the Langfuse web and worker images of the live-test stack together',
+      matchManagers: ['docker-compose'],
+      matchPackageNames: ['docker.io/langfuse/langfuse', 'docker.io/langfuse/langfuse-worker'],
+      groupName: 'langfuse live-test images',
     },
   ],
 }

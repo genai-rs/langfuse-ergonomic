@@ -7,7 +7,7 @@
 #   test run the live tests against a running stack
 #   down stop the stack and delete its data
 # API versions default to "v3 v4". Set KEEP_STACK=1 to leave the stack running after `all`.
-# LANGFUSE_IMAGE_TAG overrides the pinned Langfuse version, LANGFUSE_PORT the host port (3000).
+# LANGFUSE_PORT sets the host port (default 3000).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
