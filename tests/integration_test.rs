@@ -11,7 +11,7 @@
 
 mod common;
 
-use common::{live_client, wait_for_observation, wait_for_trace};
+use common::{eventually, live_client, wait_for_observation, wait_for_score, wait_for_trace};
 use langfuse_ergonomic::{ApiVersion, Error, LangfuseClient};
 use serde_json::json;
 
@@ -27,6 +27,27 @@ async fn new_trace(client: &LangfuseClient, name: &str) -> String {
         .await
         .expect("Failed to create trace")
         .id
+}
+
+/// Read the score back and check its trace, name and value.
+async fn assert_score(
+    client: &LangfuseClient,
+    score_id: &str,
+    trace_id: &str,
+    name: &str,
+    value: serde_json::Value,
+) -> serde_json::Value {
+    assert!(!score_id.is_empty(), "Score ID should not be empty");
+    let score = wait_for_score(client, score_id).await;
+    assert_eq!(score["id"], score_id, "{score}");
+    assert_eq!(score["traceId"], trace_id, "{score}");
+    assert_eq!(score["name"], name, "{score}");
+    match value.as_f64() {
+        // Compare numbers as f64: Langfuse returns 1.0 as `1`.
+        Some(expected) => assert_eq!(score["value"].as_f64(), Some(expected), "{score}"),
+        None => assert_eq!(score["stringValue"], value, "{score}"),
+    }
+    score
 }
 
 fn expect_type(
@@ -163,7 +184,7 @@ async fn test_numeric_score_creation() {
 
     let score_id = client
         .score()
-        .trace_id(trace_id)
+        .trace_id(trace_id.clone())
         .name("accuracy")
         .value(0.95)
         .comment("High accuracy score")
@@ -171,7 +192,8 @@ async fn test_numeric_score_creation() {
         .call()
         .await
         .expect("Failed to create numeric score");
-    assert!(!score_id.is_empty(), "Score ID should not be empty");
+    let score = assert_score(&client, &score_id, &trace_id, "accuracy", json!(0.95)).await;
+    assert_eq!(score["comment"], "High accuracy score");
 }
 
 #[tokio::test]
@@ -182,14 +204,21 @@ async fn test_categorical_score_creation() {
 
     let score_id = client
         .score()
-        .trace_id(trace_id)
+        .trace_id(trace_id.clone())
         .name("sentiment")
         .string_value("positive")
         .comment("User sentiment analysis")
         .call()
         .await
         .expect("Failed to create categorical score");
-    assert!(!score_id.is_empty(), "Score ID should not be empty");
+    assert_score(
+        &client,
+        &score_id,
+        &trace_id,
+        "sentiment",
+        json!("positive"),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -248,26 +277,40 @@ async fn test_score_helpers() {
         .binary_score(trace_id.clone(), "success", true)
         .await
         .expect("Failed to create binary score");
-    assert!(!binary_score.is_empty());
+    assert_score(&client, &binary_score, &trace_id, "success", json!(1.0)).await;
 
     let rating_score = client
         .rating_score(trace_id.clone(), "quality", 4, 5)
         .await
         .expect("Failed to create rating score");
-    assert!(!rating_score.is_empty());
+    assert_score(&client, &rating_score, &trace_id, "quality", json!(0.8)).await;
 
     let categorical_score = client
-        .categorical_score(trace_id, "category", "excellent")
+        .categorical_score(trace_id.clone(), "category", "excellent")
         .await
         .expect("Failed to create categorical score");
-    assert!(!categorical_score.is_empty());
+    assert_score(
+        &client,
+        &categorical_score,
+        &trace_id,
+        "category",
+        json!("excellent"),
+    )
+    .await;
 }
 
 #[tokio::test]
 #[ignore = "requires a Langfuse server; run scripts/live-tests.sh"]
 async fn test_trace_fetching() {
     let client = live_client();
-    let trace_id = new_trace(&client, "fetch-test-trace").await;
+    let name = unique("fetch-test-trace");
+    let trace_id = client
+        .trace()
+        .name(name.clone())
+        .call()
+        .await
+        .expect("Failed to create trace")
+        .id;
     wait_for_trace(&client, &trace_id).await;
 
     match client.api_version() {
@@ -277,12 +320,22 @@ async fn test_trace_fetching() {
                 .await
                 .expect("Failed to fetch trace");
             assert_eq!(trace.id, trace_id);
-            client
-                .list_traces()
-                .limit(5)
-                .call()
-                .await
-                .expect("Failed to list traces");
+            let traces = eventually("trace in list_traces", || async {
+                let traces = client
+                    .list_traces()
+                    .name(name.as_str())
+                    .limit(5)
+                    .call()
+                    .await
+                    .map_err(|e| format!("list error: {e}"))?;
+                if traces.data.iter().any(|t| t.id == trace_id) {
+                    Ok(traces)
+                } else {
+                    Err(format!("{} traces, not {trace_id}", traces.data.len()))
+                }
+            })
+            .await;
+            assert_eq!(traces.data.len(), 1);
         }
         ApiVersion::V4 => {
             // The v3 reads fail before sending a request.
@@ -294,14 +347,39 @@ async fn test_trace_fetching() {
                 client.list_traces().limit(5).call().await,
                 Err(Error::Configuration(_))
             ));
-            let roots = client
-                .observations()
-                .is_root_observation(true)
-                .limit(5)
-                .call()
-                .await
-                .expect("Failed to list root observations");
-            assert!(!roots.data.is_empty(), "expected at least one trace");
+            // A trace is its root observation; list them by trace name.
+            let roots = eventually("trace in root observations", || async {
+                let roots = client
+                    .observations()
+                    .is_root_observation(true)
+                    .filter(
+                        json!([{
+                            "type": "string",
+                            "column": "traceName",
+                            "operator": "=",
+                            "value": name,
+                        }])
+                        .to_string(),
+                    )
+                    .limit(5)
+                    .call()
+                    .await
+                    .map_err(|e| format!("list error: {e}"))?;
+                if roots
+                    .data
+                    .iter()
+                    .any(|o| o.trace_id.as_deref() == Some(trace_id.as_str()))
+                {
+                    Ok(roots)
+                } else {
+                    Err(format!(
+                        "{} root observations, not {trace_id}",
+                        roots.data.len()
+                    ))
+                }
+            })
+            .await;
+            assert_eq!(roots.data.len(), 1);
         }
     }
 }
