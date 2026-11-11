@@ -106,7 +106,9 @@ let client = ClientBuilder::from_env()?        // also reads LANGFUSE_API_VERSIO
 traces and observations (`POST /api/public/ingestion` accepts only `score-create`
 events from then on) and the v3 trace, observation and session reads on
 **2026-11-16**. Self-hosted v3 servers keep the v3 endpoints until they are
-upgraded; set `ApiVersion::V3` (or `LANGFUSE_API_VERSION=v3`) for them.
+upgraded, and so does a self-hosted v4 server in the `dual` or `legacy`
+`LANGFUSE_MIGRATION_V4_WRITE_MODE` (not in the default `events_only`); set
+`ApiVersion::V3` (or `LANGFUSE_API_VERSION=v3`) to use them.
 
 What changes with the version:
 
@@ -638,6 +640,39 @@ let score_id = client
 - **Connection Pooling** - Reuses connections for better performance
 - **Error Handling** - Structured error types with retry metadata
 - **Self-Hosted Support** - Full compatibility with self-hosted instances
+
+## Running the live tests
+
+The live tests (`tests/integration_test.rs`, `tests/generation_usage_e2e.rs`) write
+to and read back from a real Langfuse server. They are `#[ignore]`d, so a plain
+`cargo test` stays offline. `scripts/live-tests.sh` runs them against a
+throwaway self-hosted Langfuse v4 (Docker Compose, [`docker/langfuse/compose.yml`](docker/langfuse/compose.yml))
+that starts with a known project and test API keys:
+
+```bash
+scripts/live-tests.sh            # start Langfuse, run the tests for v3 and v4, stop it
+scripts/live-tests.sh all v4     # only ApiVersion::V4
+scripts/live-tests.sh up         # or step by step: start and wait until healthy,
+scripts/live-tests.sh test v3    #   run the tests (repeat as needed),
+scripts/live-tests.sh down       #   stop and delete all data
+```
+
+`LANGFUSE_PORT` changes the host port (default 3000), `LANGFUSE_IMAGE_TAG` the
+pinned Langfuse release. The UI is at `http://localhost:3000`
+(`live-test@example.com` / `live-test-password`).
+
+The server runs with `LANGFUSE_MIGRATION_V4_WRITE_MODE=dual`, which keeps the
+legacy v3 ingestion and read endpoints next to the v4 ones, so one server
+covers both `ApiVersion::V3` and `ApiVersion::V4` (the default `events_only`
+mode removes the v3 endpoints; see the
+[v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4)).
+CI runs the same tests for both versions on every pull request.
+
+To run them against another server, set `LANGFUSE_PUBLIC_KEY`,
+`LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` and `LANGFUSE_API_VERSION` (`v3` or
+`v4`, default `v4`) and run
+`cargo test --test integration_test --test generation_usage_e2e -- --ignored`.
+The tests create uniquely named traces, datasets and prompts.
 
 ## License
 

@@ -1,0 +1,130 @@
+# Self-hosted Langfuse v4 for the live tests (see scripts/live-tests.sh and README.md).
+#
+# Derived from https://github.com/langfuse/langfuse/blob/main/docker-compose.yml (AI gateway
+# dropped). Throwaway test stack: the credentials below are public test values, every port is
+# bound to 127.0.0.1 and no volumes are kept (`docker compose down -v` resets everything).
+#
+# LANGFUSE_MIGRATION_V4_WRITE_MODE=dual keeps the Langfuse v3 ingestion and read endpoints
+# (/api/public/ingestion, /api/public/traces, /api/public/observations, ...) next to the v4
+# ones (OTLP ingestion, /api/public/v2/observations), so one server covers both
+# ApiVersion::V3 and ApiVersion::V4. In the v4 default `events_only` mode the v3 endpoints
+# return 404 (trace/observation ingestion events get 400).
+# https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4
+
+name: langfuse-ergonomic-live
+
+x-langfuse-env: &langfuse-env
+  NEXTAUTH_URL: http://localhost:${LANGFUSE_PORT:-3000}
+  NEXTAUTH_SECRET: live-test-secret
+  DATABASE_URL: postgresql://postgres:postgres@postgres:5432/postgres
+  SALT: live-test-salt
+  ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+  TELEMETRY_ENABLED: "false"
+  LANGFUSE_MIGRATION_V4_WRITE_MODE: dual
+  LANGFUSE_BACKGROUND_MIGRATION_V4_ENABLE_HISTORIC_BACKFILL: "false"
+  CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+  CLICKHOUSE_URL: http://clickhouse:8123
+  CLICKHOUSE_USER: clickhouse
+  CLICKHOUSE_PASSWORD: clickhouse
+  CLICKHOUSE_CLUSTER_ENABLED: "false"
+  LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+  LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
+  LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: miniosecret
+  LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+  LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+  LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+  LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
+  LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: miniosecret
+  LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
+  LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_AUTH: myredissecret
+
+x-langfuse-depends-on: &langfuse-depends-on
+  postgres:
+    condition: service_healthy
+  minio:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+  clickhouse:
+    condition: service_healthy
+
+services:
+  langfuse-worker:
+    image: docker.io/langfuse/langfuse-worker:${LANGFUSE_IMAGE_TAG:-4.78.0}
+    depends_on: *langfuse-depends-on
+    environment:
+      <<: *langfuse-env
+
+  langfuse-web:
+    image: docker.io/langfuse/langfuse:${LANGFUSE_IMAGE_TAG:-4.78.0}
+    depends_on: *langfuse-depends-on
+    ports:
+      - 127.0.0.1:${LANGFUSE_PORT:-3000}:3000
+    environment:
+      <<: *langfuse-env
+      # Headless initialization: organization, project, API keys and user exist on first start.
+      LANGFUSE_INIT_ORG_ID: live-test-org
+      LANGFUSE_INIT_ORG_NAME: Live Test Org
+      LANGFUSE_INIT_PROJECT_ID: live-test-project
+      LANGFUSE_INIT_PROJECT_NAME: Live Test Project
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: pk-lf-live-test
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: sk-lf-live-test
+      LANGFUSE_INIT_USER_EMAIL: live-test@example.com
+      LANGFUSE_INIT_USER_NAME: Live Test
+      LANGFUSE_INIT_USER_PASSWORD: live-test-password
+
+  clickhouse:
+    image: docker.io/clickhouse/clickhouse-server:26.3.62.3
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  minio:
+    image: cgr.dev/chainguard/minio
+    entrypoint: sh
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: miniosecret
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 1s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: docker.io/redis:7
+    command: --requirepass myredissecret --maxmemory-policy noeviction
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "myredissecret", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  postgres:
+    image: docker.io/postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+      TZ: UTC
+      PGTZ: UTC
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
