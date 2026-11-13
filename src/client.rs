@@ -246,7 +246,7 @@ impl LangfuseClient {
 
         let configuration = Configuration {
             base_path: base_url.clone(),
-            basic_auth: Some((public_key.clone(), Some(secret_key.clone()))),
+            basic_auth: Some((public_key.clone(), Some(secret_key.clone().into()))),
             api_key: None,
             oauth_access_token: None,
             bearer_access_token: None,

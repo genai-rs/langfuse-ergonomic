@@ -196,7 +196,12 @@ pub async fn wait_for_score(client: &LangfuseClient, score_id: &str) -> serde_js
             .client
             .request(timvw_rust_runtime::Method::GET, &url);
         if let Some((user, password)) = &configuration.basic_auth {
-            request = request.basic_auth(user, password.as_deref());
+            request = request.basic_auth(
+                user,
+                password
+                    .as_ref()
+                    .map(timvw_rust_runtime::ExposeSecret::expose_secret),
+            );
         }
         let response = request
             .send()
