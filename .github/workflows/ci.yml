@@ -14,6 +14,12 @@ jobs:
     uses: genai-rs/.github/.github/workflows/rust-ci.yml@main
     with:
       msrv: "1.88"
+      # WebAssembly (README "WebAssembly"): clippy and tests/wasm.rs in Node.js.
+      wasm-clippy-args: |
+        --no-default-features --lib --test wasm
+        --no-default-features --features retry,tracing-http --lib --test wasm
+      wasm-test-args: |
+        --no-default-features --test wasm
     secrets: inherit
 
   # Feature combinations test
