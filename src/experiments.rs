@@ -14,7 +14,9 @@
 //!
 //! Concurrency comes from polling the item futures together (`buffer_unordered`) in the calling
 //! task: no runtime is needed beyond the one running `run()`, which also works on WebAssembly.
-//! The futures need not be `Send`; in turn the `run()` future is not `Send` either.
+//! Natively the task's and the evaluators' futures must be `Send` (and the task and evaluators
+//! `Sync`), so that the `run()` future is `Send` and can be spawned; on WebAssembly nothing needs
+//! to be `Send`.
 //!
 //! ```no_run
 //! use langfuse_ergonomic::experiments::{evaluator_fn, Evaluation, EvaluatorContext};
@@ -43,8 +45,10 @@
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::future::Future;
+
 use std::pin::Pin;
 use std::time::Duration;
+use timvw_rust_runtime::{MaybeSend, MaybeSync};
 
 use futures_util::StreamExt;
 use langfuse_client_base::models::{DatasetItem, DatasetStatus};
@@ -108,13 +112,14 @@ impl Evaluation {
 
 /// Scores the output of one item. Implement it, or wrap a closure with [`evaluator_fn`].
 ///
-/// The future need not be `Send` (so evaluators work on WebAssembly).
+/// The future must be `Send` natively (so that an experiment can be spawned), and need not be on
+/// WebAssembly.
 pub trait Evaluator {
     /// Evaluate one item's run.
     fn evaluate<'a>(
         &'a self,
         context: &'a EvaluatorContext,
-    ) -> impl Future<Output = std::result::Result<Vec<Evaluation>, EvaluatorError>>;
+    ) -> impl Future<Output = std::result::Result<Vec<Evaluation>, EvaluatorError>> + MaybeSend;
 }
 
 /// An [`Evaluator`] made from a closure ([`evaluator_fn`]).
@@ -125,7 +130,7 @@ pub struct FnEvaluator<F>(F);
 pub fn evaluator_fn<F, Fut>(f: F) -> FnEvaluator<F>
 where
     F: Fn(EvaluatorContext) -> Fut,
-    Fut: Future<Output = std::result::Result<Vec<Evaluation>, EvaluatorError>>,
+    Fut: Future<Output = std::result::Result<Vec<Evaluation>, EvaluatorError>> + MaybeSend,
 {
     FnEvaluator(f)
 }
@@ -133,18 +138,32 @@ where
 impl<F, Fut> Evaluator for FnEvaluator<F>
 where
     F: Fn(EvaluatorContext) -> Fut,
-    Fut: Future<Output = std::result::Result<Vec<Evaluation>, EvaluatorError>>,
+    Fut: Future<Output = std::result::Result<Vec<Evaluation>, EvaluatorError>> + MaybeSend,
 {
     fn evaluate<'a>(
         &'a self,
         context: &'a EvaluatorContext,
-    ) -> impl Future<Output = std::result::Result<Vec<Evaluation>, EvaluatorError>> {
+    ) -> impl Future<Output = std::result::Result<Vec<Evaluation>, EvaluatorError>> + MaybeSend
+    {
         (self.0)(context.clone())
     }
 }
 
+/// A boxed evaluation: `Send` natively, any future on WebAssembly.
+#[cfg(not(target_family = "wasm"))]
+type EvaluationFuture<'a> =
+    Pin<Box<dyn Future<Output = std::result::Result<Vec<Evaluation>, EvaluatorError>> + Send + 'a>>;
+/// A boxed evaluation: `Send` natively, any future on WebAssembly.
+#[cfg(target_family = "wasm")]
 type EvaluationFuture<'a> =
     Pin<Box<dyn Future<Output = std::result::Result<Vec<Evaluation>, EvaluatorError>> + 'a>>;
+
+/// A boxed evaluator: `Send + Sync` natively, any evaluator on WebAssembly.
+#[cfg(not(target_family = "wasm"))]
+type BoxedEvaluator<'c> = Box<dyn DynEvaluator + Send + Sync + 'c>;
+/// A boxed evaluator: `Send + Sync` natively, any evaluator on WebAssembly.
+#[cfg(target_family = "wasm")]
+type BoxedEvaluator<'c> = Box<dyn DynEvaluator + 'c>;
 
 /// An object-safe [`Evaluator`], so that evaluators of different types can be combined.
 trait DynEvaluator {
@@ -225,7 +244,7 @@ pub struct ExperimentBuilder<'c, F> {
     run_name: Option<String>,
     description: Option<String>,
     metadata: Option<Value>,
-    evaluators: Vec<Box<dyn DynEvaluator + 'c>>,
+    evaluators: Vec<BoxedEvaluator<'c>>,
     concurrency: usize,
 }
 
@@ -291,7 +310,7 @@ impl<'c, F> ExperimentBuilder<'c, F> {
 
     /// Add an evaluator.
     #[must_use]
-    pub fn evaluator(mut self, evaluator: impl Evaluator + 'c) -> Self {
+    pub fn evaluator(mut self, evaluator: impl Evaluator + MaybeSend + MaybeSync + 'c) -> Self {
         self.evaluators.push(Box::new(evaluator));
         self
     }
@@ -306,10 +325,10 @@ impl<'c, F> ExperimentBuilder<'c, F> {
     /// Run the experiment.
     pub async fn run<Fut, T, E>(self) -> Result<ExperimentResult>
     where
-        F: Fn(DatasetItem) -> Fut,
-        Fut: Future<Output = std::result::Result<T, E>>,
-        T: Serialize,
-        E: Display,
+        F: Fn(DatasetItem) -> Fut + MaybeSync,
+        Fut: Future<Output = std::result::Result<T, E>> + MaybeSend,
+        T: Serialize + MaybeSend,
+        E: Display + MaybeSend,
     {
         let client = self.client;
         let dataset = client.get_dataset(self.dataset_name.as_str()).await?;
@@ -328,13 +347,19 @@ impl<'c, F> ExperimentBuilder<'c, F> {
             .build()
             .await;
 
-        let runs = futures_util::stream::iter(items.into_iter().enumerate())
+        // The futures are collected first (rather than mapped lazily with a closure over
+        // borrows), which keeps the `run()` future `Send` natively.
+        let item_runs: Vec<_> = items
+            .into_iter()
+            .enumerate()
             .map(|(index, item)| {
                 let batcher = batcher.clone();
                 let run_name = run_name.as_str();
                 let this = &self;
                 async move { (index, this.run_item(item, batcher, run_name).await) }
             })
+            .collect();
+        let runs = futures_util::stream::iter(item_runs)
             .buffer_unordered(self.concurrency)
             .collect::<Vec<_>>()
             .await;
@@ -349,12 +374,16 @@ impl<'c, F> ExperimentBuilder<'c, F> {
 
         // Link each trace to the dataset run.
         let mut dataset_run_id = None;
-        let links = futures_util::stream::iter(results.iter().enumerate())
+        let link_runs: Vec<_> = results
+            .iter()
+            .enumerate()
             .map(|(index, result)| {
                 let run_name = run_name.as_str();
                 let this = &self;
                 async move { (index, this.link(result, run_name).await) }
             })
+            .collect();
+        let links = futures_util::stream::iter(link_runs)
             .buffer_unordered(self.concurrency)
             .collect::<Vec<_>>()
             .await;
@@ -425,10 +454,10 @@ impl<'c, F> ExperimentBuilder<'c, F> {
         run_name: &str,
     ) -> ExperimentItemResult
     where
-        F: Fn(DatasetItem) -> Fut,
-        Fut: Future<Output = std::result::Result<T, E>>,
-        T: Serialize,
-        E: Display,
+        F: Fn(DatasetItem) -> Fut + MaybeSync,
+        Fut: Future<Output = std::result::Result<T, E>> + MaybeSend,
+        T: Serialize + MaybeSend,
+        E: Display + MaybeSend,
     {
         let mut metadata = serde_json::json!({
             "dataset_id": item.dataset_id,
