@@ -111,9 +111,10 @@ An LLM-as-a-judge evaluator calls a model inside `evaluate`; observe it with `#[
 ### Concurrency
 
 `concurrency(n)` runs up to `n` items at once by polling their futures together
-(`buffer_unordered`) in the calling task: there is no spawning, nothing needs to be `Send`,
-and it works on WebAssembly. In turn the `run()` future is not `Send`: await it rather than
-`tokio::spawn` it. Traces and scores go through a batcher of the experiment's own, which is
+(`buffer_unordered`) in the calling task: there is no spawning, and it works on WebAssembly.
+Natively the task and the evaluators must be `Sync` and their futures `Send`, and in turn the
+`run()` future is `Send`: it can be `tokio::spawn`ed. On WebAssembly nothing needs to be
+`Send`. Traces and scores go through a batcher of the experiment's own, which is
 flushed before the traces are linked to the run.
 
 See `examples/experiments.rs`.
