@@ -194,6 +194,7 @@ pub mod batcher;
 pub mod client;
 pub mod datasets;
 pub mod error;
+pub mod mask;
 pub mod observations;
 pub mod otel;
 pub mod prompts;
@@ -211,6 +212,7 @@ pub use client::{ClientBuilder, LangfuseClient};
 pub use error::{Error, EventError, IngestionResponse, Result};
 pub use observations::{ObservationsPage, ALL_OBSERVATION_FIELDS, MAX_OBSERVATIONS_PAGE_SIZE};
 pub use traces::{IdGenerator, TraceResponse};
+
 
 // Re-export types from langfuse-client-base for convenience
 //

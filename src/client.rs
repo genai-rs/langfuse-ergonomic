@@ -29,6 +29,10 @@ pub struct LangfuseClient {
     pub(crate) api_version: ApiVersion,
     /// Langfuse v4 write state (span cache, trace attributes), shared by clones and batchers.
     pub(crate) v4_state: Arc<std::sync::Mutex<crate::otel::V4State>>,
+    /// Applied to inputs, outputs and metadata before they are sent (see [`crate::mask`]).
+    pub(crate) mask: Option<crate::mask::Mask>,
+    /// Prompts fetched with [`LangfuseClient::prompt`], shared by clones.
+    pub(crate) prompt_cache: Arc<crate::prompts::PromptCache>,
 }
 
 impl LangfuseClient {
@@ -122,6 +126,28 @@ impl LangfuseClient {
             ApiVersion::V3 => id.to_owned(),
             ApiVersion::V4 => crate::otel::observation_id(id),
         }
+    }
+
+    /// Apply the mask function, if one is set, to an event about to be sent.
+    pub(crate) fn mask_event(&self, event: &mut langfuse_client_base::models::IngestionEvent) {
+        if let Some(mask) = &self.mask {
+            mask.apply_to_event(event);
+        }
+    }
+
+    /// The mask function set with [`ClientBuilder::mask`], if any.
+    pub fn mask(&self) -> Option<&crate::mask::Mask> {
+        self.mask.as_ref()
+    }
+
+    /// The base URL of the Langfuse web UI (the base URL without a trailing `/api/public`).
+    pub fn web_base_url(&self) -> String {
+        let url = self.base_url.trim_end_matches('/');
+        let url = url
+            .strip_suffix("/api/public")
+            .or_else(|| url.strip_suffix("/api"))
+            .unwrap_or(url);
+        url.to_owned()
     }
 
     /// Get the underlying API configuration
@@ -223,6 +249,7 @@ impl LangfuseClient {
         http_client: Option<timvw_rust_runtime::Client>,
         api_version: ApiVersion,
         v4_state: crate::otel::V4State,
+        mask: Option<crate::mask::Mask>,
     ) -> Result<Self> {
         let client = match http_client {
             Some(client) => client,
@@ -271,6 +298,8 @@ impl LangfuseClient {
             configuration,
             api_version,
             v4_state: Arc::new(std::sync::Mutex::new(v4_state)),
+            mask,
+            prompt_cache: Arc::new(crate::prompts::PromptCache::default()),
         })
     }
 }
@@ -302,6 +331,7 @@ pub struct ClientBuilder {
     api_version: Option<ApiVersion>,
     v4_state_capacity: Option<usize>,
     v4_state_max_bytes: Option<usize>,
+    mask: Option<crate::mask::Mask>,
 }
 
 impl ClientBuilder {
@@ -398,6 +428,20 @@ impl ClientBuilder {
         self
     }
 
+    /// Set a function that masks (redacts) every input, output and metadata value before it is
+    /// sent: by the builders, the [`Batcher`] and [`crate::observe`]. See [`crate::mask`].
+    ///
+    /// A panic in the function is caught (natively) and the value replaced by
+    /// [`crate::mask::MASK_FAILED`].
+    #[must_use]
+    pub fn mask(
+        mut self,
+        mask: impl Fn(serde_json::Value) -> serde_json::Value + Send + Sync + 'static,
+    ) -> Self {
+        self.mask = Some(crate::mask::Mask::new(mask));
+        self
+    }
+
     /// Override the request timeout (defaults to 60 seconds).
     #[must_use]
     pub fn timeout(mut self, value: Duration) -> Self {
@@ -473,6 +517,7 @@ impl ClientBuilder {
                 self.v4_state_max_bytes
                     .unwrap_or(crate::otel::STATE_MAX_BYTES),
             ),
+            self.mask,
         )
     }
 }
