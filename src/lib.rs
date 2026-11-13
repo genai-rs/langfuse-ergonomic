@@ -195,6 +195,7 @@ pub mod client;
 pub mod datasets;
 pub mod error;
 pub mod mask;
+pub mod media;
 pub mod observations;
 pub mod observe;
 pub mod otel;

@@ -82,7 +82,6 @@ struct Options {
     stream: Option<StreamKind>,
 }
 
-
 const TYPES: [(&str, &str); 10] = [
     ("span", "Span"),
     ("generation", "Generation"),
