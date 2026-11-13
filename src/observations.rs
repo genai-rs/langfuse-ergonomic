@@ -713,20 +713,23 @@ impl LangfuseClient {
         let mut request = self
             .configuration
             .client
-            .get(format!(
-                "{}/api/public/v2/observations",
-                self.configuration.base_path
-            ))
+            .request(
+                timvw_rust_runtime::Method::GET,
+                &format!(
+                    "{}/api/public/v2/observations",
+                    self.configuration.base_path
+                ),
+            )
             .basic_auth(&self.public_key, Some(&self.secret_key))
             .query(&query);
         if let Some(user_agent) = &self.configuration.user_agent {
-            request = request.header(reqwest::header::USER_AGENT, user_agent);
+            request = request.header(timvw_rust_runtime::header::USER_AGENT, user_agent);
         }
-        let response = request.send().await.map_err(Error::Middleware)?;
+        let response = request.send().await?;
         if !response.status().is_success() {
             return Err(crate::error::error_from_response(response).await);
         }
-        let text = response.text().await.map_err(Error::Network)?;
+        let text = response.text().await?;
         let mut body: Value = serde_json::from_str(&text)?;
         round_usage_details(&mut body);
         let response: langfuse_client_base::models::ObservationsV2Response =

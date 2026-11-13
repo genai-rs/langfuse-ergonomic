@@ -878,7 +878,9 @@ impl Batcher {
     }
 
     /// Parse a 207 Multi-Status ingestion response into per-event successes and failures.
-    async fn parse_multi_status(response: reqwest::Response) -> Result<IngestionResponse> {
+    async fn parse_multi_status(
+        response: timvw_rust_runtime::Response,
+    ) -> Result<IngestionResponse> {
         #[derive(serde::Deserialize)]
         struct MultiStatusResponse {
             successes: Vec<SuccessItem>,
@@ -1082,7 +1084,7 @@ impl Batcher {
     /// Map a non-success batch response to an error; 413 becomes a split request when the
     /// batch holds more than one event.
     async fn status_error(
-        response: reqwest::Response,
+        response: timvw_rust_runtime::Response,
         config: &BatcherConfig,
         events: &[BatchEvent],
     ) -> Error {
@@ -1117,15 +1119,14 @@ impl Batcher {
         let response = client
             .configuration
             .client
-            .post(format!(
-                "{}/api/public/ingestion",
-                client.configuration.base_path
-            ))
+            .request(
+                timvw_rust_runtime::Method::POST,
+                &format!("{}/api/public/ingestion", client.configuration.base_path),
+            )
             .basic_auth(&client.public_key, Some(&client.secret_key))
             .json(&batch)
             .send()
-            .await
-            .map_err(Error::Middleware)?;
+            .await?;
 
         let status = response.status();
         let request_id = crate::error::parse_request_id(response.headers());

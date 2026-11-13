@@ -133,15 +133,15 @@ impl LangfuseClient {
 
         // Make a lightweight request to the health endpoint
         let url = format!("{}/api/public/health", self.base_url);
-        let response = self
+        let request = self
             .configuration
             .client
-            .get(&url)
+            .request(timvw_rust_runtime::Method::GET, &url)
             .basic_auth(&self.public_key, Some(&self.secret_key))
-            .timeout(Duration::from_secs(5))
-            .send()
+            .send();
+        let response = tokio::time::timeout(Duration::from_secs(5), request)
             .await
-            .map_err(Error::Middleware)?;
+            .map_err(|_| Error::Api("health check timed out after 5s".to_string()))??;
 
         // Check if we got a successful response
         match response.status() {
@@ -218,7 +218,7 @@ impl LangfuseClient {
         timeout: Option<Duration>,
         connect_timeout: Option<Duration>,
         user_agent: Option<String>,
-        http_client: Option<reqwest_middleware::ClientWithMiddleware>,
+        http_client: Option<timvw_rust_runtime::Client>,
         api_version: ApiVersion,
         v4_state: crate::otel::V4State,
     ) -> Result<Self> {
@@ -267,15 +267,16 @@ impl LangfuseClient {
 
 /// Build the HTTP client, surfacing failures instead of silently dropping the configured
 /// timeouts and connection settings.
-fn finish_http_client(
-    builder: reqwest::ClientBuilder,
-) -> Result<reqwest_middleware::ClientWithMiddleware> {
+fn finish_http_client(builder: reqwest::ClientBuilder) -> Result<timvw_rust_runtime::Client> {
     let reqwest_client = builder
         .build()
         .map_err(|e| Error::Configuration(format!("failed to build HTTP client: {e}")))?;
 
-    // Wrap with middleware support
-    Ok(reqwest_middleware::ClientBuilder::new(reqwest_client).build())
+    // No retries at this level: the batcher retries ingestion itself (with backoff and jitter),
+    // and retrying here as well would multiply the attempts. Add a RetryLayer with `http_client`.
+    Ok(timvw_rust_runtime::Client::from_service(
+        timvw_rust_runtime::ReqwestService::new(reqwest_client),
+    ))
 }
 
 /// Builder for [`LangfuseClient`], mirroring the style of `opentelemetry-langfuse`.
@@ -287,7 +288,7 @@ pub struct ClientBuilder {
     timeout: Option<Duration>,
     connect_timeout: Option<Duration>,
     user_agent: Option<String>,
-    http_client: Option<reqwest_middleware::ClientWithMiddleware>,
+    http_client: Option<timvw_rust_runtime::Client>,
     api_version: Option<ApiVersion>,
     v4_state_capacity: Option<usize>,
     v4_state_max_bytes: Option<usize>,
@@ -402,28 +403,29 @@ impl ClientBuilder {
         self
     }
 
-    /// Set a custom HTTP client with middleware.
+    /// Set a custom HTTP client.
     ///
-    /// This allows you to provide a pre-configured `ClientWithMiddleware` with
-    /// custom settings like retry policies, connection pooling, logging, etc.
+    /// The client is a [`timvw_rust_runtime::Client`]: a tower service (reqwest by default)
+    /// that takes tower layers for retries, timeouts, logging, rate limits and middleware of
+    /// your own. `timeout` and `connect_timeout` do not apply to it; configure them on the
+    /// `reqwest::Client` or add a `TimeoutLayer`. See the
+    /// [runtime's guide](https://docs.rs/timvw-rust-runtime).
     ///
     /// # Example
     ///
     /// ```rust,ignore
-    /// use reqwest_middleware::ClientBuilder;
-    /// use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
+    /// use timvw_rust_runtime::{retry::RetryPolicy, Client, ReqwestService};
+    /// use tower::retry::RetryLayer;
     ///
-    /// let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
-    /// let client = ClientBuilder::new(reqwest::Client::new())
-    ///     .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-    ///     .build();
+    /// let client = Client::from_service(ReqwestService::new(reqwest::Client::new()))
+    ///     .layer(RetryLayer::new(RetryPolicy::new(3)));
     ///
     /// let langfuse_client = langfuse_ergonomic::ClientBuilder::from_env()?
     ///     .http_client(client)
     ///     .build()?;
     /// ```
     #[must_use]
-    pub fn http_client(mut self, client: reqwest_middleware::ClientWithMiddleware) -> Self {
+    pub fn http_client(mut self, client: timvw_rust_runtime::Client) -> Self {
         self.http_client = Some(client);
         self
     }

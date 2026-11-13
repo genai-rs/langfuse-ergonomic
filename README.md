@@ -36,6 +36,8 @@ langfuse-ergonomic = { version = "*", features = ["compression"] }
 ```
 
 - `compression` - Enable gzip, brotli, and deflate compression for requests (reduces bandwidth usage)
+- `retry` - `timvw_rust_runtime::retry::RetryPolicy`, a tower retry policy for clients set with `http_client`
+- `tracing-http` - `timvw_rust_runtime::trace::TraceLayer`, which logs each HTTP request with `tracing`
 
 ## Quick Start
 
@@ -323,6 +325,22 @@ both modes.
 
 ## Type Safety
 
+### Migrating to client-base 0.21
+
+`langfuse-client-base` 0.21 is generated with `timvw-rust` 0.25 and sends through
+[`timvw-rust-runtime`](https://docs.rs/timvw-rust-runtime) (tower) instead of
+`reqwest-middleware`. The ergonomic builders keep their signatures; the HTTP types change:
+
+- `ClientBuilder::http_client` takes a `timvw_rust_runtime::Client` instead of a
+  `reqwest_middleware::ClientWithMiddleware`. Build one with
+  `Client::from_service(ReqwestService::new(reqwest_client))` and add tower layers with
+  `.layer(..)`; `reqwest-retry` becomes `RetryLayer::new(RetryPolicy::new(n))` (feature `retry`).
+- `Error::Network` wraps a `timvw_rust_runtime::Error` (`is_timeout()`, `is_connect()`, ...)
+  instead of a `reqwest::Error`, and `Error::Middleware` is gone.
+- A timed-out `validate()` returns `Error::Api`.
+- Code that uses the base API directly matches `apis::Error::Http` instead of
+  `Reqwest`/`ReqwestMiddleware`. See the base crate's `migration/api-diff-0.20.0-to-0.21.0.md`.
+
 ### Migrating to client-base 0.20
 
 `langfuse-client-base` 0.20 is generated with `timvw-rust` 0.22. The ergonomic
@@ -447,6 +465,27 @@ let client = ClientBuilder::new()
     .api_version(ApiVersion::V4)             // Langfuse server API (default V4)
     .build()?;
 ```
+
+### HTTP client and middleware
+
+Requests go through a [`timvw_rust_runtime::Client`](https://docs.rs/timvw-rust-runtime): a
+[tower](https://docs.rs/tower) service, reqwest by default. The default client does not retry by
+itself: the batcher retries ingestion with backoff and jitter. To add retries for the other
+calls, timeouts, logging or middleware of your own, pass a client with tower layers (feature
+`retry` for the runtime's retry policy):
+
+```rust,ignore
+use timvw_rust_runtime::{retry::RetryPolicy, Client, ReqwestService};
+use tower::retry::RetryLayer;
+
+let http_client = Client::from_service(ReqwestService::new(reqwest::Client::new()))
+    .layer(RetryLayer::new(RetryPolicy::new(3)));
+let client = ClientBuilder::from_env()?.http_client(http_client).build()?;
+```
+
+`timeout` and `connect_timeout` apply only to the default client. See
+[`examples/http_middleware_retry.rs`](examples/http_middleware_retry.rs) and the
+[runtime's guide](https://docs.rs/timvw-rust-runtime).
 
 ## Examples
 
