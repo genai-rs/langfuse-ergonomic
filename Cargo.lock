@@ -1054,8 +1054,6 @@ dependencies = [
 [[package]]
 name = "langfuse-client-base"
 version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14e2e85f6421d2d3eabdd1a51802df955bb004cd8f585e56f143ad885274b682"
 dependencies = [
  "bon",
  "chrono",
@@ -1069,7 +1067,7 @@ dependencies = [
 
 [[package]]
 name = "langfuse-ergonomic"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "bon",
@@ -1797,6 +1795,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
+name = "secrecy"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e891af845473308773346dc847b2c23ee78fe442e0472ac50e22a18a93d3ae5a"
+dependencies = [
+ "zeroize",
+]
+
+[[package]]
 name = "security-framework"
 version = "3.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2129,9 +2136,9 @@ dependencies = [
 
 [[package]]
 name = "timvw-rust-runtime"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c80eeb80d46cce7397f8ece27114deb7ff94b5211227ae1b4a91f7bb8ad9ab6"
+checksum = "dbaa07776abd25de0e0975710461bdb2dafd0820399bee6ba1221dbfc867acbc"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -2141,6 +2148,7 @@ dependencies = [
  "http-body",
  "http-body-util",
  "reqwest",
+ "secrecy",
  "serde",
  "serde_json",
  "serde_urlencoded",
