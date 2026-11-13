@@ -194,6 +194,7 @@ pub mod batcher;
 pub mod client;
 pub mod datasets;
 pub mod error;
+pub mod experiments;
 pub mod mask;
 pub mod media;
 pub mod observations;

@@ -575,6 +575,16 @@ impl Observation {
 
     /// Score this observation's trace.
     pub fn score_trace(&self, name: impl Into<String>, value: impl Into<ScoreValue>) {
+        self.score_trace_with(name, value, None::<String>);
+    }
+
+    /// Score this observation's trace, with a comment.
+    pub fn score_trace_with(
+        &self,
+        name: impl Into<String>,
+        value: impl Into<ScoreValue>,
+        comment: Option<impl Into<String>>,
+    ) {
         let Some(inner) = &self.inner else { return };
         inner.sink.send(vec![crate::scores::score_event(
             crate::scores::ScoreTarget {
@@ -583,7 +593,7 @@ impl Observation {
             },
             name.into(),
             &value.into(),
-            None,
+            comment.map(Into::into),
             None,
         )]);
     }

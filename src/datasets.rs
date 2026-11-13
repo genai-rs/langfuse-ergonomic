@@ -292,6 +292,61 @@ impl LangfuseClient {
         Ok(())
     }
 
-    // Note: dataset_run_items_api doesn't exist in v0.2
-    // We'll implement this when the API is available
+    /// Link a trace (or one of its observations) to a dataset run: create a dataset run item.
+    ///
+    /// The run is created on first use of `run_name`. With [`crate::ApiVersion::V4`] the ids
+    /// are mapped like the builders' ids. [`LangfuseClient::run_experiment`] does this for
+    /// every item it runs.
+    #[builder]
+    pub async fn create_dataset_run_item(
+        &self,
+        #[builder(into)] run_name: String,
+        #[builder(into)] dataset_item_id: String,
+        #[builder(into)] trace_id: Option<String>,
+        #[builder(into)] observation_id: Option<String>,
+        #[builder(into)] run_description: Option<String>,
+        metadata: Option<Value>,
+    ) -> Result<langfuse_client_base::models::DatasetRunItem> {
+        use langfuse_client_base::apis::dataset_run_items_api;
+        use langfuse_client_base::models::CreateDatasetRunItemRequest;
+
+        let request = CreateDatasetRunItemRequest {
+            run_name,
+            run_description: run_description.map(Some),
+            metadata: metadata.map(Some),
+            dataset_item_id,
+            observation_id: observation_id.map(|id| Some(self.effective_observation_id(&id))),
+            trace_id: trace_id.map(|id| Some(self.effective_trace_id(&id))),
+            dataset_version: None,
+            created_at: None,
+        };
+        dataset_run_items_api::dataset_run_items_create()
+            .configuration(self.configuration())
+            .create_dataset_run_item_request(&request)
+            .call()
+            .await
+            .map_err(|e| Error::Api(format!("Failed to create dataset run item: {e}")))
+    }
+
+    /// List the items of a dataset run (works with both API versions).
+    #[builder]
+    pub async fn list_dataset_run_items(
+        &self,
+        #[builder(into)] dataset_id: String,
+        #[builder(into)] run_name: String,
+        page: Option<i32>,
+        limit: Option<i32>,
+    ) -> Result<langfuse_client_base::models::PaginatedDatasetRunItems> {
+        use langfuse_client_base::apis::dataset_run_items_api;
+
+        dataset_run_items_api::dataset_run_items_list()
+            .configuration(self.configuration())
+            .dataset_id(dataset_id.as_str())
+            .run_name(run_name.as_str())
+            .maybe_page(page.map(i64::from))
+            .maybe_limit(limit.map(i64::from))
+            .call()
+            .await
+            .map_err(|e| Error::Api(format!("Failed to list dataset run items: {e}")))
+    }
 }
