@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.13.0...v0.14.0) - 2026-11-13
+
+### Added
+
+- build for WebAssembly (wasm32-unknown-unknown)
+- [**breaking**] langfuse-client-base 0.22 / runtime 0.2: SecretString secret key, 0.14.0
+
+### Other
+
+- depend on langfuse-client-base 0.23 and timvw-rust-runtime 0.3 from crates.io
+- use the reusable workflows from genai-rs/.github@main
+- gate heavy jobs on local-ci attestation
+
 ## [0.13.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.12.0...v0.13.0) - 2026-11-13
 
 ### Added
