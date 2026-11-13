@@ -1441,6 +1441,27 @@ mod tests {
     }
 
     #[test]
+    fn backoff_doubles_caps_jitters_and_honours_retry_after() {
+        let ms = Duration::from_millis;
+        let initial = ms(100);
+        let max = ms(1000);
+        assert_eq!(backoff_delay(1, initial, max, false, None), ms(100));
+        assert_eq!(backoff_delay(2, initial, max, false, None), ms(200));
+        assert_eq!(backoff_delay(4, initial, max, false, None), ms(800));
+        assert_eq!(backoff_delay(5, initial, max, false, None), ms(1000));
+        assert_eq!(backoff_delay(64, initial, max, false, None), ms(1000));
+        for _ in 0..50 {
+            let delay = backoff_delay(2, initial, max, true, None);
+            assert!(delay >= ms(200) && delay <= ms(250), "{delay:?}");
+        }
+        assert_eq!(
+            backoff_delay(1, initial, max, true, Some(Duration::from_secs(7))),
+            Duration::from_secs(7)
+        );
+        assert_eq!(backoff_delay(3, initial, max, false, Some(ms(10))), ms(400));
+    }
+
+    #[test]
     fn test_chunk_events() {
         let events = vec![
             BatchEvent {
