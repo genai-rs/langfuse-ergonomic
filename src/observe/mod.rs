@@ -701,7 +701,12 @@ impl Observation {
                 sink: parent.sink.clone(),
                 trace: parent.trace.clone(),
                 trace_id: parent.trace_id.clone(),
-                id: id.unwrap_or_else(new_observation_id),
+                id: id.map_or_else(new_observation_id, |id| {
+                    match parent.sink.client().api_version() {
+                        ApiVersion::V3 => id,
+                        ApiVersion::V4 => crate::otel::observation_id(&id),
+                    }
+                }),
                 parent_id: Some(parent.id.clone()),
                 kind,
                 trace_root: false,
