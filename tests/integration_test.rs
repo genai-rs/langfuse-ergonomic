@@ -439,3 +439,67 @@ async fn test_prompt_management() {
         .await
         .expect("Failed to list prompts");
 }
+
+/// `#[observe]` nests across `.await`: the child is stored with its parent and its type.
+#[cfg(feature = "macros")]
+#[tokio::test]
+#[ignore = "requires a Langfuse server; run scripts/live-tests.sh"]
+async fn test_observe_nesting_live() {
+    use langfuse_ergonomic::observe;
+    use langfuse_ergonomic::observe::{Observation, ObservationType};
+
+    #[observe(as_type = "tool", name = "live-observe-tool")]
+    async fn tool(input: u32) -> u32 {
+        tokio::task::yield_now().await;
+        input * 2
+    }
+
+    let client = live_client();
+    let batcher = client.batcher().build().await;
+    let root = Observation::builder(unique("live-observe-root"))
+        .as_type(ObservationType::Agent)
+        .batcher(batcher.clone())
+        .start();
+    let trace_id = root.trace_id().unwrap().to_owned();
+    let root_id = root.id().unwrap().to_owned();
+    let doubled = root
+        .clone()
+        .instrument(async {
+            assert_eq!(observe::current().unwrap().id(), Some(root_id.as_str()));
+            tool(21).await
+        })
+        .await;
+    assert_eq!(doubled, 42);
+    batcher.shutdown().await.expect("shutdown");
+
+    let observations = eventually("observe nesting", || async {
+        let observations = match client.api_version() {
+            ApiVersion::V4 => client
+                .trace_observations(&trace_id)
+                .await
+                .map_err(|e| e.to_string())?
+                .into_iter()
+                .map(|o| (o.name.flatten(), o.parent_observation_id, o.r#type))
+                .collect::<Vec<_>>(),
+            ApiVersion::V3 => client
+                .get_trace(&trace_id)
+                .await
+                .map_err(|e| e.to_string())?
+                .observations
+                .into_iter()
+                .map(|o| (o.name, o.parent_observation_id, o.r#type))
+                .collect(),
+        };
+        if observations.len() < 2 {
+            return Err(format!("{} observations so far", observations.len()));
+        }
+        Ok(observations)
+    })
+    .await;
+    let tool = observations
+        .iter()
+        .find(|(name, _, _)| name.as_deref() == Some("live-observe-tool"))
+        .expect("the tool observation");
+    assert_eq!(tool.1.as_deref(), Some(root_id.as_str()));
+    assert_eq!(tool.2, "TOOL");
+}
