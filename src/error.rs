@@ -148,12 +148,15 @@ impl Error {
         }
     }
 
-    /// Get the retry delay if applicable
+    /// The delay the server asked for with `Retry-After`, if any.
+    ///
+    /// Only rate limits ([`Error::RateLimit`]) carry it. Other retryable errors (5xx, network)
+    /// return `None`: the batcher then retries with exponential backoff and jitter (and honours a
+    /// `Retry-After` on a 5xx response itself). Before 0.15 this returned a fixed 5 s for server
+    /// errors and 1 s for network errors.
     pub fn retry_after(&self) -> Option<Duration> {
         match self {
             Error::RateLimit { retry_after, .. } => *retry_after,
-            Error::Server { .. } => Some(Duration::from_secs(5)), // Default retry for server errors
-            Error::Network(_) => Some(Duration::from_secs(1)),    // Quick retry for network errors
             _ => None,
         }
     }
@@ -280,7 +283,6 @@ pub fn map_api_error<T>(err: langfuse_client_base::apis::Error<T>) -> Error {
     match err {
         ApiError::Http(e) => Error::Network(e),
         ApiError::Serde(e) => Error::Serialization(e),
-        ApiError::Io(e) => Error::Api(format!("IO error: {e}")),
         ApiError::ResponseError(response) => {
             let status = response.status.as_u16();
             let request_id = parse_request_id(&response.headers);
@@ -312,6 +314,9 @@ pub fn map_api_error<T>(err: langfuse_client_base::apis::Error<T>) -> Error {
                 _ => Error::Api(message),
             }
         }
+        // Other transport failures (`Io` in langfuse-client-base before 0.24, removed since).
+        #[allow(unreachable_patterns)]
+        other => Error::Api(other.to_string()),
     }
 }
 
@@ -370,13 +375,13 @@ mod tests {
             Some(Duration::from_secs(10))
         );
 
-        // Server error should have default retry delay
+        // Server errors carry no delay of their own: the batcher backs off exponentially
         let server_error = Error::Server {
             status: 503,
             message: "Service unavailable".to_string(),
             request_id: None,
         };
-        assert_eq!(server_error.retry_after(), Some(Duration::from_secs(5)));
+        assert_eq!(server_error.retry_after(), None);
 
         // Auth error should have no retry delay
         let auth_error = Error::Auth {

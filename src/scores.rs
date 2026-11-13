@@ -158,3 +158,119 @@ impl LangfuseClient {
             .await
     }
 }
+
+/// The value of a score: numeric, boolean or categorical.
+///
+/// Used by [`crate::observe::Observation::score`] and the experiment evaluators
+/// ([`crate::experiments::Evaluation`]).
+#[derive(Debug, Clone, PartialEq)]
+pub enum ScoreValue {
+    /// A number (data type `NUMERIC`).
+    Numeric(f64),
+    /// True or false (data type `BOOLEAN`, sent as 1 or 0).
+    Boolean(bool),
+    /// A category (data type `CATEGORICAL`).
+    Categorical(String),
+}
+
+impl ScoreValue {
+    /// The value as a number: numeric scores as they are, booleans as 1 or 0, categories `None`.
+    pub fn as_f64(&self) -> Option<f64> {
+        match self {
+            Self::Numeric(v) => Some(*v),
+            Self::Boolean(b) => Some(if *b { 1.0 } else { 0.0 }),
+            Self::Categorical(_) => None,
+        }
+    }
+}
+
+impl From<f64> for ScoreValue {
+    fn from(value: f64) -> Self {
+        Self::Numeric(value)
+    }
+}
+
+impl From<f32> for ScoreValue {
+    fn from(value: f32) -> Self {
+        Self::Numeric(f64::from(value))
+    }
+}
+
+impl From<i32> for ScoreValue {
+    fn from(value: i32) -> Self {
+        Self::Numeric(f64::from(value))
+    }
+}
+
+impl From<bool> for ScoreValue {
+    fn from(value: bool) -> Self {
+        Self::Boolean(value)
+    }
+}
+
+impl From<String> for ScoreValue {
+    fn from(value: String) -> Self {
+        Self::Categorical(value)
+    }
+}
+
+impl From<&str> for ScoreValue {
+    fn from(value: &str) -> Self {
+        Self::Categorical(value.to_owned())
+    }
+}
+
+/// A score to send, for [`score_event`].
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ScoreTarget {
+    pub trace_id: Option<String>,
+    pub observation_id: Option<String>,
+    pub session_id: Option<String>,
+    pub dataset_run_id: Option<String>,
+}
+
+/// Build a `score-create` ingestion event.
+pub(crate) fn score_event(
+    target: ScoreTarget,
+    name: String,
+    value: &ScoreValue,
+    comment: Option<String>,
+    metadata: Option<Value>,
+) -> langfuse_client_base::models::IngestionEvent {
+    use langfuse_client_base::models::{
+        ingestion_event_score_event::Type, IngestionEvent, IngestionEventScoreEvent,
+    };
+    let (value, data_type) = match value {
+        ScoreValue::Numeric(v) => (CreateScoreValue::DoubleNumber(*v), ScoreDataType::Numeric),
+        ScoreValue::Boolean(b) => (
+            CreateScoreValue::DoubleNumber(if *b { 1.0 } else { 0.0 }),
+            ScoreDataType::Boolean,
+        ),
+        ScoreValue::Categorical(s) => (
+            CreateScoreValue::String(s.clone()),
+            ScoreDataType::Categorical,
+        ),
+    };
+    let body = ScoreBody {
+        id: Some(Some(Uuid::new_v4().to_string())),
+        trace_id: target.trace_id.map(Some),
+        session_id: target.session_id.map(Some),
+        observation_id: target.observation_id.map(Some),
+        dataset_run_id: target.dataset_run_id.map(Some),
+        name,
+        environment: None,
+        queue_id: None,
+        value,
+        comment: comment.map(Some),
+        metadata: metadata.map(Some),
+        data_type: Some(data_type),
+        config_id: None,
+    };
+    IngestionEvent::ScoreEvent(IngestionEventScoreEvent {
+        body,
+        id: Uuid::new_v4().to_string(),
+        timestamp: crate::time::now_utc().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        metadata: None,
+        r#type: Type::ScoreCreate,
+    })
+}

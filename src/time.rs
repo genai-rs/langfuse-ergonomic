@@ -7,6 +7,21 @@
 use std::future::Future;
 use std::time::Duration;
 
+/// A monotonic instant: `performance.now()` on WebAssembly.
+#[cfg(not(target_family = "wasm"))]
+pub(crate) use std::time::Instant;
+/// A monotonic instant: `performance.now()` on WebAssembly.
+#[cfg(target_family = "wasm")]
+pub(crate) use web_time::Instant;
+
+/// The wall clock as a UTC date-time (`Date.now()` on WebAssembly).
+pub(crate) fn now_utc() -> chrono::DateTime<chrono::Utc> {
+    let since = since_epoch();
+    #[allow(clippy::cast_possible_wrap)]
+    chrono::DateTime::from_timestamp(since.as_secs() as i64, since.subsec_nanos())
+        .unwrap_or_default()
+}
+
 /// The wall clock, as the time since the Unix epoch: `Date.now()` on WebAssembly.
 pub(crate) fn since_epoch() -> Duration {
     #[cfg(not(target_family = "wasm"))]

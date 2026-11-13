@@ -133,10 +133,14 @@ impl LangfuseClient {
     /// Send ingestion events with the transport of the configured [`crate::ApiVersion`].
     pub(crate) async fn ingest_events(
         &self,
-        events: Vec<langfuse_client_base::models::IngestionEvent>,
+        mut events: Vec<langfuse_client_base::models::IngestionEvent>,
     ) -> Result<()> {
         use langfuse_client_base::apis::ingestion_api;
         use langfuse_client_base::models::IngestionBatchRequest;
+
+        for event in &mut events {
+            self.mask_event(event);
+        }
 
         if self.api_version == crate::ApiVersion::V4 {
             return self.ingest_events_v4(events).await;

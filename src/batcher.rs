@@ -222,7 +222,55 @@ pub struct BatcherMetricsSnapshot {
     pub last_error_ts: u64,
 }
 
+/// A failed send attempt: the error, and the `Retry-After` the response carried (also for 5xx,
+/// which [`Error::Server`] does not hold).
+struct SendFailure {
+    error: Error,
+    retry_after: Option<Duration>,
+}
+
+impl From<Error> for SendFailure {
+    fn from(error: Error) -> Self {
+        let retry_after = error.retry_after();
+        Self { error, retry_after }
+    }
+}
+
+impl From<timvw_rust_runtime::Error> for SendFailure {
+    fn from(error: timvw_rust_runtime::Error) -> Self {
+        Error::from(error).into()
+    }
+}
+
+/// The delay before retry `attempt` (1-based): `initial * 2^(attempt - 1)`, at most `max`, plus up to 25%
+/// random jitter when `jitter` is set. A `Retry-After` from the server raises it (even above `max`).
+pub(crate) fn backoff_delay(
+    attempt: u32,
+    initial: Duration,
+    max: Duration,
+    jitter: bool,
+    retry_after: Option<Duration>,
+) -> Duration {
+    let exponent = attempt.saturating_sub(1).min(31);
+    let base = initial
+        .checked_mul(1u32 << exponent)
+        .unwrap_or(max)
+        .min(max);
+    let delay = if jitter {
+        #[allow(clippy::cast_possible_truncation)]
+        let jitter_range = base.as_millis().min(u128::from(u64::MAX)) as u64 / 4;
+        base + Duration::from_millis(rng().random_range(0..=jitter_range))
+    } else {
+        base
+    };
+    retry_after.map_or(delay, |retry_after| retry_after.max(delay))
+}
+
 /// Batch ingestion handler with automatic chunking and retries
+///
+/// Cloning is cheap: clones share the queue, the background task and the metrics (for example one
+/// clone installed as the [`crate::observe`] sink and one kept for [`Batcher::shutdown`]).
+#[derive(Clone)]
 pub struct Batcher {
     client: Arc<LangfuseClient>,
     config: BatcherConfig,
@@ -456,12 +504,14 @@ impl Batcher {
         batcher
     }
 
-    /// Add an event to the batch
-    pub async fn add(&self, event: IngestionEvent) -> Result<()> {
+    /// Mask, validate and size an event before it is queued; the V4 copy to apply once queued.
+    fn prepare(&self, mut event: IngestionEvent) -> Result<(BatchEvent, Option<IngestionEvent>)> {
         // Check if shutdown has been called
         if self.shutdown_flag.load(Ordering::Relaxed) {
             return Err(Error::Api("Batcher is shutting down".to_string()));
         }
+
+        self.client.mask_event(&mut event);
 
         // V4: reject events the v4 transport cannot send (for example an update of an unknown
         // span) now, but only record them in the shared state once the batcher accepted them,
@@ -475,7 +525,7 @@ impl Batcher {
 
         let id = Self::extract_event_id(&event);
 
-        let batch_event = BatchEvent::new(event, id.clone())?;
+        let batch_event = BatchEvent::new(event, id)?;
 
         // Check size limit
         if batch_event.size > self.config.max_bytes {
@@ -484,6 +534,66 @@ impl Batcher {
                 max_size: self.config.max_bytes,
             });
         }
+        Ok((batch_event, v4_event))
+    }
+
+    /// Add an event to the batch without waiting: usable from synchronous code and `Drop`.
+    ///
+    /// The [`ClientBuilder::mask`](crate::ClientBuilder::mask) function is applied first. When the
+    /// queue is full, [`BackpressurePolicy::DropOldest`] makes room by dropping the oldest buffered
+    /// event if it can do so without waiting; otherwise (and always for
+    /// [`BackpressurePolicy::Block`], which cannot block here, and
+    /// [`BackpressurePolicy::DropNew`]) the new event is dropped and [`Error::Backpressure`] is
+    /// returned. The [`crate::observe`] module sends through this method.
+    pub fn try_add(&self, event: IngestionEvent) -> Result<()> {
+        let (batch_event, v4_event) = self.prepare(event)?;
+        let policy = self.config.backpressure_policy;
+        let rejected = match self.tx.try_send(batch_event) {
+            Ok(()) => None,
+            Err(mpsc::error::TrySendError::Full(batch_event))
+                if policy == BackpressurePolicy::DropOldest =>
+            {
+                if let Ok(mut buf) = self.buffer.try_lock() {
+                    if let Some(dropped) = buf.pop_front() {
+                        self.buffer_size.fetch_sub(dropped.size, Ordering::Relaxed);
+                        self.metrics.dropped.fetch_add(1, Ordering::Relaxed);
+                        self.metrics.queued.fetch_sub(1, Ordering::Relaxed);
+                    }
+                }
+                match self.tx.try_send(batch_event) {
+                    Ok(()) => None,
+                    Err(mpsc::error::TrySendError::Full(_)) => {
+                        Some("Queue full, new event dropped")
+                    }
+                    Err(e) => return Err(Error::Api(format!("Failed to queue event: {e}"))),
+                }
+            }
+            Err(mpsc::error::TrySendError::Full(_)) => Some("Queue full, new event dropped"),
+            Err(e) => return Err(Error::Api(format!("Failed to queue event: {e}"))),
+        };
+        if let Some(reason) = rejected {
+            self.metrics.dropped.fetch_add(1, Ordering::Relaxed);
+            return Err(Error::Backpressure {
+                policy,
+                reason: reason.to_string(),
+            });
+        }
+        if let Some(event) = v4_event {
+            self.client.v4_state().apply(&event)?;
+        }
+        Ok(())
+    }
+
+    /// The client this batcher sends with.
+    pub(crate) fn client(&self) -> &LangfuseClient {
+        &self.client
+    }
+
+    /// Add an event to the batch
+    ///
+    /// The [`ClientBuilder::mask`](crate::ClientBuilder::mask) function is applied first.
+    pub async fn add(&self, event: IngestionEvent) -> Result<()> {
+        let (batch_event, v4_event) = self.prepare(event)?;
 
         // Handle backpressure based on policy
         match self.config.backpressure_policy {
@@ -821,14 +931,18 @@ impl Batcher {
     }
 
     /// Send a batch with exponential backoff retry
+    ///
+    /// Retryable failures (5xx, 429, network) wait `initial_retry_delay * 2^n` (capped at
+    /// `max_retry_delay`, plus up to 25% jitter when enabled); a `Retry-After` header, on a 429 or
+    /// a 5xx, raises the wait to at least that long.
     async fn send_batch_with_retry(
         client: &LangfuseClient,
         events: &[BatchEvent],
         config: &BatcherConfig,
         metrics: &BatcherMetrics,
     ) -> std::result::Result<(IngestionResponse, u32), (Error, u32)> {
-        let mut delay = config.initial_retry_delay;
         let mut last_error = None;
+        let mut retry_after = None;
 
         for attempt in 0..=config.max_retries {
             if attempt > 0 || (attempt == 0 && events[0].retry_count > 0) {
@@ -836,24 +950,22 @@ impl Batcher {
             }
 
             if attempt > 0 {
-                // Add jitter to avoid thundering herd
-                let actual_delay = if config.retry_jitter {
-                    #[allow(clippy::cast_possible_truncation)]
-                    let jitter_range = delay.as_millis().min(u128::from(u64::MAX)) as u64 / 4; // 25% jitter
-                    let mut rng = rng();
-                    let jitter = rng.random_range(0..=jitter_range);
-                    delay + Duration::from_millis(jitter)
-                } else {
-                    delay
-                };
-
-                crate::time::sleep(actual_delay).await;
-                delay = std::cmp::min(delay * 2, config.max_retry_delay);
+                let delay = backoff_delay(
+                    attempt,
+                    config.initial_retry_delay,
+                    config.max_retry_delay,
+                    config.retry_jitter,
+                    retry_after.take(),
+                );
+                crate::time::sleep(delay).await;
             }
 
-            match Self::send_batch_internal(client, config, events).await {
+            let failure = match Self::send_batch_internal(client, config, events).await {
                 Ok(response) => return Ok((response, attempt)),
-                Err(Error::Client { status: 413, .. }) => {
+                Err(failure) => failure,
+            };
+            match failure.error {
+                Error::Client { status: 413, .. } => {
                     // Payload too large - should be handled at the chunk level
                     return Err((
                         Error::Client {
@@ -864,12 +976,10 @@ impl Batcher {
                         attempt,
                     ));
                 }
-                Err(e) if !e.is_retryable() => return Err((e, attempt)),
-                Err(e) => {
-                    // Retry-After takes precedence over exponential backoff
-                    if let Some(retry_after) = e.retry_after() {
-                        delay = std::cmp::max(retry_after, delay); // Honor Retry-After even if larger
-                    }
+                e if !e.is_retryable() => return Err((e, attempt)),
+                e => {
+                    // Retry-After raises the backoff for the next attempt.
+                    retry_after = failure.retry_after;
                     last_error = Some(e);
                 }
             }
@@ -949,7 +1059,7 @@ impl Batcher {
         client: &LangfuseClient,
         config: &BatcherConfig,
         events: &[BatchEvent],
-    ) -> Result<IngestionResponse> {
+    ) -> std::result::Result<IngestionResponse, SendFailure> {
         match client.api_version {
             ApiVersion::V3 => {
                 let batch = IngestionBatchRequest {
@@ -982,7 +1092,7 @@ impl Batcher {
         client: &LangfuseClient,
         config: &BatcherConfig,
         events: &[BatchEvent],
-    ) -> Result<IngestionResponse> {
+    ) -> std::result::Result<IngestionResponse, SendFailure> {
         let mut span_ids = Vec::new();
         let mut spans = Vec::new();
         let mut scores = Vec::new();
@@ -1058,7 +1168,7 @@ impl Batcher {
                         });
                     }
                     if matches!(error, Error::Auth { .. }) && success_ids.is_empty() {
-                        return Err(error);
+                        return Err(error.into());
                     }
                     break;
                 }
@@ -1091,6 +1201,18 @@ impl Batcher {
         response: timvw_rust_runtime::Response,
         config: &BatcherConfig,
         events: &[BatchEvent],
+    ) -> SendFailure {
+        let retry_after = crate::error::parse_retry_after(response.headers());
+        SendFailure {
+            error: Self::status_error_inner(response, config, events).await,
+            retry_after,
+        }
+    }
+
+    async fn status_error_inner(
+        response: timvw_rust_runtime::Response,
+        config: &BatcherConfig,
+        events: &[BatchEvent],
     ) -> Error {
         if response.status().as_u16() == 413 {
             let request_id = crate::error::parse_request_id(response.headers());
@@ -1115,7 +1237,7 @@ impl Batcher {
         batch: IngestionBatchRequest,
         config: &BatcherConfig,
         events: &[BatchEvent],
-    ) -> Result<IngestionResponse> {
+    ) -> std::result::Result<IngestionResponse, SendFailure> {
         // Get event IDs for tracking
         let event_ids: Vec<String> = batch.batch.iter().map(Self::extract_event_id).collect();
 
@@ -1134,9 +1256,11 @@ impl Batcher {
 
         let status = response.status();
         let request_id = crate::error::parse_request_id(response.headers());
+        // Honoured for 429 and 5xx alike.
+        let retry_after_header = crate::error::parse_retry_after(response.headers());
 
         // Handle different status codes
-        match status.as_u16() {
+        let result: Result<IngestionResponse> = match status.as_u16() {
             200..=202 => {
                 // Full success
                 let count = event_ids.len();
@@ -1196,7 +1320,11 @@ impl Batcher {
                     .unwrap_or_else(|_| format!("Unexpected status: {status}")),
                 request_id,
             }),
-        }
+        };
+        result.map_err(|error| SendFailure {
+            retry_after: retry_after_header.or_else(|| error.retry_after()),
+            error,
+        })
     }
 
     /// Shutdown the batcher and flush remaining events

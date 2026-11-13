@@ -5,7 +5,7 @@
 
 // Re-export common types that might be useful
 pub use langfuse_client_base::models::{
-    CreateEventBody, CreateGenerationBody, CreateSpanBody, ObservationLevel,
+    CreateEventBody, CreateGenerationBody, CreateSpanBody, ObservationLevel, ObservationType,
 };
 
 use bon::bon;
@@ -54,9 +54,355 @@ pub(crate) fn model_parameters_map(
     (!converted.is_empty()).then_some(converted)
 }
 
+/// Every field an observation create event can carry, for [`observation_event`].
+#[derive(Debug, Clone)]
+pub(crate) struct ObservationFields {
+    pub kind: ObservationType,
+    pub id: String,
+    pub trace_id: String,
+    pub parent_observation_id: Option<String>,
+    pub name: Option<String>,
+    pub start_time: DateTime<Utc>,
+    pub end_time: Option<DateTime<Utc>>,
+    pub completion_start_time: Option<DateTime<Utc>>,
+    pub input: Option<Value>,
+    pub output: Option<Value>,
+    pub metadata: Option<Value>,
+    pub level: Option<ObservationLevel>,
+    pub status_message: Option<String>,
+    pub version: Option<String>,
+    pub environment: Option<String>,
+    pub model: Option<String>,
+    pub model_parameters: Option<Value>,
+    pub usage_details: Option<std::collections::HashMap<String, i64>>,
+    pub cost_details: Option<std::collections::HashMap<String, f64>>,
+    pub prompt_name: Option<String>,
+    pub prompt_version: Option<i64>,
+}
+
+impl ObservationFields {
+    pub(crate) fn new(kind: ObservationType, id: String, trace_id: String) -> Self {
+        Self {
+            kind,
+            id,
+            trace_id,
+            parent_observation_id: None,
+            name: None,
+            start_time: crate::time::now_utc(),
+            end_time: None,
+            completion_start_time: None,
+            input: None,
+            output: None,
+            metadata: None,
+            level: None,
+            status_message: None,
+            version: None,
+            environment: None,
+            model: None,
+            model_parameters: None,
+            usage_details: None,
+            cost_details: None,
+            prompt_name: None,
+            prompt_version: None,
+        }
+    }
+}
+
+/// Build the create event of one observation, in the shape both API versions understand:
+/// `span-create`, `generation-create` and `event-create` for those three types, and
+/// `observation-create` (with the type) for agent, tool, chain, retriever, evaluator, embedding
+/// and guardrail. Usage and cost details are sent in full on generations; other types send the
+/// `input`/`output`/`total` counts and costs as legacy `usage`.
+pub(crate) fn observation_event(
+    f: ObservationFields,
+) -> langfuse_client_base::models::IngestionEvent {
+    use langfuse_client_base::models::{
+        ingestion_event_create_event_event, ingestion_event_create_generation_event,
+        ingestion_event_create_observation_event, ingestion_event_create_span_event,
+        IngestionEvent, IngestionEventCreateEventEvent, IngestionEventCreateGenerationEvent,
+        IngestionEventCreateObservationEvent, IngestionEventCreateSpanEvent, ObservationBody,
+        Usage, UsageDetails,
+    };
+
+    let envelope_id = Uuid::new_v4().to_string();
+    let timestamp = f
+        .start_time
+        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    let start = Some(Some(f.start_time.fixed_offset()));
+    let end = f.end_time.map(|t| Some(t.fixed_offset()));
+    let completion_start = f.completion_start_time.map(|t| Some(t.fixed_offset()));
+    let some = |v: Option<String>| v.map(Some);
+    let model_parameters = f
+        .model_parameters
+        .as_ref()
+        .and_then(model_parameters_map)
+        .map(Some);
+
+    match f.kind {
+        ObservationType::Span => {
+            IngestionEvent::CreateSpanEvent(IngestionEventCreateSpanEvent::new(
+                envelope_id,
+                timestamp,
+                CreateSpanBody {
+                    id: Some(Some(f.id)),
+                    trace_id: Some(Some(f.trace_id)),
+                    name: some(f.name),
+                    start_time: start,
+                    end_time: end,
+                    metadata: f.metadata.map(Some),
+                    input: f.input.map(Some),
+                    output: f.output.map(Some),
+                    level: f.level,
+                    status_message: some(f.status_message),
+                    parent_observation_id: some(f.parent_observation_id),
+                    version: some(f.version),
+                    environment: some(f.environment),
+                },
+                ingestion_event_create_span_event::Type::SpanCreate,
+            ))
+        }
+        ObservationType::Generation => {
+            IngestionEvent::CreateGenerationEvent(IngestionEventCreateGenerationEvent::new(
+                envelope_id,
+                timestamp,
+                CreateGenerationBody {
+                    id: Some(Some(f.id)),
+                    trace_id: Some(Some(f.trace_id)),
+                    name: some(f.name),
+                    start_time: start,
+                    end_time: end,
+                    completion_start_time: completion_start,
+                    metadata: f.metadata.map(Some),
+                    input: f.input.map(Some),
+                    output: f.output.map(Some),
+                    level: f.level,
+                    status_message: some(f.status_message),
+                    parent_observation_id: some(f.parent_observation_id),
+                    version: some(f.version),
+                    environment: some(f.environment),
+                    model: some(f.model),
+                    model_parameters,
+                    usage: None,
+                    usage_details: f
+                        .usage_details
+                        .filter(|u| !u.is_empty())
+                        .map(UsageDetails::Object),
+                    cost_details: f.cost_details.filter(|c| !c.is_empty()).map(Some),
+                    prompt_name: some(f.prompt_name),
+                    prompt_version: f.prompt_version.map(Some),
+                },
+                ingestion_event_create_generation_event::Type::GenerationCreate,
+            ))
+        }
+        ObservationType::Event => {
+            IngestionEvent::CreateEventEvent(IngestionEventCreateEventEvent::new(
+                envelope_id,
+                timestamp,
+                CreateEventBody {
+                    id: Some(Some(f.id)),
+                    trace_id: Some(Some(f.trace_id)),
+                    name: some(f.name),
+                    start_time: start,
+                    metadata: f.metadata.map(Some),
+                    input: f.input.map(Some),
+                    output: f.output.map(Some),
+                    level: f.level,
+                    status_message: some(f.status_message),
+                    parent_observation_id: some(f.parent_observation_id),
+                    version: some(f.version),
+                    environment: some(f.environment),
+                },
+                ingestion_event_create_event_event::Type::EventCreate,
+            ))
+        }
+        kind => {
+            let usage = f.usage_details.as_ref().map(|u| {
+                let count = |key: &str| u.get(key).copied().unwrap_or_default();
+                let cost = |key: &str| f.cost_details.as_ref().and_then(|c| c.get(key).copied());
+                Usage {
+                    input: count("input"),
+                    output: count("output"),
+                    total: u
+                        .get("total")
+                        .copied()
+                        .unwrap_or_else(|| count("input") + count("output")),
+                    unit: None,
+                    input_cost: cost("input").map(Some),
+                    output_cost: cost("output").map(Some),
+                    total_cost: cost("total").map(Some),
+                }
+            });
+            IngestionEvent::CreateObservationEvent(IngestionEventCreateObservationEvent::new(
+                envelope_id,
+                timestamp,
+                ObservationBody {
+                    id: Some(Some(f.id)),
+                    trace_id: Some(Some(f.trace_id)),
+                    r#type: kind,
+                    name: some(f.name),
+                    start_time: start,
+                    end_time: end,
+                    completion_start_time: completion_start,
+                    model: some(f.model),
+                    model_parameters,
+                    input: f.input.map(Some),
+                    version: some(f.version),
+                    metadata: f.metadata.map(Some),
+                    output: f.output.map(Some),
+                    usage,
+                    level: f.level,
+                    status_message: some(f.status_message),
+                    parent_observation_id: some(f.parent_observation_id),
+                    environment: some(f.environment),
+                },
+                ingestion_event_create_observation_event::Type::ObservationCreate,
+            ))
+        }
+    }
+}
+
+/// Builder of [`LangfuseClient::observation`] with the type already set, returned by
+/// [`LangfuseClient::agent`], [`LangfuseClient::tool`] and the other typed shortcuts.
+pub type LangfuseClientTypedObservationBuilder<'a> =
+    LangfuseClientObservationBuilder<'a, langfuse_client_observation_builder::SetAsType>;
+
+macro_rules! typed_observation {
+    ($($(#[$doc:meta])* $method:ident => $kind:ident,)*) => {
+        impl LangfuseClient {
+            $(
+                $(#[$doc])*
+                ///
+                /// A shortcut for [`LangfuseClient::observation`] with `as_type` set; see there
+                /// for the fields and how the type is sent with each API version.
+                pub fn $method(&self) -> LangfuseClientTypedObservationBuilder<'_> {
+                    self.observation().as_type(ObservationType::$kind)
+                }
+            )*
+        }
+    };
+}
+
+typed_observation! {
+    /// Create an agent observation (an LLM-driven agent deciding on steps and tool calls).
+    agent => Agent,
+    /// Create a tool observation (a function or API call made by an agent or a chain).
+    tool => Tool,
+    /// Create a chain observation (a fixed sequence of steps).
+    chain => Chain,
+    /// Create a retriever observation (a lookup in a vector store, search index or database).
+    retriever => Retriever,
+    /// Create an evaluator observation (an LLM-as-a-judge or other check of an output).
+    evaluator => Evaluator,
+    /// Create an embedding observation (a call to an embedding model).
+    embedding => Embedding,
+    /// Create a guardrail observation (a check that blocks or rewrites unsafe content).
+    guardrail => Guardrail,
+}
+
 #[bon]
 impl LangfuseClient {
     // ===== OBSERVATIONS (SPANS, GENERATIONS, EVENTS) =====
+
+    /// Create an observation of any type ([`ObservationType`]): span, generation, event, agent,
+    /// tool, chain, retriever, evaluator, embedding or guardrail.
+    ///
+    /// The typed shortcuts [`LangfuseClient::agent`], [`LangfuseClient::tool`], ... set the
+    /// type for you. Spans, generations and events are sent like [`LangfuseClient::span`],
+    /// [`LangfuseClient::generation`] and [`LangfuseClient::event`]; the other types are sent as
+    /// `observation-create` events with their type (V3) or as spans with
+    /// `langfuse.observation.type` set to it (V4). The generation fields (`model`,
+    /// `usage_details`, `cost_details`, `completion_start_time`, `prompt_name`/`prompt_version`)
+    /// are sent in full on generations; other types keep `model`, `model_parameters`,
+    /// `completion_start_time` and the `input`/`output`/`total` usage and costs.
+    ///
+    /// Returns the observation id (the mapped OpenTelemetry span id with
+    /// [`crate::ApiVersion::V4`]).
+    ///
+    /// ```no_run
+    /// # use langfuse_ergonomic::ClientBuilder;
+    /// # use serde_json::json;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ClientBuilder::from_env()?.build()?;
+    /// let tool_id = client
+    ///     .tool()
+    ///     .trace_id("trace-1")
+    ///     .name("weather-lookup")
+    ///     .input(json!({"city": "Ghent"}))
+    ///     .output(json!({"celsius": 12}))
+    ///     .call()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[builder]
+    pub async fn observation(
+        &self,
+        /// The observation type.
+        as_type: ObservationType,
+        #[builder(into)] trace_id: String,
+        /// Trace user id. V4 stamps it on every span of the trace; V3 upserts the trace.
+        #[builder(into)]
+        user_id: Option<String>,
+        /// Trace session id. V4 stamps it on every span of the trace; V3 upserts the trace.
+        #[builder(into)]
+        session_id: Option<String>,
+        /// Trace tags. V4 stamps them on every span of the trace; V3 upserts the trace.
+        tags: Option<Vec<String>>,
+        #[builder(into)] id: Option<String>,
+        #[builder(into)] parent_observation_id: Option<String>,
+        #[builder(into)] name: Option<String>,
+        input: Option<Value>,
+        output: Option<Value>,
+        metadata: Option<Value>,
+        #[builder(into)] level: Option<String>,
+        #[builder(into)] status_message: Option<String>,
+        start_time: Option<DateTime<Utc>>,
+        end_time: Option<DateTime<Utc>>,
+        #[builder(into)] version: Option<String>,
+        #[builder(into)] model: Option<String>,
+        /// A JSON object of model parameters.
+        model_parameters: Option<Value>,
+        /// When the first token arrived (time to first token).
+        completion_start_time: Option<DateTime<Utc>>,
+        /// Token counts by usage type (`input`, `output`, `total`, `cache_read_input_tokens`, ...).
+        usage_details: Option<std::collections::HashMap<String, i64>>,
+        /// Costs in USD by usage type (`input`, `output`, `total`, ...).
+        cost_details: Option<std::collections::HashMap<String, f64>>,
+        /// The Langfuse prompt this generation used (see [`crate::prompts::FetchedPrompt`]).
+        #[builder(into)]
+        prompt_name: Option<String>,
+        /// The version of `prompt_name`.
+        prompt_version: Option<i64>,
+    ) -> Result<String> {
+        let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
+        let mut fields = ObservationFields::new(as_type, observation_id.clone(), trace_id.clone());
+        if let Some(start_time) = start_time {
+            fields.start_time = start_time;
+        }
+        fields.parent_observation_id = parent_observation_id;
+        fields.name = name;
+        fields.end_time = end_time;
+        fields.completion_start_time = completion_start_time;
+        fields.input = input;
+        fields.output = output;
+        fields.metadata = metadata;
+        fields.level = level.map(|l| parse_observation_level(&l));
+        fields.status_message = status_message;
+        fields.version = version;
+        fields.model = model;
+        fields.model_parameters = model_parameters;
+        fields.usage_details = usage_details;
+        fields.cost_details = cost_details;
+        fields.prompt_name = prompt_name;
+        fields.prompt_version = prompt_version;
+
+        let mut events = self.trace_attribute_events(&trace_id, user_id, session_id, tags);
+        events.push(observation_event(fields));
+        self.ingest_events(events)
+            .await
+            .map(|_| self.effective_observation_id(&observation_id))
+            .map_err(|e| Error::Api(format!("Failed to create {as_type} observation: {e}")))
+    }
 
     /// Create a span observation
     ///
@@ -132,11 +478,14 @@ impl LangfuseClient {
 
     /// Create a generation observation
     ///
-    /// Token counts are sent as `usageDetails`: `prompt_tokens` as `input`,
-    /// `completion_tokens` as `output`, and `total_tokens` as `total`.
+    /// Token counts are sent as `usageDetails`: the `usage_details` map, with `prompt_tokens`
+    /// as `input`, `completion_tokens` as `output`, and `total_tokens` as `total` on top.
     /// Only supplied counts are sent, including zeros. An explicit total is
     /// preserved; when omitted, Langfuse derives it from the supplied usage.
-    /// If no counts are supplied, `usageDetails` is omitted.
+    /// If no counts are supplied, `usageDetails` is omitted. `cost_details` are sent as
+    /// `costDetails` (Langfuse infers costs from the model otherwise), `completion_start_time`
+    /// records the time to first token, and `prompt_name`/`prompt_version` link the generation
+    /// to a Langfuse prompt.
     ///
     /// With [`crate::ApiVersion::V4`] the returned id is the mapped OpenTelemetry span id (see
     /// [`crate::otel`]); passing your own id again resolves to the same observation. A
@@ -174,6 +523,20 @@ impl LangfuseClient {
         prompt_tokens: Option<i32>,
         completion_tokens: Option<i32>,
         total_tokens: Option<i32>,
+        /// Token counts by usage type (`input`, `output`, `total`, `cache_read_input_tokens`,
+        /// ...), sent as `usageDetails`. `prompt_tokens`, `completion_tokens` and
+        /// `total_tokens`, when given, set `input`, `output` and `total` on top of it.
+        usage_details: Option<std::collections::HashMap<String, i64>>,
+        /// Costs in USD by usage type (`input`, `output`, `total`, ...), sent as `costDetails`.
+        cost_details: Option<std::collections::HashMap<String, f64>>,
+        /// When the first token arrived (time to first token).
+        completion_start_time: Option<DateTime<Utc>>,
+        /// The Langfuse prompt this generation used (see [`crate::prompts::FetchedPrompt`]).
+        #[builder(into)]
+        prompt_name: Option<String>,
+        /// The version of `prompt_name`.
+        prompt_version: Option<i64>,
+        #[builder(into)] version: Option<String>,
     ) -> Result<String> {
         use langfuse_client_base::models::{
             ingestion_event_create_generation_event::Type as GenerationEventType,
@@ -188,14 +551,16 @@ impl LangfuseClient {
         let level = level.map(|l| parse_observation_level(&l));
         let end_time = end_time.map(|t| t.fixed_offset());
 
-        let usage_details: std::collections::HashMap<String, i64> = [
-            ("input", prompt_tokens),
-            ("output", completion_tokens),
-            ("total", total_tokens),
-        ]
-        .into_iter()
-        .filter_map(|(key, count)| count.map(|count| (key.to_owned(), i64::from(count))))
-        .collect();
+        let mut usage_details = usage_details.unwrap_or_default();
+        usage_details.extend(
+            [
+                ("input", prompt_tokens),
+                ("output", completion_tokens),
+                ("total", total_tokens),
+            ]
+            .into_iter()
+            .filter_map(|(key, count)| count.map(|count| (key.to_owned(), i64::from(count)))),
+        );
         let usage_details =
             (!usage_details.is_empty()).then_some(UsageDetails::Object(usage_details));
 
@@ -216,6 +581,11 @@ impl LangfuseClient {
             .maybe_level(level)
             .maybe_status_message(status_message.map(Some))
             .maybe_parent_observation_id(parent_observation_id.map(Some))
+            .maybe_completion_start_time(completion_start_time.map(|t| Some(t.fixed_offset())))
+            .maybe_cost_details(cost_details.filter(|c| !c.is_empty()).map(Some))
+            .maybe_prompt_name(prompt_name.map(Some))
+            .maybe_prompt_version(prompt_version.map(Some))
+            .maybe_version(version.map(Some))
             .build();
 
         let event = IngestionEventCreateGenerationEvent::builder()
@@ -487,15 +857,24 @@ impl LangfuseClient {
         status_message: Option<String>,
         version: Option<String>,
         #[builder(into)] parent_observation_id: Option<String>,
+        /// A JSON object of model parameters.
+        model_parameters: Option<Value>,
+        /// Token counts by usage type, sent as `usageDetails`.
+        usage_details: Option<std::collections::HashMap<String, i64>>,
+        /// Costs in USD by usage type, sent as `costDetails`.
+        cost_details: Option<std::collections::HashMap<String, f64>>,
+        /// The Langfuse prompt this generation used.
+        #[builder(into)]
+        prompt_name: Option<String>,
+        /// The version of `prompt_name`.
+        prompt_version: Option<i64>,
     ) -> Result<String> {
         use chrono::Utc as ChronoUtc;
         use langfuse_client_base::models::{
-            IngestionEvent, IngestionEventUpdateGenerationEvent, UpdateGenerationBody,
+            IngestionEvent, IngestionEventUpdateGenerationEvent, UpdateGenerationBody, UsageDetails,
         };
         use uuid::Uuid;
 
-        // Note: In v0.2, model_parameters and usage have different types
-        // We'll leave them out for now as they require special handling
         let event_body = UpdateGenerationBody {
             id: id.clone(),
             trace_id: Some(Some(trace_id)),
@@ -504,20 +883,22 @@ impl LangfuseClient {
             end_time: Some(end_time.map(|dt| dt.fixed_offset())),
             completion_start_time: Some(completion_start_time.map(|dt| dt.fixed_offset())),
             model: Some(model),
-            model_parameters: None, // Requires HashMap<String, MapValue>
+            model_parameters: Some(model_parameters.as_ref().and_then(model_parameters_map)),
             input: Some(input),
             output: Some(output),
-            usage: None, // Requires Box<IngestionUsage>
+            usage: None,
             metadata: Some(metadata),
             level: level.map(|l| parse_observation_level(&l)),
             status_message: Some(status_message),
             version: Some(version),
             parent_observation_id: Some(parent_observation_id),
             environment: None,
-            cost_details: None,
-            prompt_name: None,
-            prompt_version: None,
-            usage_details: None,
+            cost_details: Some(cost_details.filter(|c| !c.is_empty())),
+            prompt_name: Some(prompt_name),
+            prompt_version: Some(prompt_version),
+            usage_details: usage_details
+                .filter(|u| !u.is_empty())
+                .map(UsageDetails::Object),
         };
 
         let event = IngestionEventUpdateGenerationEvent {
