@@ -43,6 +43,7 @@ impl Recorder {
                     true
                 })
                 .with_status(status)
+                .with_header("content-type", "application/json")
                 .with_body(response)
                 .expect_at_least(0)
                 .create_async()

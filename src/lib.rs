@@ -213,7 +213,15 @@ pub use batcher::{
 };
 pub use client::{ClientBuilder, LangfuseClient};
 pub use error::{Error, EventError, IngestionResponse, Result};
-pub use observations::{ObservationsPage, ALL_OBSERVATION_FIELDS, MAX_OBSERVATIONS_PAGE_SIZE};
+pub use experiments::{evaluator_fn, Evaluation, Evaluator, EvaluatorContext, ExperimentResult};
+pub use mask::Mask;
+pub use media::{MediaField, MediaReference};
+pub use observations::{
+    ObservationType, ObservationsPage, ALL_OBSERVATION_FIELDS, MAX_OBSERVATIONS_PAGE_SIZE,
+};
+pub use observe::Observation;
+pub use prompts::{CompiledPrompt, FetchedPrompt, PromptFallback, PromptSource};
+pub use scores::ScoreValue;
 pub use traces::{IdGenerator, TraceResponse};
 
 /// Trace a function as a Langfuse observation: see [`mod@observe`] (feature `macros`).
