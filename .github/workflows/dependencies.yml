@@ -7,26 +7,43 @@ on:
     branches: [main]
 
 jobs:
+  # Decides whether heavy jobs run (genai-rs/.github local-ci-gate.yml).
+  gate:
+    uses: genai-rs/.github/.github/workflows/local-ci-gate.yml@ci/local-ci-gate
+
   udeps:
     name: Check Unused Dependencies
+    needs: gate
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
+    env:
+      RUN: ${{ needs.gate.outputs.heavy != 'false' }}
     steps:
+      - name: Skip (${{ needs.gate.outputs.mode }})
+        if: env.RUN != 'true'
+        env:
+          REASON: ${{ needs.gate.outputs.reason }}
+        run: echo "Skipped - $REASON"
       - name: Checkout repository
+        if: env.RUN == 'true'
         uses: actions/checkout@v7
-        
+
       - name: Install Rust nightly
+        if: env.RUN == 'true'
         uses: dtolnay/rust-toolchain@nightly
-        
+
       - name: Cache cargo-udeps
+        if: env.RUN == 'true'
         uses: actions/cache@v6
         id: cache-udeps
         with:
           path: ~/.cargo/bin/cargo-udeps
           key: cargo-udeps-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-          
+
       - name: Install cargo-udeps
-        if: steps.cache-udeps.outputs.cache-hit != 'true'
+        if: env.RUN == 'true' && (steps.cache-udeps.outputs.cache-hit != 'true')
         run: cargo install cargo-udeps --locked
-        
+
       - name: Run cargo-udeps
+        if: env.RUN == 'true'
         run: cargo +nightly udeps --all-targets --all-features

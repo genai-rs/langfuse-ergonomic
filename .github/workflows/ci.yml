@@ -6,8 +6,12 @@ on:
   pull_request:
 
 jobs:
+  # Decides whether heavy jobs run (genai-rs/.github local-ci-gate.yml).
+  gate:
+    uses: genai-rs/.github/.github/workflows/local-ci-gate.yml@ci/local-ci-gate
+
   ci:
-    uses: genai-rs/.github/.github/workflows/rust-ci.yml@main
+    uses: genai-rs/.github/.github/workflows/rust-ci.yml@ci/local-ci-gate
     with:
       msrv: "1.88"
     secrets: inherit
@@ -15,44 +19,67 @@ jobs:
   # Feature combinations test
   features:
     name: Feature Combinations
+    needs: gate
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
+    env:
+      RUN: ${{ needs.gate.outputs.heavy != 'false' }}
     timeout-minutes: 20
     steps:
+      - name: Skip (${{ needs.gate.outputs.mode }})
+        if: env.RUN != 'true'
+        env:
+          REASON: ${{ needs.gate.outputs.reason }}
+        run: echo "Skipped - $REASON"
       - name: Checkout repository
+        if: env.RUN == 'true'
         uses: actions/checkout@v7
 
       - name: Install Rust
+        if: env.RUN == 'true'
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache dependencies
+        if: env.RUN == 'true'
         uses: Swatinem/rust-cache@v2
 
       - name: Test with no features
+        if: env.RUN == 'true'
         run: cargo test --no-default-features
 
       - name: Test with default features (rustls)
+        if: env.RUN == 'true'
         run: cargo test
 
       - name: Test with rustls explicitly
+        if: env.RUN == 'true'
         run: cargo test --no-default-features --features rustls
 
       - name: Test with native-tls
+        if: env.RUN == 'true'
         run: cargo test --no-default-features --features native-tls
 
       - name: Test with compression + rustls
+        if: env.RUN == 'true'
         run: cargo test --features compression
 
       - name: Test with compression + native-tls
+        if: env.RUN == 'true'
         run: cargo test --no-default-features --features "compression,native-tls"
 
       - name: Test with all features
+        if: env.RUN == 'true'
         run: cargo test --all-features
 
   # Live tests against a self-hosted Langfuse v4 (docker/langfuse/compose.yml) that serves
   # both the v4 and the legacy v3 endpoints, once per ApiVersion.
   live:
     name: Live tests (Langfuse API ${{ matrix.api-version }})
+    needs: gate
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
+    env:
+      RUN: ${{ needs.gate.outputs.mode != 'release' }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -61,32 +88,44 @@ jobs:
       matrix:
         api-version: [v3, v4]
     steps:
+      - name: Skip (${{ needs.gate.outputs.mode }})
+        if: env.RUN != 'true'
+        env:
+          REASON: ${{ needs.gate.outputs.reason }}
+        run: echo "Skipped - $REASON"
       - name: Checkout repository
+        if: env.RUN == 'true'
         uses: actions/checkout@v7
 
       - name: Start Langfuse
+        if: env.RUN == 'true'
         # Starts in the background while the tests compile; `live-tests.sh up` waits for it.
         run: docker compose -f docker/langfuse/compose.yml up -d --quiet-pull
 
       - name: Install Rust
+        if: env.RUN == 'true'
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache dependencies
+        if: env.RUN == 'true'
         uses: Swatinem/rust-cache@v2
 
       - name: Build live tests
+        if: env.RUN == 'true'
         run: cargo test --no-run --test integration_test --test generation_usage_e2e
 
       - name: Wait for Langfuse
+        if: env.RUN == 'true'
         run: scripts/live-tests.sh up
 
       - name: Run live tests
+        if: env.RUN == 'true'
         run: scripts/live-tests.sh test ${{ matrix.api-version }}
 
       - name: Langfuse logs
-        if: failure()
+        if: env.RUN == 'true' && (failure())
         run: docker compose -f docker/langfuse/compose.yml logs --tail 200 langfuse-web langfuse-worker
 
       - name: Stop Langfuse
-        if: always()
+        if: env.RUN == 'true' && (always())
         run: scripts/live-tests.sh down
