@@ -47,7 +47,8 @@ What differs, behind `#[cfg(target_family = "wasm")]`:
 
 `tests/wasm.rs` runs the batcher (interval and size flushes, retries with backoff, shutdown),
 `validate()`'s timeout and the observation context (nesting across `.await` and
-`spawn_local`, cancellation, and `#[observe]` with the `macros` feature) in Node.js against a scripted HTTP service, with
+`spawn_local`, cancellation, and `#[observe]` with the `macros` feature), an experiment with a
+non-`Send` task, the prompt cache with its fallbacks and a media upload in Node.js against a scripted HTTP service, with
 [`wasm-bindgen-test-runner`](https://rustwasm.github.io/wasm-bindgen/wasm-bindgen-test/index.html)
 (install `wasm-bindgen-cli` of the `wasm-bindgen` version in `Cargo.lock`):
 
