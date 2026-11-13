@@ -883,7 +883,10 @@ impl LangfuseClient {
             end_time: Some(end_time.map(|dt| dt.fixed_offset())),
             completion_start_time: Some(completion_start_time.map(|dt| dt.fixed_offset())),
             model: Some(model),
-            model_parameters: Some(model_parameters.as_ref().and_then(model_parameters_map)),
+            model_parameters: model_parameters
+                .as_ref()
+                .and_then(model_parameters_map)
+                .map(Some),
             input: Some(input),
             output: Some(output),
             usage: None,
@@ -893,9 +896,9 @@ impl LangfuseClient {
             version: Some(version),
             parent_observation_id: Some(parent_observation_id),
             environment: None,
-            cost_details: Some(cost_details.filter(|c| !c.is_empty())),
-            prompt_name: Some(prompt_name),
-            prompt_version: Some(prompt_version),
+            cost_details: cost_details.filter(|c| !c.is_empty()).map(Some),
+            prompt_name: prompt_name.map(Some),
+            prompt_version: prompt_version.map(Some),
             usage_details: usage_details
                 .filter(|u| !u.is_empty())
                 .map(UsageDetails::Object),
