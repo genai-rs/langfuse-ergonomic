@@ -1,0 +1,5 @@
+error: unknown level; expected DEBUG, DEFAULT, WARNING or ERROR
+ --> tests/ui/bad_level.rs:3:19
+  |
+3 | #[observe(level = "LOUD")]
+  |                   ^^^^^^

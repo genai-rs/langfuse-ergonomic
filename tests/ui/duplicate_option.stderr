@@ -1,0 +1,5 @@
+error: duplicate `name` option
+ --> tests/ui/duplicate_option.rs:3:23
+  |
+3 | #[observe(name = "a", name = "b")]
+  |                       ^^^^
