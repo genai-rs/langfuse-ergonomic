@@ -1053,7 +1053,9 @@ dependencies = [
 
 [[package]]
 name = "langfuse-client-base"
-version = "0.20.1"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14e2e85f6421d2d3eabdd1a51802df955bb004cd8f585e56f143ad885274b682"
 dependencies = [
  "bon",
  "chrono",
