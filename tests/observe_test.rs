@@ -1,5 +1,5 @@
 //! `#[observe]` and the observation context, against a mock Langfuse (v3 and v4).
-#![cfg(not(target_family = "wasm"))]
+#![cfg(all(feature = "macros", not(target_family = "wasm")))]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod recorder;

@@ -18,8 +18,10 @@ jobs:
       wasm-clippy-args: |
         --no-default-features --lib --test wasm
         --no-default-features --features retry,tracing-http --lib --test wasm
+        --no-default-features --features macros,otel-context --lib --test wasm
       wasm-test-args: |
         --no-default-features --test wasm
+        --no-default-features --features macros --test wasm
     secrets: inherit
 
   # Feature combinations test
@@ -76,6 +78,10 @@ jobs:
       - name: Test with all features
         if: env.RUN == 'true'
         run: cargo test --all-features
+
+      - name: Test the workspace (macros crate, observe, otel-context)
+        if: env.RUN == 'true'
+        run: cargo test --workspace --all-features
 
   # Live tests against a self-hosted Langfuse v4 (docker/langfuse/compose.yml) that serves
   # both the v4 and the legacy v3 endpoints, once per ApiVersion.

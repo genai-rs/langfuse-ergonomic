@@ -1,7 +1,11 @@
 //! Feature `otel-context`: OpenTelemetry spans nest under observations (as openai-ergonomic's
 //! `LangfuseInterceptor` spans do: it starts them from `Context::current()`), and root
 //! observations join the active OpenTelemetry span.
-#![cfg(all(feature = "otel-context", not(target_family = "wasm")))]
+#![cfg(all(
+    feature = "otel-context",
+    feature = "macros",
+    not(target_family = "wasm")
+))]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod recorder;
