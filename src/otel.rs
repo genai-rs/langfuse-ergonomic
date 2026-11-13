@@ -1382,7 +1382,7 @@ pub(crate) fn export_request(spans: Vec<Value>) -> Value {
 }
 
 /// Log OTLP partial success (rejected spans), which carries no per-span detail.
-pub(crate) async fn log_partial_success(response: reqwest::Response) {
+pub(crate) async fn log_partial_success(response: timvw_rust_runtime::Response) {
     let Ok(body) = response.text().await else {
         return;
     };
@@ -1413,22 +1413,25 @@ pub(crate) async fn log_partial_success(response: reqwest::Response) {
 
 impl LangfuseClient {
     /// POST spans to the OTLP endpoint and return the raw response.
-    pub(crate) async fn post_otlp(&self, spans: Vec<Value>) -> Result<reqwest::Response> {
+    pub(crate) async fn post_otlp(
+        &self,
+        spans: Vec<Value>,
+    ) -> Result<timvw_rust_runtime::Response> {
         let body = serde_json::to_vec(&export_request(spans))?;
         let mut request = self
             .configuration
             .client
-            .post(format!(
-                "{}{OTLP_TRACES_PATH}",
-                self.configuration.base_path
-            ))
+            .request(
+                timvw_rust_runtime::Method::POST,
+                &format!("{}{OTLP_TRACES_PATH}", self.configuration.base_path),
+            )
             .basic_auth(&self.public_key, Some(&self.secret_key))
-            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .header(timvw_rust_runtime::header::CONTENT_TYPE, "application/json")
             .header(INGESTION_VERSION_HEADER, "4");
         if let Some(user_agent) = &self.configuration.user_agent {
-            request = request.header(reqwest::header::USER_AGENT, user_agent);
+            request = request.header(timvw_rust_runtime::header::USER_AGENT, user_agent);
         }
-        request.body(body).send().await.map_err(Error::Middleware)
+        Ok(request.body(body).send().await?)
     }
 
     /// Export spans, mapping a non-success status to an [`Error`].

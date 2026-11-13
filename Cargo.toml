@@ -1,6 +1,6 @@
 [package]
 name = "langfuse-ergonomic"
-version = "0.12.0"
+version = "0.13.0"
 edition = "2021"
 authors = ["Tim Van Wassenhove <github@timvw.be>"]
 license = "MIT OR Apache-2.0"
@@ -38,12 +38,13 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-langfuse-client-base = "0.20"
+langfuse-client-base = { path = "../langfuse-client-base", default-features = false }
+# The HTTP stack of langfuse-client-base: a tower service, reqwest by default.
+timvw-rust-runtime = { version = "^0.1.0", default-features = false, features = ["reqwest"] }
 bon = "^3.10.3"
 serde = { version = "^1.0.229", features = ["derive"] }
 serde_json = "^1.0.154"
 reqwest = { version = "^0.13.5", features = ["json"], default-features = false }
-reqwest-middleware = "^0.5.2"
 thiserror = "^2.0.21"
 chrono = { version = "^0.4.45", features = ["serde"] }
 uuid = { version = ">=1.23.5, <1.27.0", features = ["v4", "v5", "serde"] }
@@ -56,7 +57,7 @@ tracing-subscriber = { version = "^0.3.23", features = ["env-filter"] }
 dotenvy = "^0.15.7"
 mockito = "^1.7.2"
 anyhow = "^1.0.104"  # Used in examples
-reqwest-retry = "^0.9.1"  # Used in middleware examples
+tower = { version = "^0.5.2", features = ["retry", "timeout"] }  # Used in middleware examples
 
 [[example]]
 name = "test_trace"
@@ -117,6 +118,7 @@ path = "examples/advanced_features.rs"
 [[example]]
 name = "http_middleware_retry"
 path = "examples/http_middleware_retry.rs"
+required-features = ["retry"]
 
 [[example]]
 name = "comprehensive_batch_test"
@@ -125,6 +127,10 @@ path = "examples/comprehensive_batch_test.rs"
 
 [features]
 default = ["rustls"]
-rustls = ["langfuse-client-base/rustls", "reqwest/rustls"]
-native-tls = ["langfuse-client-base/native-tls", "reqwest/native-tls"]
+rustls = ["langfuse-client-base/rustls", "timvw-rust-runtime/rustls", "reqwest/rustls"]
+native-tls = ["langfuse-client-base/native-tls", "timvw-rust-runtime/native-tls", "reqwest/native-tls"]
+# timvw_rust_runtime::retry::RetryPolicy, for clients built with `http_client`.
+retry = ["timvw-rust-runtime/retry", "langfuse-client-base/retry"]
+# timvw_rust_runtime::trace::TraceLayer: logs each request with `tracing`.
+tracing-http = ["timvw-rust-runtime/tracing", "langfuse-client-base/tracing"]
 compression = ["reqwest/gzip", "reqwest/brotli", "reqwest/deflate"]

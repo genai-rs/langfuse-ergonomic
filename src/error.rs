@@ -26,13 +26,10 @@ pub enum Error {
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 
-    /// Network-level failure while sending a request
+    /// Failure while sending a request or reading its response (connection, timeout, body),
+    /// from the HTTP stack (`timvw_rust_runtime`, reqwest by default, and its tower layers)
     #[error("Network error: {0}")]
-    Network(#[from] reqwest::Error),
-
-    /// Failure in the HTTP middleware stack
-    #[error("Middleware error: {0}")]
-    Middleware(#[from] reqwest_middleware::Error),
+    Network(#[from] timvw_rust_runtime::Error),
 
     /// Authentication failure
     #[error("Authentication failed: {message}")]
@@ -137,7 +134,6 @@ impl Error {
     pub fn is_retryable(&self) -> bool {
         match self {
             Error::Network(_) => true,
-            Error::Middleware(_) => true,
             Error::RateLimit { .. } => true,
             Error::Server { .. } => true,
             Error::PartialFailure { .. } => true,
@@ -214,9 +210,9 @@ impl IngestionResponse {
 }
 
 /// Parse a `Retry-After` header, given either as seconds or as an HTTP-date.
-pub(crate) fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
+pub(crate) fn parse_retry_after(headers: &timvw_rust_runtime::HeaderMap) -> Option<Duration> {
     headers
-        .get(reqwest::header::RETRY_AFTER)
+        .get(timvw_rust_runtime::header::RETRY_AFTER)
         .and_then(|v| v.to_str().ok())
         .and_then(|s| {
             // Try parsing as seconds (integer)
@@ -237,7 +233,7 @@ pub(crate) fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<
 }
 
 /// Read the `x-request-id` header, if present.
-pub(crate) fn parse_request_id(headers: &reqwest::header::HeaderMap) -> Option<String> {
+pub(crate) fn parse_request_id(headers: &timvw_rust_runtime::HeaderMap) -> Option<String> {
     headers
         .get("x-request-id")
         .and_then(|v| v.to_str().ok())
@@ -245,7 +241,7 @@ pub(crate) fn parse_request_id(headers: &reqwest::header::HeaderMap) -> Option<S
 }
 
 /// Map a non-success HTTP response to an [`Error`], keeping `Retry-After` and `x-request-id`.
-pub(crate) async fn error_from_response(response: reqwest::Response) -> Error {
+pub(crate) async fn error_from_response(response: timvw_rust_runtime::Response) -> Error {
     let status = response.status().as_u16();
     let request_id = parse_request_id(response.headers());
     let retry_after = parse_retry_after(response.headers());
@@ -282,8 +278,7 @@ pub fn map_api_error<T>(err: langfuse_client_base::apis::Error<T>) -> Error {
     use langfuse_client_base::apis::Error as ApiError;
 
     match err {
-        ApiError::Reqwest(e) => Error::Network(e),
-        ApiError::ReqwestMiddleware(e) => Error::Middleware(e),
+        ApiError::Http(e) => Error::Network(e),
         ApiError::Serde(e) => Error::Serialization(e),
         ApiError::Io(e) => Error::Api(format!("IO error: {e}")),
         ApiError::ResponseError(response) => {
@@ -395,13 +390,16 @@ mod tests {
         status: u16,
         headers: &[(&'static str, &'static str)],
     ) -> langfuse_client_base::apis::Error<()> {
-        let mut header_map = reqwest::header::HeaderMap::new();
+        let mut header_map = timvw_rust_runtime::header::HeaderMap::new();
         for (name, value) in headers {
-            header_map.insert(*name, reqwest::header::HeaderValue::from_static(value));
+            header_map.insert(
+                *name,
+                timvw_rust_runtime::header::HeaderValue::from_static(value),
+            );
         }
         langfuse_client_base::apis::Error::ResponseError(Box::new(
             langfuse_client_base::apis::ResponseContent {
-                status: reqwest::StatusCode::from_u16(status).unwrap(),
+                status: timvw_rust_runtime::StatusCode::from_u16(status).unwrap(),
                 content: "body".to_string(),
                 entity: None,
                 headers: header_map,
@@ -430,11 +428,11 @@ mod tests {
 
     #[test]
     fn test_parse_retry_after_http_date() {
-        let mut headers = reqwest::header::HeaderMap::new();
+        let mut headers = timvw_rust_runtime::header::HeaderMap::new();
         let future = (chrono::Utc::now() + chrono::Duration::seconds(120)).to_rfc2822();
         headers.insert(
-            reqwest::header::RETRY_AFTER,
-            reqwest::header::HeaderValue::from_str(&future).unwrap(),
+            timvw_rust_runtime::header::RETRY_AFTER,
+            timvw_rust_runtime::header::HeaderValue::from_str(&future).unwrap(),
         );
         let delay = parse_retry_after(&headers).unwrap();
         assert!(
@@ -444,8 +442,8 @@ mod tests {
 
         let past = (chrono::Utc::now() - chrono::Duration::seconds(120)).to_rfc2822();
         headers.insert(
-            reqwest::header::RETRY_AFTER,
-            reqwest::header::HeaderValue::from_str(&past).unwrap(),
+            timvw_rust_runtime::header::RETRY_AFTER,
+            timvw_rust_runtime::header::HeaderValue::from_str(&past).unwrap(),
         );
         assert_eq!(parse_retry_after(&headers), None);
     }

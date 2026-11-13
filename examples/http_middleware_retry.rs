@@ -1,21 +1,22 @@
-//! HTTP middleware with retry support using reqwest-middleware.
+//! HTTP middleware with retry support using tower layers.
 //!
-//! This example demonstrates how to use `reqwest-middleware` with `reqwest-retry`
-//! to add automatic retry capabilities with exponential backoff to the Langfuse client.
+//! The HTTP client is a `timvw_rust_runtime::Client`: a tower service (reqwest by default)
+//! that takes tower layers. This example adds `tower::retry::RetryLayer` with the runtime's
+//! `RetryPolicy` (429, 408, 5xx and failed connections, exponential backoff, `Retry-After`)
+//! and a `TimeoutLayer`.
 //!
-//! The middleware approach allows you to:
-//! - Automatically retry transient errors (network failures, timeouts, 5xx errors)
-//! - Configure exponential backoff strategies
-//! - Add custom middleware for logging, metrics, or other cross-cutting concerns
-//! - Compose multiple middleware layers
+//! The layer approach allows you to:
+//! - Automatically retry transient errors (network failures, 429, 5xx)
+//! - Add timeouts, rate limits, logging (`TraceLayer`, feature `tracing-http`) or metrics
+//! - Compose multiple layers
 //!
-//! Run with: `cargo run --example http_middleware_retry`
+//! Run with: `cargo run --example http_middleware_retry --features retry`
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use langfuse_ergonomic::{ClientBuilder, Result};
-use reqwest_middleware::ClientBuilder as MiddlewareClientBuilder;
-use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde_json::json;
+use timvw_rust_runtime::{retry::RetryPolicy, Client, ReqwestService};
+use tower::{retry::RetryLayer, timeout::TimeoutLayer};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -24,14 +25,9 @@ async fn main() -> Result<()> {
     // Example 1: Basic client with retry middleware
     println!("1. Creating Langfuse client with retry middleware\n");
 
-    // Create a retry policy with exponential backoff
-    // This will retry transient errors up to 3 times with exponential delays
-    let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
-
-    // Build an HTTP client with retry middleware
-    let http_client = MiddlewareClientBuilder::new(reqwest::Client::new())
-        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-        .build();
+    // Retry transient errors up to 3 times with exponential delays
+    let http_client = Client::from_service(ReqwestService::new(reqwest::Client::new()))
+        .layer(RetryLayer::new(RetryPolicy::new(3)));
 
     // Create Langfuse client with custom HTTP client
     let client = ClientBuilder::from_env()?
@@ -61,23 +57,11 @@ async fn main() -> Result<()> {
     // Example 2: Custom retry policy with more retries and custom delays
     println!("\n2. Creating client with custom retry policy\n");
 
-    let custom_retry_policy = ExponentialBackoff::builder()
-        .retry_bounds(
-            std::time::Duration::from_millis(100), // minimum delay
-            std::time::Duration::from_secs(30),    // maximum delay
-        )
-        .build_with_max_retries(5); // up to 5 retries
-
-    let custom_http_client = MiddlewareClientBuilder::new(
-        reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(60))
-            .build()
-            .expect("Failed to build reqwest client"),
-    )
-    .with(RetryTransientMiddleware::new_with_policy(
-        custom_retry_policy,
-    ))
-    .build();
+    // Up to 5 retries, each attempt limited to 20 seconds (a layer added later sees the request
+    // first, so the timeout applies to each attempt).
+    let custom_http_client = Client::from_service(ReqwestService::new(reqwest::Client::new()))
+        .layer(TimeoutLayer::new(std::time::Duration::from_secs(20)))
+        .layer(RetryLayer::new(RetryPolicy::new(5)));
 
     let custom_client = ClientBuilder::from_env()?
         .http_client(custom_http_client)
@@ -92,8 +76,7 @@ async fn main() -> Result<()> {
         .metadata(json!({
             "retry_config": {
                 "max_retries": 5,
-                "min_delay_ms": 100,
-                "max_delay_sec": 30
+                "attempt_timeout_sec": 20
             }
         }))
         .call()
@@ -118,7 +101,7 @@ async fn main() -> Result<()> {
 
     println!("\n=== Example Complete ===");
     println!("\nKey takeaways:");
-    println!("- Middleware allows transparent retry logic");
+    println!("- Tower layers add transparent retry logic");
     println!("- Exponential backoff prevents overwhelming the server");
     println!("- Custom policies can be tailored to your needs");
     println!("- All API calls automatically benefit from retries");

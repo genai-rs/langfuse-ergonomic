@@ -192,7 +192,9 @@ pub async fn wait_for_score(client: &LangfuseClient, score_id: &str) -> serde_js
         configuration.base_path.trim_end_matches('/')
     );
     eventually(&format!("score {score_id}"), || async {
-        let mut request = configuration.client.get(&url);
+        let mut request = configuration
+            .client
+            .request(timvw_rust_runtime::Method::GET, &url);
         if let Some((user, password)) = &configuration.basic_auth {
             request = request.basic_auth(user, password.as_deref());
         }
