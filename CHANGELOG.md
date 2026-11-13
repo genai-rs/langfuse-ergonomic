@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.12.0...v0.13.0) - 2026-11-13
+
+### Added
+
+- [**breaking**] send through timvw-rust-runtime (tower) with langfuse-client-base 0.21
+
+### Other
+
+- depend on langfuse-client-base 0.21 from crates.io
+- give the live-test job read-only repository access
+- check scores, the own trace and the API version in the live tests
+- pin the live-test images by tag and digest
+- allowlist the live-test keys in a gitleaks config
+- keep the live-test keys out of the gitleaks curl rule
+- run the live tests against a self-hosted Langfuse v4
+- run the live tests for both Langfuse API versions
+
 ## [0.12.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.11.0...v0.12.0) - 2026-11-10
 
 ### Added
