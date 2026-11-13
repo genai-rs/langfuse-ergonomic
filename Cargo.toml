@@ -38,9 +38,11 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-langfuse-client-base = { path = "../langfuse-client-base", default-features = false }
+# Temporary: a local langfuse-client-base generated with timvw-rust 0.27 (runtime 0.3), until it is released.
+langfuse-client-base = { path = "/private/tmp/claude-501/-Users-tim-runner-setup-workspace--sessions-cse-01HMZBkbrVdWFeznYPW678Ks/ce8518b4-9a45-529e-b240-bdd8e11c02de/scratchpad/lcb-027", default-features = false }
 # The HTTP stack of langfuse-client-base: a tower service, reqwest by default.
-timvw-rust-runtime = { version = "^0.2.0", default-features = false, features = ["reqwest"] }
+# Temporary path: timvw-rust-runtime 0.3 is not released yet.
+timvw-rust-runtime = { version = "0.3.0", path = "../openapi-generator-timvw-rust/runtime", default-features = false, features = ["reqwest"] }
 bon = "^3.10.3"
 serde = { version = "^1.0.229", features = ["derive"] }
 serde_json = "^1.0.154"
@@ -48,16 +50,38 @@ reqwest = { version = "^0.13.5", features = ["json"], default-features = false }
 thiserror = "^2.0.21"
 chrono = { version = "^0.4.45", features = ["serde"] }
 uuid = { version = ">=1.23.5, <1.27.0", features = ["v4", "v5", "serde"] }
-tokio = { version = "^1.54.1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+# `sync` and `macros` (`select!`) work on any target; the runtime and the timers only natively (below).
+tokio = { version = "^1.54.1", features = ["macros", "sync"] }
 tracing = "^0.1.44"  # For library logging (replacing eprintln!)
 rand = "^0.10.3"
 
-[dev-dependencies]
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+# The batcher's background task (`tokio::spawn`) and its timers.
+tokio = { version = "^1.54.1", features = ["rt-multi-thread", "time"] }
+
+# WebAssembly in a JavaScript host (wasm32-unknown-unknown): the batcher's task runs with `spawn_local`, timers are the
+# host's `setTimeout` and clocks `performance.now()`/`Date.now()` (std's panic there). See "WebAssembly" in README.md.
+[target.'cfg(target_family = "wasm")'.dependencies]
+wasm-bindgen-futures = "0.4"
+gloo-timers = { version = "0.3", features = ["futures"] }
+web-time = "1"
+# Random v4 ids from `crypto.getRandomValues`.
+uuid = { version = ">=1.23.5, <1.27.0", features = ["js"] }
+# The retry jitter (`rand`'s thread RNG) seeded from `crypto.getRandomValues`.
+getrandom = { version = "0.4", features = ["wasm_js"] }
+
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 tracing-subscriber = { version = "^0.3.23", features = ["env-filter"] }
 dotenvy = "^0.15.7"
 mockito = "^1.7.2"
 anyhow = "^1.0.104"  # Used in examples
 tower = { version = "^0.5.2", features = ["retry", "timeout"] }  # Used in middleware examples
+
+# `tests/wasm.rs`, run in Node.js with wasm-bindgen-test-runner (see "WebAssembly" in README.md).
+[target.'cfg(target_family = "wasm")'.dev-dependencies]
+wasm-bindgen-test = "0.3"
+http = "1"
+tower = { version = "^0.5.2", default-features = false, features = ["util"] }
 
 [[example]]
 name = "test_trace"

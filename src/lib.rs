@@ -161,6 +161,17 @@
 //!
 //! - `compression` - Enable gzip, brotli, and deflate compression for requests
 //!
+//! ## WebAssembly
+//!
+//! The crate builds for `wasm32-unknown-unknown` in a JavaScript host (browsers, Node.js,
+//! Cloudflare Workers) with `default-features = false`: the TLS features add nothing there, as the
+//! host's `fetch` does TLS (and owns timeouts and compression). The batcher's background task runs
+//! with `wasm_bindgen_futures::spawn_local` and waits with the host's `setTimeout`; nothing needs to
+//! be `Send`. `ClientBuilder::from_env` is not available there: configure the builder explicitly.
+//! Hosts that stop a request's tasks once its response is sent (Cloudflare Workers) also stop the
+//! flush interval: call [`Batcher::flush`] before returning the response. See the README's
+//! "WebAssembly" section.
+//!
 //! ## Examples
 //!
 //! See the `examples/` directory for more usage patterns:
@@ -187,6 +198,7 @@ pub mod observations;
 pub mod otel;
 pub mod prompts;
 pub mod scores;
+mod time;
 pub mod traces;
 
 // Re-export commonly used types at the crate root for convenience

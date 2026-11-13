@@ -58,12 +58,12 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, Mutex};
-use tokio::time::interval;
 
 use crate::api_version::ApiVersion;
 use crate::client::LangfuseClient;
 use crate::error::{Error, EventError, IngestionResponse, Result};
 use crate::otel::V4Item;
+use crate::time::{Interval, TaskHandle};
 use langfuse_client_base::models::{IngestionBatchRequest, IngestionEvent};
 
 /// Maximum batch size in bytes (3.5 MB as per Langfuse docs)
@@ -236,7 +236,7 @@ pub struct Batcher {
     shutdown_overlap_result: Arc<Mutex<Option<IngestionResponse>>>,
     flush_mutex: Arc<Mutex<()>>,
     shutdown_flag: Arc<AtomicBool>,
-    task_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    task_handle: Arc<Mutex<Option<TaskHandle>>>,
 }
 
 fn merge_ingestion_response(
@@ -287,7 +287,16 @@ impl Batcher {
     }
 
     /// Create a new batcher with custom configuration
+    ///
+    /// Starts the background task that flushes every `flush_interval` and whenever a batch is full: natively a
+    /// tokio task (call this inside a tokio runtime); on WebAssembly a task of the JavaScript host
+    /// (`wasm_bindgen_futures::spawn_local`). A host that stops running tasks once a response is sent (Cloudflare
+    /// Workers and similar) stops the interval too: call [`Batcher::flush`] (or [`Batcher::shutdown`]) before
+    /// returning the response, or hand that future to the host's `waitUntil`.
     #[builder]
+    // On WebAssembly the client is not `Send`/`Sync` (the host's futures cannot leave its thread), and the `Arc`s
+    // are only shared with the task on the same thread.
+    #[cfg_attr(target_family = "wasm", allow(clippy::arc_with_non_send_sync))]
     pub async fn new(
         client: LangfuseClient,
         max_events: Option<usize>,
@@ -353,9 +362,8 @@ impl Batcher {
         let flush_mutex_clone = flush_mutex.clone();
         let shutdown_flag_clone = shutdown_flag.clone();
 
-        let handle = tokio::spawn(async move {
-            let mut flush_interval = interval(config.flush_interval);
-            flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let handle = crate::time::spawn(async move {
+            let mut flush_interval = Interval::new(config.flush_interval);
 
             // Consume the first immediate tick
             flush_interval.tick().await;
@@ -555,7 +563,7 @@ impl Batcher {
     /// This allows callers to track which events succeeded immediately vs required retry.
     pub async fn flush(&self) -> Result<IngestionResponse> {
         // Give background task time to add pending events to buffer
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        crate::time::sleep(Duration::from_millis(50)).await;
 
         // Flush the buffer
         Self::flush_buffer(
@@ -584,7 +592,7 @@ impl Batcher {
     pub async fn wait_for_pending(&self) {
         // Wait until queue is empty
         while self.metrics.queued.load(Ordering::Relaxed) > 0 {
-            tokio::time::sleep(Duration::from_millis(10)).await;
+            crate::time::sleep(Duration::from_millis(10)).await;
         }
     }
 
@@ -705,13 +713,9 @@ impl Batcher {
 
     /// Record the time of the most recent error in the metrics.
     fn record_error_timestamp(metrics: &BatcherMetrics) {
-        metrics.last_error_ts.store(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs(),
-            Ordering::Relaxed,
-        );
+        metrics
+            .last_error_ts
+            .store(crate::time::since_epoch().as_secs(), Ordering::Relaxed);
     }
 
     /// Queue the retryable failures of a 207 response for another attempt, counting the rest as
@@ -843,7 +847,7 @@ impl Batcher {
                     delay
                 };
 
-                tokio::time::sleep(actual_delay).await;
+                crate::time::sleep(actual_delay).await;
                 delay = std::cmp::min(delay * 2, config.max_retry_delay);
             }
 
@@ -1031,7 +1035,7 @@ impl Batcher {
                     Err(Error::RateLimit { retry_after, .. }) if attempt < config.max_retries => {
                         attempt += 1;
                         let wait = retry_after.map_or(delay, |r| r.max(delay));
-                        tokio::time::sleep(wait).await;
+                        crate::time::sleep(wait).await;
                         delay = std::cmp::min(delay * 2, config.max_retry_delay);
                     }
                     other => break other,
@@ -1220,7 +1224,7 @@ impl Batcher {
             let mut handle_guard = self.task_handle.lock().await;
             handle_guard.take()
         } {
-            handle.await.map_err(|error| {
+            handle.join().await.map_err(|error| {
                 Error::Api(format!("Batcher task failed during shutdown: {error}"))
             })?;
         }
