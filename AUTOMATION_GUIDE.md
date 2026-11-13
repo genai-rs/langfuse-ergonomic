@@ -133,10 +133,10 @@ cargo run --example advanced_features
    path = "examples/your_example.rs"
    ```
 3. Test the example
-4. Update README with the new example
+4. Mention the new example in the relevant page under docs/
 
 ### Updating Documentation
-- Keep README accurate - only document implemented features
+- Keep README and docs/ accurate - only document implemented features
 - Mark unimplemented features as "Planned"
 - Test all code examples in documentation
 

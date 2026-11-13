@@ -7,14 +7,19 @@
 //!
 //! ## Features
 //!
-//! - **Builder Pattern** - Intuitive API using the bon builder pattern library
-//! - **Async/Await** - Full async support with Tokio
-//! - **Type Safe** - Strongly typed with compile-time guarantees
-//! - **Easy Setup** - Simple configuration from environment variables
-//! - **Comprehensive** - Support for traces, observations, scores, and more
-//! - **Batch Processing** - Automatic batching with retry logic and chunking
-//! - **Production Ready** - Built-in timeouts, connection pooling, and error handling
-//! - **Self-Hosted Support** - Full support for self-hosted Langfuse instances
+//! - **`#[observe]`** - trace functions automatically, nested across `.await`, with errors,
+//!   panics and cancellation recorded: see [`mod@observe`]
+//! - **Builders** - traces and every observation type (spans, generations, events, agents,
+//!   tools, chains, retrievers, evaluators, embeddings, guardrails), scores, datasets, prompts
+//! - **Batching** - the [`Batcher`], with backpressure, exponential backoff and `Retry-After`
+//! - **Prompts** - a cache with stale-on-error and fallbacks, and compilation: [`prompts`]
+//! - **Experiments** - run a task over a dataset with evaluators: [`experiments`]
+//! - **Media** and **masking** - [`media`], [`mask`]
+//! - **Langfuse v3 and v4** - OpenTelemetry ingestion by default: [`ApiVersion`], [`otel`]
+//! - **WebAssembly** - `wasm32-unknown-unknown` in JavaScript hosts
+//!
+//! The guides live in the repository's
+//! [`docs/`](https://github.com/genai-rs/langfuse-ergonomic/tree/main/docs) directory.
 //!
 //! ## Quick Start
 //!
@@ -159,7 +164,13 @@
 //!
 //! ## Feature Flags
 //!
-//! - `compression` - Enable gzip, brotli, and deflate compression for requests
+//! - `rustls` (default) / `native-tls` - the TLS implementation
+//! - `macros` (default) - the [`observe`](macro@observe) attribute
+//! - `otel-context` - OpenTelemetry context propagation for observations (Langfuse v4): see
+//!   [`mod@observe`]
+//! - `compression` - gzip, brotli, and deflate compression for responses
+//! - `retry` - `timvw_rust_runtime::retry::RetryPolicy` for clients set with `http_client`
+//! - `tracing-http` - `timvw_rust_runtime::trace::TraceLayer`, which logs each request
 //!
 //! ## WebAssembly
 //!
@@ -169,15 +180,19 @@
 //! with `wasm_bindgen_futures::spawn_local` and waits with the host's `setTimeout`; nothing needs to
 //! be `Send`. `ClientBuilder::from_env` is not available there: configure the builder explicitly.
 //! Hosts that stop a request's tasks once its response is sent (Cloudflare Workers) also stop the
-//! flush interval: call [`Batcher::flush`] before returning the response. See the README's
-//! "WebAssembly" section.
+//! flush interval: call [`Batcher::flush`] before returning the response. The observation
+//! context needs no runtime there (add the `macros` feature for `#[observe]`). See
+//! `docs/webassembly.md`.
 //!
 //! ## Examples
 //!
 //! See the `examples/` directory for more usage patterns:
+//! - `observe` - the `#[observe]` attribute
 //! - `basic_trace` - Simple trace creation
+//! - `observation_types` - agents, tools, chains, retrievers, ...
 //! - `batch_ingestion` - Batch processing with automatic chunking
-//! - `trace_with_metadata` - Rich metadata and tagging
+//! - `prompts_cache` - cached prompts with a fallback, compiled
+//! - `experiments` - a task over a dataset with evaluators
 //! - `self_hosted` - Connecting to self-hosted instances
 //!
 //! ## License
@@ -263,3 +278,43 @@ pub use langfuse_client_base::models::{
 
 /// Response from the legacy observations API, retaining the name used in 0.6.3.
 pub use langfuse_client_base::models::LegacyObservationsViews as ObservationsViews;
+
+/// The README and the guides under `docs/`, compiled as doc tests so that their examples keep
+/// working.
+#[cfg(doctest)]
+mod doc_pages {
+    #[cfg(feature = "macros")]
+    #[doc = include_str!("../README.md")]
+    struct Readme;
+    #[cfg(feature = "macros")]
+    #[doc = include_str!("../docs/getting-started.md")]
+    struct GettingStarted;
+    #[doc = include_str!("../docs/configuration.md")]
+    struct Configuration;
+    #[doc = include_str!("../docs/api-versions.md")]
+    struct ApiVersions;
+    #[doc = include_str!("../docs/tracing.md")]
+    struct Tracing;
+    #[cfg(feature = "macros")]
+    #[doc = include_str!("../docs/observe.md")]
+    struct Observe;
+    #[doc = include_str!("../docs/batching.md")]
+    struct Batching;
+    #[doc = include_str!("../docs/scores.md")]
+    struct Scores;
+    #[doc = include_str!("../docs/prompts.md")]
+    struct Prompts;
+    #[cfg(feature = "macros")]
+    #[doc = include_str!("../docs/datasets-and-experiments.md")]
+    struct DatasetsAndExperiments;
+    #[doc = include_str!("../docs/media.md")]
+    struct Media;
+    #[doc = include_str!("../docs/masking.md")]
+    struct Masking;
+    #[doc = include_str!("../docs/webassembly.md")]
+    struct WebAssembly;
+    #[doc = include_str!("../docs/migration.md")]
+    struct Migration;
+    #[doc = include_str!("../docs/development.md")]
+    struct Development;
+}
