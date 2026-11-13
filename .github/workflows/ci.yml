@@ -8,10 +8,10 @@ on:
 jobs:
   # Decides whether heavy jobs run (genai-rs/.github local-ci-gate.yml).
   gate:
-    uses: genai-rs/.github/.github/workflows/local-ci-gate.yml@ci/local-ci-gate
+    uses: genai-rs/.github/.github/workflows/local-ci-gate.yml@main
 
   ci:
-    uses: genai-rs/.github/.github/workflows/rust-ci.yml@ci/local-ci-gate
+    uses: genai-rs/.github/.github/workflows/rust-ci.yml@main
     with:
       msrv: "1.88"
     secrets: inherit
