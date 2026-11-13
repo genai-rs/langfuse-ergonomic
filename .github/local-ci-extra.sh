@@ -11,3 +11,5 @@ cargo +stable test --no-default-features --features native-tls
 cargo +stable test --features compression
 cargo +stable test --no-default-features --features "compression,native-tls"
 cargo +stable test --all-features
+# The workspace: the macros crate and the `otel-context` interop.
+cargo +stable test --workspace --all-features

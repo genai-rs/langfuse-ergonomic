@@ -1,5 +1,5 @@
 //! Experiments against a mock Langfuse: tasks traced, run items linked, evaluators scored.
-#![cfg(not(target_family = "wasm"))]
+#![cfg(all(feature = "macros", not(target_family = "wasm")))]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod recorder;

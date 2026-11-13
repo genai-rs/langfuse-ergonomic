@@ -211,3 +211,130 @@ async fn validate_times_out_with_the_host_timer() {
     assert!(error.to_string().contains("timed out"), "{error}");
     assert!(started.elapsed() >= Duration::from_secs(5));
 }
+
+// ----- The observation context (runtime-agnostic: entered on every poll) -----
+
+use langfuse_ergonomic::observe::{self, Observation, ObservationType, ObserveFutureExt};
+
+fn observations(seen: &[Seen]) -> Vec<serde_json::Value> {
+    seen.iter()
+        .filter(|s| s.path == "/api/public/ingestion")
+        .flat_map(|s| s.body["batch"].as_array().cloned().unwrap_or_default())
+        .filter(|e| e["type"] != "trace-create")
+        .map(|e| e["body"].clone())
+        .collect()
+}
+
+#[wasm_bindgen_test]
+async fn observations_nest_across_await_and_spawn_local() {
+    let (client, seen) = scripted(ApiVersion::V3, vec![]);
+    let batcher = Batcher::builder()
+        .client(client)
+        .flush_interval(Duration::from_secs(3600))
+        .build()
+        .await;
+
+    let root = Observation::builder("root")
+        .as_type(ObservationType::Agent)
+        .batcher(batcher.clone())
+        .start();
+    let root_id = root.id().unwrap().to_owned();
+    root.clone()
+        .instrument(async {
+            sleep(Duration::from_millis(5)).await;
+            // Started after an await, still inside the root.
+            let step = Observation::builder("step").start();
+            assert_eq!(step.parent_id(), observe::current().unwrap().id());
+            step.end();
+            // A task spawned on the host's event loop, carrying the observation.
+            let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+            wasm_bindgen_futures::spawn_local(
+                async move {
+                    sleep(Duration::from_millis(1)).await;
+                    Observation::builder("spawned")
+                        .as_type(ObservationType::Tool)
+                        .start()
+                        .end();
+                    let _ = done_tx.send(());
+                }
+                .in_current_observation(),
+            );
+            done_rx.await.unwrap();
+        })
+        .await;
+    assert!(observe::current().is_none());
+    batcher.flush().await.unwrap();
+
+    let observations = observations(&seen.borrow());
+    assert_eq!(observations.len(), 3, "{observations:#?}");
+    for name in ["step", "spawned"] {
+        let child = observations.iter().find(|o| o["name"] == name).unwrap();
+        assert_eq!(child["parentObservationId"], root_id.as_str());
+    }
+    let root = observations.iter().find(|o| o["name"] == "root").unwrap();
+    assert_eq!(root["type"], "AGENT");
+}
+
+#[wasm_bindgen_test]
+async fn a_cancelled_observation_still_ends() {
+    let (client, seen) = scripted(ApiVersion::V4, vec![]);
+    let batcher = Batcher::builder()
+        .client(client)
+        .flush_interval(Duration::from_secs(3600))
+        .build()
+        .await;
+    let observation = Observation::builder("cancelled")
+        .batcher(batcher.clone())
+        .start();
+    let future = observation.instrument(sleep(Duration::from_secs(60)));
+    drop(future);
+    batcher.flush().await.unwrap();
+    let seen = seen.borrow();
+    let spans = &seen[0].body["resourceSpans"][0]["scopeSpans"][0]["spans"];
+    assert_eq!(spans[0]["name"], "cancelled");
+    assert!(spans[0]["attributes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(
+            |a| a["key"] == "langfuse.observation.level" && a["value"]["stringValue"] == "WARNING"
+        ));
+}
+
+#[cfg(feature = "macros")]
+mod macros {
+    use super::*;
+    use langfuse_ergonomic::observe;
+
+    #[observe(as_type = "generation")]
+    async fn answer(question: &str) -> Result<String, String> {
+        sleep(Duration::from_millis(1)).await;
+        Ok(format!("echo {question}"))
+    }
+
+    #[observe]
+    async fn turn(question: String) -> Result<String, String> {
+        answer(&question).await
+    }
+
+    #[wasm_bindgen_test]
+    async fn the_observe_attribute_works_in_a_javascript_host() {
+        let (client, seen) = scripted(ApiVersion::V3, vec![]);
+        let batcher = Batcher::builder()
+            .client(client)
+            .flush_interval(Duration::from_secs(3600))
+            .build()
+            .await;
+        observe::install_batcher(batcher.clone());
+        assert_eq!(turn("hi".into()).await.unwrap(), "echo hi");
+        observe::uninstall();
+        batcher.flush().await.unwrap();
+
+        let observations = observations(&seen.borrow());
+        let turn = observations.iter().find(|o| o["name"] == "turn").unwrap();
+        let answer = observations.iter().find(|o| o["name"] == "answer").unwrap();
+        assert_eq!(answer["parentObservationId"], turn["id"]);
+        assert_eq!(answer["output"], "echo hi");
+        assert_eq!(turn["input"], serde_json::json!({"question": "hi"}));
+    }
+}
