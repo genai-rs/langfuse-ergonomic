@@ -39,10 +39,10 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 # Temporary: a local langfuse-client-base generated with timvw-rust 0.27 (runtime 0.3), until it is released.
-langfuse-client-base = { path = "/private/tmp/claude-501/-Users-tim-runner-setup-workspace--sessions-cse-01HMZBkbrVdWFeznYPW678Ks/ce8518b4-9a45-529e-b240-bdd8e11c02de/scratchpad/lcb-027", default-features = false }
+langfuse-client-base = { version = "0.23", default-features = false }
 # The HTTP stack of langfuse-client-base: a tower service, reqwest by default.
 # Temporary path: timvw-rust-runtime 0.3 is not released yet.
-timvw-rust-runtime = { version = "0.3.0", path = "../openapi-generator-timvw-rust/runtime", default-features = false, features = ["reqwest"] }
+timvw-rust-runtime = { version = "^0.3.0", default-features = false, features = ["reqwest"] }
 bon = "^3.10.3"
 serde = { version = "^1.0.229", features = ["derive"] }
 serde_json = "^1.0.154"
