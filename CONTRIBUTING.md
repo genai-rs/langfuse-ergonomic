@@ -143,7 +143,7 @@ versions with:
 scripts/live-tests.sh
 ```
 
-See [Running the live tests](README.md#running-the-live-tests) for the options
+See [Running the live tests](docs/development.md#live-tests) for the options
 and for running them against another server. CI runs them on every pull
 request.
 

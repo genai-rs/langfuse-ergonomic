@@ -1,4 +1,4 @@
-# Self-hosted Langfuse v4 for the live tests (see scripts/live-tests.sh and README.md).
+# Self-hosted Langfuse v4 for the live tests (see scripts/live-tests.sh and docs/development.md).
 #
 # Derived from https://github.com/langfuse/langfuse/blob/main/docker-compose.yml (AI gateway
 # dropped). Throwaway test stack: the credentials below are public test values, every port is

@@ -74,7 +74,7 @@ opentelemetry = { version = "0.33.1", default-features = false, features = ["tra
 tokio = { version = "^1.54.1", features = ["rt-multi-thread", "time"] }
 
 # WebAssembly in a JavaScript host (wasm32-unknown-unknown): the batcher's task runs with `spawn_local`, timers are the
-# host's `setTimeout` and clocks `performance.now()`/`Date.now()` (std's panic there). See "WebAssembly" in README.md.
+# host's `setTimeout` and clocks `performance.now()`/`Date.now()` (std's panic there). See docs/webassembly.md.
 [target.'cfg(target_family = "wasm")'.dependencies]
 wasm-bindgen-futures = "0.4"
 gloo-timers = { version = "0.3", features = ["futures"] }
@@ -94,7 +94,7 @@ trybuild = "1.0.105"
 opentelemetry_sdk = { version = "0.33.1", default-features = false, features = ["trace", "testing"] }
 futures-util = { version = "0.3.31", default-features = false, features = ["std"] }
 
-# `tests/wasm.rs`, run in Node.js with wasm-bindgen-test-runner (see "WebAssembly" in README.md).
+# `tests/wasm.rs`, run in Node.js with wasm-bindgen-test-runner (see docs/webassembly.md).
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
 wasm-bindgen-test = "0.3"
 http = "1"
@@ -164,6 +164,38 @@ required-features = ["retry"]
 [[example]]
 name = "comprehensive_batch_test"
 path = "examples/comprehensive_batch_test.rs"
+
+[[example]]
+name = "observe"
+path = "examples/observe.rs"
+required-features = ["macros"]
+
+[[example]]
+name = "observe_otel"
+path = "examples/observe_otel.rs"
+required-features = ["macros", "otel-context"]
+
+[[example]]
+name = "observation_types"
+path = "examples/observation_types.rs"
+
+[[example]]
+name = "prompts_cache"
+path = "examples/prompts_cache.rs"
+
+[[example]]
+name = "experiments"
+path = "examples/experiments.rs"
+required-features = ["macros"]
+
+[[example]]
+name = "media"
+path = "examples/media.rs"
+
+[[example]]
+name = "masking"
+path = "examples/masking.rs"
+required-features = ["macros"]
 
 
 [features]

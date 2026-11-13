@@ -2,7 +2,7 @@
 //! HTTP service (a tower service that is not `Send`, in place of a server).
 //!
 //! `cargo test --target wasm32-unknown-unknown --no-default-features --test wasm`, with `wasm-bindgen-test-runner`
-//! as the target's runner (it runs the tests in Node.js); see "WebAssembly" in README.md.
+//! as the target's runner (it runs the tests in Node.js); see docs/webassembly.md.
 #![cfg(target_family = "wasm")]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 

@@ -78,7 +78,7 @@
 //!
 //! # Attribute mapping
 //!
-//! See the README section "Langfuse v3 and v4" for the full table. Attribute names follow
+//! See `docs/api-versions.md` ("Attribute mapping") for the full table. Attribute names follow
 //! <https://langfuse.com/integrations/native/opentelemetry>.
 
 use std::collections::{BTreeMap, HashMap};
