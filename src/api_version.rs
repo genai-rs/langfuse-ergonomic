@@ -27,7 +27,7 @@ pub enum ApiVersion {
 }
 
 impl ApiVersion {
-    /// Name of the environment variable read by [`crate::ClientBuilder::from_env`].
+    /// Name of the environment variable read by `ClientBuilder::from_env` (not on WebAssembly).
     pub const ENV_VAR: &'static str = "LANGFUSE_API_VERSION";
 }
 

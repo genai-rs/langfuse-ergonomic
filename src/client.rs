@@ -12,9 +12,11 @@ const SDK_VERSION: &str = env!("CARGO_PKG_VERSION");
 const SDK_NAME: &str = env!("CARGO_PKG_NAME");
 
 /// Default timeout for API requests
+#[cfg(not(target_family = "wasm"))]
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Default connection timeout
+#[cfg(not(target_family = "wasm"))]
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Main client for interacting with the Langfuse API
@@ -139,9 +141,9 @@ impl LangfuseClient {
             .request(timvw_rust_runtime::Method::GET, &url)
             .basic_auth(&self.public_key, Some(&self.secret_key))
             .send();
-        let response = tokio::time::timeout(Duration::from_secs(5), request)
+        let response = crate::time::timeout(Duration::from_secs(5), request)
             .await
-            .map_err(|_| Error::Api("health check timed out after 5s".to_string()))??;
+            .ok_or_else(|| Error::Api("health check timed out after 5s".to_string()))??;
 
         // Check if we got a successful response
         match response.status() {
@@ -224,6 +226,7 @@ impl LangfuseClient {
     ) -> Result<Self> {
         let client = match http_client {
             Some(client) => client,
+            #[cfg(not(target_family = "wasm"))]
             None => {
                 #[allow(unused_mut)]
                 let mut client_builder = reqwest::Client::builder()
@@ -238,6 +241,13 @@ impl LangfuseClient {
                 }
 
                 finish_http_client(client_builder)?
+            }
+            // On WebAssembly reqwest sends with the host's `fetch`, which owns connections, timeouts and
+            // compression: `timeout` and `connect_timeout` do not apply there.
+            #[cfg(target_family = "wasm")]
+            None => {
+                let _ = (timeout, connect_timeout);
+                finish_http_client(reqwest::Client::builder())?
             }
         };
 
@@ -305,6 +315,12 @@ impl ClientBuilder {
     ///
     /// Reads `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` (required), `LANGFUSE_BASE_URL`
     /// (optional) and `LANGFUSE_API_VERSION` (optional, `v3` or `v4`, default `v4`).
+    ///
+    /// Not available on WebAssembly (`target_family = "wasm"`), which has no process environment: configure the
+    /// builder explicitly there ([`ClientBuilder::new`], [`ClientBuilder::public_key`], ...), for example from a
+    /// Cloudflare Worker's `env` bindings.
+    #[cfg(not(target_family = "wasm"))]
+    #[cfg_attr(docsrs, doc(cfg(not(target_family = "wasm"))))]
     pub fn from_env() -> Result<Self> {
         use std::env;
 
@@ -461,7 +477,11 @@ impl ClientBuilder {
     }
 }
 
-#[cfg(all(test, any(feature = "rustls", feature = "native-tls")))]
+#[cfg(all(
+    test,
+    not(target_family = "wasm"),
+    any(feature = "rustls", feature = "native-tls")
+))]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
