@@ -57,7 +57,7 @@ async fn agent(question: String) -> Result<String, std::io::Error> {
     // An error in a tool is recorded (level ERROR) without failing the agent.
     let _ = weather("Atlantis".to_owned()).await;
 
-    let prompt = format!("{question} | {:?} | {forecast:?}", documents);
+    let prompt = format!("{question} | {documents:?} | {forecast:?}");
     let answer = llm("sk-secret", prompt).await?;
     observe::score_current("helpfulness", 0.9);
     Ok(answer)
