@@ -1,0 +1,5 @@
+error: #[observe] cannot be used on a `const fn`
+ --> tests/ui/const_fn.rs:4:1
+  |
+4 | const fn f() -> u8 {
+  | ^^^^^

@@ -1,0 +1,5 @@
+error: unknown #[observe] option `nmae`; expected name, as_type, capture_input, capture_output, skip, err, level, model, user_id, session_id, tags, metadata or stream
+ --> tests/ui/unknown_option.rs:3:11
+  |
+3 | #[observe(nmae = "typo")]
+  |           ^^^^

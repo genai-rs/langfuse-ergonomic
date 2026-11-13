@@ -1,0 +1,5 @@
+error: unknown observation type; expected one of: span, generation, event, agent, tool, chain, retriever, evaluator, embedding, guardrail
+ --> tests/ui/bad_type.rs:3:21
+  |
+3 | #[observe(as_type = "llm")]
+  |                     ^^^^^

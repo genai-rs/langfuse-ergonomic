@@ -1,0 +1,5 @@
+error: `skip`: the function has no argument `password`
+ --> tests/ui/skip_unknown_arg.rs:3:16
+  |
+3 | #[observe(skip(password))]
+  |                ^^^^^^^^

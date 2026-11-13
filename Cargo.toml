@@ -1,6 +1,6 @@
 [package]
 name = "langfuse-ergonomic"
-version = "0.14.0"
+version = "0.15.0"
 edition = "2021"
 authors = ["Tim Van Wassenhove <github@timvw.be>"]
 license = "MIT OR Apache-2.0"
@@ -33,6 +33,10 @@ bare_urls = "warn"
 unescaped_backticks = "warn"
 
 
+[workspace]
+# The `#[observe]` proc macro lives in its own crate (proc macros must), released with this one.
+members = [".", "langfuse-ergonomic-macros"]
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
@@ -52,6 +56,18 @@ uuid = { version = ">=1.23.5, <1.27.0", features = ["v4", "v5", "serde"] }
 tokio = { version = "^1.54.1", features = ["macros", "sync"] }
 tracing = "^0.1.44"  # For library logging (replacing eprintln!)
 rand = "^0.10.3"
+# `#[observe]` (feature `macros`): the expansion calls `langfuse_ergonomic::__private`, so the versions are pinned.
+langfuse-ergonomic-macros = { version = "=0.15.0", path = "langfuse-ergonomic-macros", optional = true }
+# The observation context: futures and streams that carry it.
+pin-project-lite = "0.2.16"
+futures-core = "0.3.31"
+# Experiments: bounded concurrency without a runtime (`buffer_unordered`).
+futures-util = { version = "0.3.31", default-features = false, features = ["std"] }
+# Media uploads: the SHA-256 Langfuse deduplicates and verifies uploads with.
+sha2 = "0.10.9"
+base64 = "0.22.1"
+# Feature `otel-context`: nest OpenTelemetry spans (openai-ergonomic, opentelemetry-langfuse) under observations.
+opentelemetry = { version = "0.33.1", default-features = false, features = ["trace"], optional = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 # The batcher's background task (`tokio::spawn`) and its timers.
@@ -74,6 +90,9 @@ dotenvy = "^0.15.7"
 mockito = "^1.7.2"
 anyhow = "^1.0.104"  # Used in examples
 tower = { version = "^0.5.2", features = ["retry", "timeout"] }  # Used in middleware examples
+trybuild = "1.0.105"
+opentelemetry_sdk = { version = "0.33.1", default-features = false, features = ["trace", "testing"] }
+futures-util = { version = "0.3.31", default-features = false, features = ["std"] }
 
 # `tests/wasm.rs`, run in Node.js with wasm-bindgen-test-runner (see "WebAssembly" in README.md).
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
@@ -148,7 +167,12 @@ path = "examples/comprehensive_batch_test.rs"
 
 
 [features]
-default = ["rustls"]
+default = ["rustls", "macros"]
+# The `#[observe]` attribute (re-exported as `langfuse_ergonomic::observe`).
+macros = ["dep:langfuse-ergonomic-macros"]
+# Attach an OpenTelemetry context for the current observation (Langfuse v4), and adopt the active
+# OpenTelemetry span as the parent of root observations. See docs/observe.md.
+otel-context = ["dep:opentelemetry"]
 rustls = ["langfuse-client-base/rustls", "timvw-rust-runtime/rustls", "reqwest/rustls"]
 native-tls = ["langfuse-client-base/native-tls", "timvw-rust-runtime/native-tls", "reqwest/native-tls"]
 # timvw_rust_runtime::retry::RetryPolicy, for clients built with `http_client`.
