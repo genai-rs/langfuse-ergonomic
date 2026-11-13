@@ -269,7 +269,7 @@ pub(crate) fn backoff_delay(
 /// Batch ingestion handler with automatic chunking and retries
 ///
 /// Cloning is cheap: clones share the queue, the background task and the metrics (for example one
-/// clone installed as the [`crate::observe`] sink and one kept for [`Batcher::shutdown`]).
+/// clone installed as the [`observe`](mod@crate::observe) sink and one kept for [`Batcher::shutdown`]).
 #[derive(Clone)]
 pub struct Batcher {
     client: Arc<LangfuseClient>,
@@ -544,7 +544,7 @@ impl Batcher {
     /// event if it can do so without waiting; otherwise (and always for
     /// [`BackpressurePolicy::Block`], which cannot block here, and
     /// [`BackpressurePolicy::DropNew`]) the new event is dropped and [`Error::Backpressure`] is
-    /// returned. The [`crate::observe`] module sends through this method.
+    /// returned. The [`observe`](mod@crate::observe) module sends through this method.
     pub fn try_add(&self, event: IngestionEvent) -> Result<()> {
         let (batch_event, v4_event) = self.prepare(event)?;
         let policy = self.config.backpressure_policy;
