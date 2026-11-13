@@ -3,7 +3,7 @@
 //! Set a mask function with [`ClientBuilder::mask`](crate::ClientBuilder::mask). The client
 //! applies it to the `input`, `output` and `metadata` of every event it sends: the observation
 //! and trace builders, [`Batcher::add`](crate::Batcher::add) /
-//! [`Batcher::try_add`](crate::Batcher::try_add), and the [`crate::observe`] module (which sends
+//! [`Batcher::try_add`](crate::Batcher::try_add), and the [`observe`](mod@crate::observe) module (which sends
 //! through them). Scores' metadata is masked too. Values that are absent are not passed to it.
 //!
 //! The function must not panic. If it does anyway, the value is replaced by

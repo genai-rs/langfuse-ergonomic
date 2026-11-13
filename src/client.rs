@@ -429,7 +429,7 @@ impl ClientBuilder {
     }
 
     /// Set a function that masks (redacts) every input, output and metadata value before it is
-    /// sent: by the builders, the [`Batcher`] and [`crate::observe`]. See [`crate::mask`].
+    /// sent: by the builders, the [`Batcher`] and [`observe`](mod@crate::observe). See [`crate::mask`].
     ///
     /// A panic in the function is caught (natively) and the value replaced by
     /// [`crate::mask::MASK_FAILED`].
