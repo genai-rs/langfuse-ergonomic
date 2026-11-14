@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.14.0...v0.15.0) - 2026-11-14
+
+### Added
+
+- [**breaking**] langfuse-client-base 0.25 and timvw-rust-runtime 0.4
+- *(experiments)* the run() future is Send natively
+- experiments over datasets with evaluators
+- media uploads, downloads and reference strings
+- #[observe] attribute and the observation context
+- observation types, generation details, masking, prompt cache, Batcher::try_add
+
+### Fixed
+
+- update_generation sends the new optional fields only when set
+
+### Other
+
+- lock langfuse-client-base 0.25.0 and timvw-rust-runtime 0.4.0
+- *(wasm)* an experiment end to end, the prompt cache and a media upload in Node.js
+- inline format arguments in the observe example (MSRV clippy)
+- live #[observe] nesting test; map caller ids of manual child observations for v4
+- short README with live badges, guides under docs/, new examples, release both crates
+- disambiguate links to the observe module
+- *(wasm)* observation context, cancellation and #[observe] in Node.js; CI for the workspace
+- observation types, generation details, masking, try_add, 5xx backoff and prompt cache
+- run the WebAssembly suite (clippy + wasm-bindgen-test in Node.js)
+- allow auto-merge (as in the client-base repos)
+- release version 0.14.0
+
 ## [0.14.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.13.0...v0.14.0) - 2026-11-13
 
 ### Added
