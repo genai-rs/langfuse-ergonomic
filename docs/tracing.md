@@ -120,7 +120,15 @@ async fn example(client: &LangfuseClient, trace_id: &str) -> Result<(), Box<dyn 
 | `span()` | span | `span-create` | `span` |
 | `generation()` | generation | `generation-create` | `generation` |
 | `event()` | event | `event-create` | `event` |
-| `agent()`, `tool()`, `chain()`, `retriever()`, `evaluator()`, `embedding()`, `guardrail()` | as named | `observation-create` with the type | the type, in lower case |
+| `agent()`, `tool()`, `chain()`, `retriever()`, `evaluator()`, `embedding()`, `guardrail()` | as named | `agent-create`, `tool-create`, ... (the type, in lower case, then `-create`) | the type, in lower case |
+
+The same applies to `#[observe(as_type = "...")]` and `Observation::builder(..).as_type(..)`.
+With `ApiVersion::V3`, the agent, tool, chain, retriever, evaluator, embedding and guardrail
+types need Langfuse v3.99.0 or later: the legacy `observation-create` event only takes span,
+generation and event, and older servers reject the `<type>-create` events. A rejected event
+fails the builder call with `Error::PartialFailure`, is listed in the failures of
+`Batcher::flush`/`Batcher::shutdown` and counted in `BatcherMetrics::failed`, and the batcher
+logs it as a warning.
 
 `observation()` and the typed builders take the generation fields too (`model`,
 `model_parameters`, `completion_start_time`, `usage_details`, `cost_details`,

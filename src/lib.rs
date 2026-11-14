@@ -210,6 +210,7 @@ pub mod client;
 pub mod datasets;
 pub mod error;
 pub mod experiments;
+mod ingestion_v3;
 pub mod mask;
 pub mod media;
 pub mod observations;

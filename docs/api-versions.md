@@ -47,6 +47,14 @@ processing is asynchronous. Scores are sent one by one: a 429 waits for
 `Retry-After` and retries (the wait holds the batcher's flush lock), a 401/403
 stops the batch, and any other failure is reported for its own event.
 
+In V3, the agent, tool, chain, retriever, evaluator, embedding and guardrail
+observation types are sent as `agent-create`, `tool-create`, ... ingestion events,
+which Langfuse accepts since v3.99.0 (the legacy `observation-create` event only
+takes span, generation and event). Langfuse answers a batch with 207 and
+per-event errors: the builders return `Error::PartialFailure` for rejected events,
+and the batcher reports them in the `flush`/`shutdown` response, counts them in
+`BatcherMetrics::failed` and logs a warning.
+
 In V3, the observation builders' `user_id`/`session_id`/`tags` setters upsert
 the trace. Used before `trace()`, that upsert creates the trace and fixes its
 timestamp, which v3 does not change afterwards.

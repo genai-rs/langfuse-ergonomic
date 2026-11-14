@@ -64,7 +64,7 @@ use crate::client::LangfuseClient;
 use crate::error::{Error, EventError, IngestionResponse, Result};
 use crate::otel::V4Item;
 use crate::time::{Interval, TaskHandle};
-use langfuse_client_base::models::{IngestionBatchRequest, IngestionEvent};
+use langfuse_client_base::models::IngestionEvent;
 
 /// Maximum batch size in bytes (3.5 MB as per Langfuse docs)
 const MAX_BATCH_SIZE_BYTES: usize = 3_500_000;
@@ -828,8 +828,8 @@ impl Batcher {
             .store(crate::time::since_epoch().as_secs(), Ordering::Relaxed);
     }
 
-    /// Queue the retryable failures of a 207 response for another attempt, counting the rest as
-    /// failed.
+    /// Queue the retryable failures of a 207 response for another attempt, counting (and
+    /// logging) the rest as failed.
     fn queue_retryable_failures(
         chunk: &mut [BatchEvent],
         failures: &[EventError],
@@ -845,14 +845,24 @@ impl Batcher {
                         event.retry_count += transport_retries + 1;
                         retry_queue.push(event.clone());
                     }
-                    _ => {
-                        metrics.failed.fetch_add(1, Ordering::Relaxed);
-                    }
+                    _ => Self::record_rejected(failure, metrics),
                 }
             } else {
-                metrics.failed.fetch_add(1, Ordering::Relaxed);
+                Self::record_rejected(failure, metrics);
             }
         }
+    }
+
+    /// Count an event Langfuse rejected for good, and log it: a flush in the background task
+    /// has no caller to return the failure to.
+    fn record_rejected(failure: &EventError, metrics: &BatcherMetrics) {
+        metrics.failed.fetch_add(1, Ordering::Relaxed);
+        tracing::warn!(
+            event_id = %failure.event_id,
+            code = failure.code.as_deref().unwrap_or_default(),
+            message = %failure.message,
+            "Langfuse rejected an ingestion event"
+        );
     }
 
     /// Record every event of a chunk as failed with the given error.
@@ -992,7 +1002,7 @@ impl Batcher {
     }
 
     /// Parse a 207 Multi-Status ingestion response into per-event successes and failures.
-    async fn parse_multi_status(
+    pub(crate) async fn parse_multi_status(
         response: timvw_rust_runtime::Response,
     ) -> Result<IngestionResponse> {
         #[derive(serde::Deserialize)]
@@ -1035,12 +1045,15 @@ impl Batcher {
             .iter()
             .map(|e| EventError {
                 event_id: e.id.clone(),
-                message: e
-                    .message
-                    .as_ref()
-                    .or(e.error.as_ref())
-                    .unwrap_or(&"Unknown error".to_string())
-                    .clone(),
+                // Langfuse puts the reason (for a 400, the validation error) in `error`.
+                message: match (&e.message, &e.error) {
+                    (Some(message), Some(error)) if message != error => {
+                        format!("{message}: {error}")
+                    }
+                    (Some(message), _) => message.clone(),
+                    (None, Some(error)) => error.clone(),
+                    (None, None) => "Unknown error".to_owned(),
+                },
                 code: e.status.map(|s| s.to_string()),
                 retryable: e.status.is_some_and(|s| s >= 500 || s == 429),
             })
@@ -1061,13 +1074,7 @@ impl Batcher {
         events: &[BatchEvent],
     ) -> std::result::Result<IngestionResponse, SendFailure> {
         match client.api_version {
-            ApiVersion::V3 => {
-                let batch = IngestionBatchRequest {
-                    batch: events.iter().map(|e| e.event.clone()).collect(),
-                    metadata: None,
-                };
-                Self::send_batch_v3(client, batch, config, events).await
-            }
+            ApiVersion::V3 => Self::send_batch_v3(client, config, events).await,
             ApiVersion::V4 => Self::send_batch_v4(client, config, events).await,
         }
     }
@@ -1234,25 +1241,12 @@ impl Batcher {
     /// Send a single v3 ingestion batch and handle 207 responses
     async fn send_batch_v3(
         client: &LangfuseClient,
-        batch: IngestionBatchRequest,
         config: &BatcherConfig,
         events: &[BatchEvent],
     ) -> std::result::Result<IngestionResponse, SendFailure> {
-        // Get event IDs for tracking
-        let event_ids: Vec<String> = batch.batch.iter().map(Self::extract_event_id).collect();
-
-        // Use the raw response API to get status code
-        let response = client
-            .configuration
-            .client
-            .request(
-                timvw_rust_runtime::Method::POST,
-                &format!("{}/api/public/ingestion", client.configuration.base_path),
-            )
-            .basic_auth(&client.public_key, Some(&client.secret_key))
-            .json(&batch)
-            .send()
-            .await?;
+        let event_ids: Vec<String> = events.iter().map(|e| e.id.clone()).collect();
+        let batch: Vec<IngestionEvent> = events.iter().map(|e| e.event.clone()).collect();
+        let response = client.post_ingestion_batch(&batch).await?;
 
         let status = response.status();
         let request_id = crate::error::parse_request_id(response.headers());

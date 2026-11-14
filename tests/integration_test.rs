@@ -470,7 +470,10 @@ async fn test_observe_nesting_live() {
         })
         .await;
     assert_eq!(doubled, 42);
-    batcher.shutdown().await.expect("shutdown");
+    // Langfuse answers rejected events with a 207 and per-event errors: fail with them here
+    // instead of waiting for observations that never arrive.
+    let response = batcher.shutdown().await.expect("shutdown");
+    assert!(response.is_success(), "rejected: {:?}", response.failures);
 
     let observations = eventually("observe nesting", || async {
         let observations = match client.api_version() {

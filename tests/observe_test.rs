@@ -180,8 +180,7 @@ async fn nested_async_and_sync_observations_form_one_trace_v3() {
         assert_eq!(child["parentObservationId"], root["id"], "{child:#?}");
     }
     assert_eq!(root["kind"], "span-create");
-    assert_eq!(retrieve["kind"], "observation-create");
-    assert_eq!(retrieve["type"], "RETRIEVER");
+    assert_eq!(retrieve["kind"], "retriever-create");
     assert_eq!(generate["kind"], "generation-create");
     assert_eq!(generate["model"], "gpt-test");
     assert_eq!(generate["usageDetails"], json!({"input": 3, "output": 5}));
@@ -473,10 +472,10 @@ async fn manual_observations_and_masking() {
     batcher.flush().await.unwrap();
 
     let manual = recorder.v3_observation("manual");
-    assert_eq!(manual["type"], "AGENT");
+    assert_eq!(manual["kind"], "agent-create");
     assert_eq!(manual["input"], "[redacted]");
     let step = recorder.v3_observation("step");
-    assert_eq!(step["type"], "TOOL");
+    assert_eq!(step["kind"], "tool-create");
     assert_eq!(step["parentObservationId"], manual["id"]);
     assert_eq!(
         recorder.v3_observation("inside")["parentObservationId"],
