@@ -199,20 +199,26 @@ v3 sink nothing is attached: Langfuse v3 ingestion and OpenTelemetry spans do no
 ```toml
 [dependencies]
 langfuse-ergonomic = { version = "0.x", features = ["otel-context"] }  # see the crates.io badge
-openai-ergonomic = { version = "0.x", features = ["langfuse"] }
+openai-ergonomic = "0.x"   # its default `otel` feature has the Langfuse interceptor
+opentelemetry = { version = "0.x", features = ["trace"] }
+opentelemetry_sdk = { version = "0.x", features = ["rt-tokio", "trace", "experimental_trace_batch_span_processor_with_async_runtime"] }
+tokio = { version = "1", features = ["full"] }
 ```
 
 ```rust,ignore
 use langfuse_ergonomic::{observe, ClientBuilder};
-use openai_ergonomic::langfuse_interceptor::{LangfuseConfig, LangfuseInterceptor};
-use openai_ergonomic::{langfuse_exporter_from_env, Client};
+use openai_ergonomic::{
+    langfuse_exporter_from_env, Client, LangfuseConfig, LangfuseInterceptor, LangfuseState,
+};
 use opentelemetry::trace::TracerProvider;
 use opentelemetry_sdk::runtime::Tokio;
 use opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor;
-use opentelemetry_sdk::trace::SdkTracerProvider;
+use opentelemetry_sdk::trace::{SdkTracerProvider, Span};
+
+type OpenAi = Client<LangfuseState<Span>>;
 
 #[observe(as_type = "agent")]
-async fn agent(openai: &Client, question: &str) -> Result<String, Box<dyn std::error::Error>> {
+async fn agent(openai: &OpenAi, question: &str) -> Result<String, Box<dyn std::error::Error>> {
     // The interceptor's span for this call is a child of the `agent` observation.
     let response = openai.send_chat(openai.chat_simple(question)).await?;
     Ok(response.content().unwrap_or_default().to_owned())
@@ -225,7 +231,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_span_processor(BatchSpanProcessor::builder(langfuse_exporter_from_env()?, Tokio).build())
         .build();
     let interceptor = LangfuseInterceptor::new(provider.tracer("openai-ergonomic"), LangfuseConfig::new());
-    let openai = Client::from_env()?.with_interceptor(Box::new(interceptor)).build();
+    let openai = Client::from_env()?.with_interceptor(interceptor).build();
 
     // Your own code: #[observe] observations, sent by langfuse-ergonomic (Langfuse v4).
     let batcher = ClientBuilder::from_env()?.build()?.batcher().build().await;
@@ -234,7 +240,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     agent(&openai, "What is the capital of Belgium?").await?;
 
     batcher.shutdown().await?;
-    provider.shutdown()?;
+    // The Tokio batch processor needs the runtime while shutdown waits for export.
+    tokio::task::spawn_blocking(move || provider.shutdown()).await??;
     Ok(())
 }
 ```

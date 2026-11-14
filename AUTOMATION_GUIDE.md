@@ -9,19 +9,13 @@ This is the **langfuse-ergonomic** repository - an ergonomic wrapper for the Lan
 - **Depends on**: [langfuse-client-base](https://github.com/genai-rs/langfuse-client-base) - the auto-generated OpenAPI client
 - **Purpose**: Provides a user-friendly API using the Bon builder pattern library
 
-## Recent Migration (2025-08-29)
+## Layout
 
-This repository was migrated from the monorepo at timvw/langfuse-rs to a standalone repository in the genai-rs organization. Key changes:
-
-1. **Standalone Repository**: Converted from workspace member to standalone package
-2. **Dependencies**: Now depends on published langfuse-client-base crate from crates.io (v0.3)
-3. **Simplified Configuration**: Removed workspace configuration from release-plz.toml
-4. **Structure**: All code moved from subdirectory to repository root
-5. **CI/CD**: Retained full test matrix as this contains manually written code
-
-### Migration Notes
-- Repository is still technically a fork but has full permissions via organization settings
-- All modules are now active and tested
+- `.`: the `langfuse-ergonomic` library; `langfuse-ergonomic-macros/`: the `#[observe]`
+  procedural macro, released together with the library at the same version.
+- Depends on the published `langfuse-client-base` and `timvw-rust-runtime` crates from crates.io.
+- User guides live in `docs/` and are compiled as doc tests (`doc_pages` in `src/lib.rs`);
+  see [docs/development.md](docs/development.md) for tests, local CI and live tests.
 
 ## Development Workflow
 
@@ -51,19 +45,19 @@ This repository was migrated from the monorepo at timvw/langfuse-rs to a standal
 
 ### Branch Management
 - The repository is configured to automatically delete branches after PR merge
-- Branch protection rules are enforced on `main`:
-  - Required status checks must pass (CI tests, security audit)
-  - Branches must be up to date before merging
-- Repository settings are documented in `.github/settings.yml`
+- Branch protection rules are enforced on `main`: pull requests only, linear history (rebase
+  merges), and the required CI checks
 
 ### Pre-commit Checks
-- **ALWAYS run pre-commit checks before committing**:
+- **ALWAYS run the checks before committing**:
   ```bash
   cargo fmt --all -- --check
-  cargo clippy --all-targets --all-features -- -D warnings
-  cargo test --all
+  cargo clippy --workspace --all-targets --all-features -- -D warnings
+  cargo test --workspace --all-features
   ```
 - If formatting issues are found, run `cargo fmt --all` to fix them
+- Before pushing, run `scripts/local-ci.sh` from genai-rs/.github; its `local-ci`
+  attestation lets the PR skip the heavy CI jobs (see [docs/development.md](docs/development.md#local-ci))
 
 ### Commit Messages
 - Use conventional commits format:
@@ -79,48 +73,31 @@ The project uses environment variables for Langfuse authentication:
 - `LANGFUSE_PUBLIC_KEY` - Public API key
 - `LANGFUSE_SECRET_KEY` - Secret API key  
 - `LANGFUSE_BASE_URL` - API endpoint (defaults to https://cloud.langfuse.com)
+- `LANGFUSE_API_VERSION` - `v3` or `v4` (defaults to `v4`)
 
 ## Testing
 
 ### Running Examples
-Always test examples with real credentials before committing:
+The examples in `examples/` send to a real Langfuse server (credentials from the environment),
+for example:
 ```bash
-cargo run --example test_trace
+cargo run --example observe
 cargo run --example basic_trace
-cargo run --example trace_with_metadata
-cargo run --example multiple_traces
-cargo run --example advanced_features
+cargo run --example http_middleware_retry --features retry
 ```
+The live tests (`scripts/live-tests.sh`) run against a throwaway self-hosted Langfuse in
+Docker; see [docs/development.md](docs/development.md#live-tests).
 
 ### CI/CD
-- GitHub Actions runs on every push and PR
+- GitHub Actions runs on every push and PR (shared `rust-ci`, feature combinations, live tests
+  for v3 and v4, security)
 - release-plz creates automated release PRs
-- Packages are published to crates.io on release
+- Both crates are published to crates.io when the release PR is merged
 
-## Current Implementation Status
+## Implementation Status
 
-### Implemented 
-- Basic trace creation with builder pattern
-- Environment-based configuration
-- Trace metadata, tags, input/output
-- Session and user tracking
-- Observations (spans, generations, events)
-- Scoring system (numeric, binary, categorical)
-- Fetching existing traces
-- Batch operations with advanced features:
-  - Automatic retries with exponential backoff
-  - 207 Multi-Status response handling
-  - 413 Payload Too Large handling with automatic chunking
-  - Backpressure policies (Block, DropNew, DropOldest)
-  - Metrics tracking
-  - Graceful shutdown
-- Dataset management
-- Prompt management (create text/chat prompts, update versions, list, get)
-
-### Not Yet Implemented 
-- Advanced prompt caching
-- Dataset run items API (not available in v0.2)
-- Event update operations (no IngestionEvent variant in v0.2)
+The README's feature list and the pages under `docs/` describe what is implemented; keep them
+in sync with the code.
 
 ## Common Tasks
 
@@ -145,7 +122,7 @@ cargo run --example advanced_features
 1. **Base Client**: This crate depends on langfuse-client-base from crates.io
 2. **Token Scopes**: crates.io tokens must have the pattern `langfuse-*` for publishing
 3. **Documentation**: docs.rs builds documentation automatically after crates.io publish
-4. **Examples**: All examples must be tested with real API credentials before committing
+4. **Examples**: Run the examples you change against a Langfuse server before committing
 
 ## Repository Links
 - GitHub: https://github.com/genai-rs/langfuse-ergonomic

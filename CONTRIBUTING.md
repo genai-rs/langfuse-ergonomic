@@ -6,9 +6,9 @@ Thank you for your interest in contributing to langfuse-ergonomic! This guide wi
 
 ### Prerequisites
 
-- Rust 1.88 or later
-- Node.js 18+ (for OpenAPI generator)
-- Java 11+ (for OpenAPI generator v7.x)
+- Rust stable, and the MSRV toolchain (the `rust-version` in `Cargo.toml`, shown by the MSRV
+  badge) to run the MSRV checks
+- Docker, only for the [live tests](docs/development.md#live-tests)
 
 ### Getting Started
 
@@ -20,7 +20,7 @@ cd langfuse-ergonomic
 
 2. Set up the development environment:
 ```bash
-# Install git hooks and verify dependencies
+# Point git at .githooks/ (the pre-commit hook runs fmt, clippy, build and tests)
 ./scripts/setup-hooks.sh
 ```
 
@@ -46,20 +46,17 @@ git checkout -b feat/your-feature-name
    - Add tests for new functionality
    - Update documentation as needed
 
-3. **Run pre-commit checks:**
+3. **Run the checks:**
 ```bash
-# Run formatting, linting, and tests
 cargo fmt --all -- --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features
 ```
 
-Or individually:
-```bash
-cargo fmt --all -- --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all
-```
+Before pushing, run the organization's local CI (`scripts/local-ci.sh` from
+[genai-rs/.github](https://github.com/genai-rs/.github)): it pushes and attests the commit
+as `local-ci`, which lets the pull request skip the heavy CI jobs. See
+[Local CI](docs/development.md#local-ci).
 
 4. **Commit your changes:**
 ```bash
@@ -95,14 +92,16 @@ gh pr create  # or use GitHub web UI
 
 The `langfuse-client-base` crate contains auto-generated code from the OpenAPI specification. 
 
-**DO NOT** edit files in `langfuse-client-base/src/` directly. The langfuse-ergonomic repository uses the langfuse-client-base crate from crates.io as a dependency.
+This repository does not contain it: it depends on the published crate from crates.io. Fixes
+to the generated client belong in
+[langfuse-client-base](https://github.com/genai-rs/langfuse-client-base).
 
 ### Examples
 
 When adding new features, please include examples:
 
-1. Create an example file in `langfuse-ergonomic/examples/`
-2. Add it to `langfuse-ergonomic/Cargo.toml`:
+1. Create an example file in `examples/`
+2. Add it to `Cargo.toml`:
 ```toml
 [[example]]
 name = "your_example"
@@ -110,7 +109,6 @@ path = "examples/your_example.rs"
 ```
 3. Test the example:
 ```bash
-cd langfuse-ergonomic
 cargo run --example your_example
 ```
 
@@ -178,11 +176,14 @@ async fn test_api_feature() {
 
 ```
 langfuse-ergonomic/
- src/                    # Hand-written ergonomic API
- examples/               # Usage examples  
- scripts/                # Build and setup scripts
- tests/                  # Integration tests
- .github/workflows/      # CI/CD configuration
+ src/                        # Hand-written ergonomic API
+ langfuse-ergonomic-macros/  # The #[observe] procedural macro
+ docs/                       # Guides (compiled as doc tests)
+ examples/                   # Usage examples
+ scripts/                    # Hook setup and live tests
+ docker/langfuse/            # Self-hosted Langfuse for the live tests
+ tests/                      # Unit, mock, trybuild, wasm and live tests
+ .github/workflows/          # CI/CD configuration
 ```
 
 The project depends on `langfuse-client-base` from crates.io, which contains the auto-generated OpenAPI client.
@@ -194,7 +195,8 @@ Releases are automated using [release-plz](https://release-plz.ieni.dev/):
 1. Merge changes to `main`
 2. release-plz creates a release PR automatically
 3. Review and merge the release PR
-4. Packages are published to crates.io automatically
+4. Both crates (`langfuse-ergonomic` and `langfuse-ergonomic-macros`, same version) are
+   published to crates.io automatically
 
 Before merging a release PR, verify the manifest and lockfile agree on the
 version, review the changelog (including any MSRV change), and check the current
@@ -205,7 +207,7 @@ cargo fmt --all -- --check
 cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked --all-features
 cargo test --locked --no-default-features
-cargo +1.88.0 test --locked --all-features
+cargo +<msrv> test --locked --all-features   # <msrv>: the rust-version in Cargo.toml
 cargo publish --locked --dry-run
 ```
 
