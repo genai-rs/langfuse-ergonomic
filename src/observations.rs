@@ -111,8 +111,9 @@ impl ObservationFields {
 /// Build the create event of one observation, in the shape both API versions understand:
 /// `span-create`, `generation-create` and `event-create` for those three types, and
 /// `observation-create` (with the type) for agent, tool, chain, retriever, evaluator, embedding
-/// and guardrail. Usage and cost details are sent in full on generations; other types send the
-/// `input`/`output`/`total` counts and costs as legacy `usage`.
+/// and guardrail, which the V3 transport sends as `agent-create`, `tool-create`, ... (see
+/// `crate::ingestion_v3`). Usage and cost details are sent in full on generations; other types
+/// send the `input`/`output`/`total` counts and costs as legacy `usage`.
 pub(crate) fn observation_event(
     f: ObservationFields,
 ) -> langfuse_client_base::models::IngestionEvent {
@@ -309,8 +310,8 @@ impl LangfuseClient {
     /// The typed shortcuts [`LangfuseClient::agent`], [`LangfuseClient::tool`], ... set the
     /// type for you. Spans, generations and events are sent like [`LangfuseClient::span`],
     /// [`LangfuseClient::generation`] and [`LangfuseClient::event`]; the other types are sent as
-    /// `observation-create` events with their type (V3) or as spans with
-    /// `langfuse.observation.type` set to it (V4). The generation fields (`model`,
+    /// `agent-create`, `tool-create`, ... events (V3, Langfuse v3.99.0 or later) or as spans
+    /// with `langfuse.observation.type` set to the type (V4). The generation fields (`model`,
     /// `usage_details`, `cost_details`, `completion_start_time`, `prompt_name`/`prompt_version`)
     /// are sent in full on generations; other types keep `model`, `model_parameters`,
     /// `completion_start_time` and the `input`/`output`/`total` usage and costs.

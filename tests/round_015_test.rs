@@ -93,8 +93,12 @@ async fn every_observation_type_is_sent_with_its_type_v3_and_v4() {
         ("guardrail", "GUARDRAIL"),
     ] {
         let observation = recorder.v3_observation(name);
-        assert_eq!(observation["kind"], "observation-create");
-        assert_eq!(observation["type"], kind);
+        // The legacy `observation-create` only takes SPAN, GENERATION and EVENT.
+        assert_eq!(
+            observation["kind"],
+            format!("{}-create", kind.to_lowercase())
+        );
+        assert!(observation.get("type").is_none(), "{observation:#?}");
         let span = recorder.v4_span(name);
         assert_eq!(
             attr(&span, "langfuse.observation.type"),
@@ -105,6 +109,90 @@ async fn every_observation_type_is_sent_with_its_type_v3_and_v4() {
     assert!(v3
         .iter()
         .any(|o| o["name"] == "plain-span" && o["kind"] == "span-create"));
+}
+
+/// Langfuse rejects an `observation-create` of a new type with a per-event 400 in its 207
+/// response; such rejections fail the builder call and show up in the batcher's results.
+#[tokio::test]
+async fn v3_ingestion_rejections_are_reported() {
+    let rejected = |id: &str| {
+        json!({"successes": [], "errors": [{
+            "id": id,
+            "status": 400,
+            "message": "Invalid request data",
+            "error": "Invalid enum value at body.type"
+        }]})
+        .to_string()
+    };
+    let mut server = mockito::Server::new_async().await;
+    let client = ClientBuilder::new()
+        .public_key("pk-test")
+        .secret_key("sk-test")
+        .base_url(server.url())
+        .api_version(ApiVersion::V3)
+        .build()
+        .unwrap();
+
+    // The builder: the event type and body Langfuse accepts, and its rejection as an error.
+    let mock = server
+        .mock("POST", "/api/public/ingestion")
+        .match_body(Matcher::PartialJson(json!({"batch": [{
+            "type": "agent-create",
+            "body": {"traceId": "t-reject", "name": "agent"}
+        }]})))
+        .with_status(207)
+        .with_body(rejected("any"))
+        .create_async()
+        .await;
+    let error = client
+        .agent()
+        .trace_id("t-reject")
+        .name("agent")
+        .call()
+        .await
+        .unwrap_err();
+    mock.assert_async().await;
+    // The builders wrap the error with what they were creating.
+    let message = error.to_string();
+    assert!(
+        message.contains("Partial batch failure: 0 succeeded, 1 failed")
+            && message
+                .contains("Invalid request data: Invalid enum value at body.type (code: 400)"),
+        "{message}"
+    );
+
+    // The batcher (here through `observe`): the rejected event is in the shutdown response and
+    // the metrics.
+    let mock = server
+        .mock("POST", "/api/public/ingestion")
+        .match_body(Matcher::PartialJson(json!({"batch": [{
+            "type": "tool-create",
+            "body": {"name": "tool"}
+        }]})))
+        .with_status(207)
+        .with_body(rejected("any"))
+        .create_async()
+        .await;
+    let batcher = Batcher::builder()
+        .client(client)
+        .flush_interval(Duration::from_secs(3600))
+        .max_retries(0)
+        .build()
+        .await;
+    langfuse_ergonomic::observe::Observation::builder("tool")
+        .as_type(ObservationType::Tool)
+        .batcher(batcher.clone())
+        .start()
+        .end();
+    let metrics = batcher.clone();
+    let response = batcher.shutdown().await.unwrap();
+    mock.assert_async().await;
+    assert_eq!(response.failure_count, 1, "{response:?}");
+    assert_eq!(
+        response.failures[0].message,
+        "Invalid request data: Invalid enum value at body.type"
+    );
+    assert_eq!(metrics.metrics().failed, 1);
 }
 
 #[tokio::test]

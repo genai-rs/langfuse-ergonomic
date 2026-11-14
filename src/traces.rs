@@ -131,13 +131,13 @@ pub use crate::scores::LangfuseClientScoreBuilder;
 #[bon]
 impl LangfuseClient {
     /// Send ingestion events with the transport of the configured [`crate::ApiVersion`].
+    ///
+    /// With V3, events Langfuse rejects in its 207 response fail the call with
+    /// [`crate::Error::PartialFailure`].
     pub(crate) async fn ingest_events(
         &self,
         mut events: Vec<langfuse_client_base::models::IngestionEvent>,
     ) -> Result<()> {
-        use langfuse_client_base::apis::ingestion_api;
-        use langfuse_client_base::models::IngestionBatchRequest;
-
         for event in &mut events {
             self.mask_event(event);
         }
@@ -146,16 +146,16 @@ impl LangfuseClient {
             return self.ingest_events_v4(events).await;
         }
 
-        let batch_request = IngestionBatchRequest::builder().batch(events).build();
-
         // V3 keeps using the (upstream-deprecated) batch ingestion endpoint.
-        ingestion_api::ingestion_batch()
-            .configuration(self.configuration())
-            .ingestion_batch_request(&batch_request)
-            .call()
-            .await
-            .map(|_| ())
-            .map_err(crate::error::map_api_error)
+        let response = self.post_ingestion_batch(&events).await?;
+        match response.status().as_u16() {
+            207 => crate::Batcher::parse_multi_status(response)
+                .await?
+                .to_error()
+                .map_or(Ok(()), Err),
+            200..=299 => Ok(()),
+            _ => Err(crate::error::error_from_response(response).await),
+        }
     }
 
     /// Create a new trace

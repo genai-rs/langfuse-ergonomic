@@ -221,7 +221,11 @@ fn observations(seen: &[Seen]) -> Vec<serde_json::Value> {
         .filter(|s| s.path == "/api/public/ingestion")
         .flat_map(|s| s.body["batch"].as_array().cloned().unwrap_or_default())
         .filter(|e| e["type"] != "trace-create")
-        .map(|e| e["body"].clone())
+        .map(|e| {
+            let mut body = e["body"].clone();
+            body["kind"] = e["type"].clone();
+            body
+        })
         .collect()
 }
 
@@ -272,7 +276,7 @@ async fn observations_nest_across_await_and_spawn_local() {
         assert_eq!(child["parentObservationId"], root_id.as_str());
     }
     let root = observations.iter().find(|o| o["name"] == "root").unwrap();
-    assert_eq!(root["type"], "AGENT");
+    assert_eq!(root["kind"], "agent-create");
 }
 
 #[wasm_bindgen_test]
@@ -438,7 +442,7 @@ async fn an_experiment_runs_end_to_end_in_a_javascript_host() {
         .collect();
     let roots: Vec<_> = events
         .iter()
-        .filter(|e| e["type"] == "observation-create" && e["body"]["name"] == "experiment-item-run")
+        .filter(|e| e["type"] == "chain-create" && e["body"]["name"] == "experiment-item-run")
         .collect();
     assert_eq!(roots.len(), 2, "{events:#?}");
     let traces: Vec<_> = events

@@ -72,7 +72,10 @@ pub enum Error {
     },
 
     /// Partial failure in batch operations (207 Multi-Status)
-    #[error("Partial batch failure: {success_count} succeeded, {failure_count} failed")]
+    #[error(
+        "Partial batch failure: {success_count} succeeded, {failure_count} failed{}",
+        first_failure(errors)
+    )]
     PartialFailure {
         /// Number of events processed successfully
         success_count: usize,
@@ -114,6 +117,14 @@ pub struct EventError {
     pub code: Option<String>,
     /// Whether this error is retryable
     pub retryable: bool,
+}
+
+/// `": <the first failure>"` for the [`Error::PartialFailure`] message, or nothing.
+fn first_failure(errors: &[EventError]) -> String {
+    errors
+        .first()
+        .map(|error| format!(": {error}"))
+        .unwrap_or_default()
 }
 
 impl fmt::Display for EventError {
