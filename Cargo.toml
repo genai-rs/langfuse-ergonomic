@@ -1,6 +1,6 @@
 [package]
 name = "langfuse-ergonomic"
-version = "0.15.0"
+version = "0.15.1"
 edition = "2021"
 authors = ["Tim Van Wassenhove <github@timvw.be>"]
 license = "MIT OR Apache-2.0"
@@ -57,7 +57,7 @@ tokio = { version = "^1.54.1", features = ["macros", "sync"] }
 tracing = "^0.1.44"  # For library logging (replacing eprintln!)
 rand = "^0.10.3"
 # `#[observe]` (feature `macros`): the expansion calls `langfuse_ergonomic::__private`, so the versions are pinned.
-langfuse-ergonomic-macros = { version = "=0.15.0", path = "langfuse-ergonomic-macros", optional = true }
+langfuse-ergonomic-macros = { version = "=0.15.1", path = "langfuse-ergonomic-macros", optional = true }
 # The observation context: futures and streams that carry it.
 pin-project-lite = "0.2.16"
 futures-core = "0.3.31"
