@@ -48,29 +48,26 @@ branches:
       # Require status checks
       required_status_checks:
         strict: true  # Require branches to be up to date before merging
+        # Mirrors the live branch protection (job names from the shared rust-ci.yml and
+        # rust-security.yml workflows in genai-rs/.github).
         contexts:
-          # Core CI checks - test suite
-          - "Test Suite (macos-latest / stable)"
-          - "Test Suite (macos-latest / beta)"
-          - "Test Suite (ubuntu-latest / stable)"
-          - "Test Suite (ubuntu-latest / beta)"
-          - "Test Suite (windows-latest / stable)"
-          - "Test Suite (windows-latest / beta)"
-          # MSRV checks
-          - "Test Suite (ubuntu-latest / 1.88)"
-          - "Test Suite (macos-latest / 1.88)"
-          - "Test Suite (windows-latest / 1.88)"
-          - "Feature Combinations"        # Ensure all feature combinations compile
-          
-          # Security checks (from security.yml workflow)
-          - "Cargo Audit"                # Dependency vulnerability scanning
-          - "Cargo Deny"                 # License and dependency analysis
-          - "Secret Scanning"            # Combined secrets check
-          
-          # Dependency maintenance (from dependencies.yml workflow)
-          - "Check Unused Dependencies"  # Keep dependencies clean
-          
-          # Note: Code Coverage is informational only, not required
+          - "ci / fmt"
+          - "ci / clippy (stable)"
+          - "ci / clippy (msrv)"
+          - "ci / doc"
+          - "ci / semver-checks"
+          - "ci / test (ubuntu-latest, stable)"
+          - "ci / test (ubuntu-latest, msrv)"
+          - "ci / test (macos-latest, stable)"
+          - "ci / test (macos-latest, msrv)"
+          - "ci / test (windows-latest, stable)"
+          - "ci / test (windows-latest, msrv)"
+          - "Feature Combinations"
+          - "security / cargo-audit"
+          - "security / cargo-deny"
+          - "security / gitleaks"
+          - "Check Unused Dependencies"
+          # coverage, wasm and release-sanity are informational, not required
       
       # Enforce for admins
       enforce_admins: false
