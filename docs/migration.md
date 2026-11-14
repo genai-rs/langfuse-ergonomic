@@ -32,6 +32,8 @@ New:
   ([Media](media.md)).
 - Masking: `ClientBuilder::mask(fn)` ([Masking](masking.md)).
 - `Batcher::try_add` (never waits) and `Batcher: Clone` (clones share the queue).
+- `update_prompt_version()` takes `remove_labels`, and `labels` may be left out; on success it
+  drops the client's cached entries for that prompt.
 
 Changed behaviour:
 
@@ -46,8 +48,16 @@ Changed behaviour:
   others).
 - `generation().usage_details(map)` and `prompt_tokens`/`completion_tokens`/`total_tokens`
   combine: the token setters override the `input`/`output`/`total` keys of the map.
+
+Dependencies:
+
+- `langfuse-client-base` 0.25 (generated with `timvw-rust` 0.29, Langfuse spec of November
+  2026) and `timvw-rust-runtime` 0.4. A client given to `ClientBuilder::http_client` is a
+  `timvw_rust_runtime::Client` of 0.4: bump your own `timvw-rust-runtime` dependency to 0.4.
 - Code that matched `langfuse_client_base::apis::Error::Io` should use a wildcard arm: the
   variant is removed in langfuse-client-base 0.24.
+- Code that builds `langfuse_client_base::models::PromptVersionUpdateRequest` itself: see the
+  [client-base 0.25 note](https://github.com/genai-rs/langfuse-client-base/blob/main/migration/api-diff-0.24.0-to-0.25.0.md).
 
 The [Langfuse v4 migration](api-versions.md#migrating-to-v4) is described with the API
 versions.

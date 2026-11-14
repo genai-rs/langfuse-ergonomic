@@ -42,9 +42,9 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-langfuse-client-base = { version = "0.23", default-features = false }
+langfuse-client-base = { version = "0.25", default-features = false }
 # The HTTP stack of langfuse-client-base: a tower service, reqwest by default.
-timvw-rust-runtime = { version = "^0.3.0", default-features = false, features = ["reqwest"] }
+timvw-rust-runtime = { version = "^0.4.0", default-features = false, features = ["reqwest"] }
 bon = "^3.10.3"
 serde = { version = "^1.0.229", features = ["derive"] }
 serde_json = "^1.0.154"

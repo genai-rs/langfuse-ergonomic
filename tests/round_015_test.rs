@@ -412,3 +412,74 @@ async fn prompts_are_cached_served_stale_on_error_and_fall_back() {
     assert!(client.prompt("greeting").call().await.is_err());
     failing.assert_async().await;
 }
+
+#[tokio::test]
+async fn updating_labels_sends_only_the_set_lists_and_drops_cached_entries() {
+    let mut server = mockito::Server::new_async().await;
+    let get = server
+        .mock("GET", "/api/public/v2/prompts/greeting")
+        .match_query(Matcher::Any)
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(text_prompt(2, "Hello {{name}}"))
+        .expect(2)
+        .create_async()
+        .await;
+    let patch = server
+        .mock("PATCH", "/api/public/v2/prompts/greeting/versions/3")
+        .match_body(Matcher::Json(
+            json!({"newLabels": ["production"], "removeLabels": ["staging"]}),
+        ))
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(text_prompt(3, "Hi {{name}}"))
+        .expect(1)
+        .create_async()
+        .await;
+    let remove_only = server
+        .mock("PATCH", "/api/public/v2/prompts/greeting/versions/1")
+        .match_body(Matcher::Json(json!({"removeLabels": ["old"]})))
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(text_prompt(1, "Yo"))
+        .expect(1)
+        .create_async()
+        .await;
+    let client = ClientBuilder::new()
+        .public_key("pk")
+        .secret_key("sk")
+        .base_url(server.url())
+        .build()
+        .unwrap();
+
+    assert_eq!(
+        client.prompt("greeting").call().await.unwrap().source,
+        PromptSource::Api
+    );
+    client
+        .update_prompt_version()
+        .name("greeting")
+        .version(3)
+        .labels(vec!["production".to_string()])
+        .remove_labels(vec!["staging".to_string()])
+        .call()
+        .await
+        .unwrap();
+    // `production` may now resolve to another version: fetched again, not from the cache.
+    assert_eq!(
+        client.prompt("greeting").call().await.unwrap().source,
+        PromptSource::Api
+    );
+    client
+        .update_prompt_version()
+        .name("greeting")
+        .version(1)
+        .remove_labels(vec!["old".to_string()])
+        .call()
+        .await
+        .unwrap();
+
+    get.assert_async().await;
+    patch.assert_async().await;
+    remove_only.assert_async().await;
+}
