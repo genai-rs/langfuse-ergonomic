@@ -2,9 +2,9 @@
 
 ## Supported Versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
+Security fixes go into the latest release (see the
+[crates.io badge](https://crates.io/crates/langfuse-ergonomic)); older releases are not
+patched.
 
 ## Reporting a Vulnerability
 
@@ -38,7 +38,7 @@ When using this library:
 
 This project uses:
 - Automated dependency updates via Renovate
-- Security vulnerability scanning in CI
+- Security scanning in CI (the shared `rust-security` workflow and TruffleHog)
 - `cargo audit` for Rust dependency vulnerabilities
 
 Run security audit locally:
