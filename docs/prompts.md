@@ -76,7 +76,8 @@ A generation records which prompt produced it: `generation().prompt_name(prompt.
 ## Manage prompts
 
 `create_prompt()` and `create_chat_prompt()` create prompts (or new versions),
-`update_prompt_version()` changes a version's labels, `get_prompt()` fetches without the cache
+`update_prompt_version()` adds (`labels`) and removes (`remove_labels`) a version's labels and
+drops the prompt from the client's cache, `get_prompt()` fetches without the cache
 and `list_prompts()` lists them. Invalid chat messages fail with their index before any
 request.
 

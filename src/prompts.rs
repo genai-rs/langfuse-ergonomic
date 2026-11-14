@@ -116,27 +116,40 @@ impl LangfuseClient {
             .map_err(|e| crate::error::Error::Api(format!("Failed to create chat prompt: {e}")))
     }
 
-    /// Update labels for a specific prompt version
+    /// Add labels to and remove labels from a specific prompt version.
+    ///
+    /// `labels` are added and `remove_labels` are removed; either may be left out. A label is
+    /// unique across a prompt's versions, so adding one moves it from the version that had it.
+    /// The `latest` label is managed by Langfuse. On success, this client's prompt cache drops
+    /// its entries for the prompt, because a label may now resolve to another version.
     #[builder]
     pub async fn update_prompt_version(
         &self,
         #[builder(into)] name: String,
         version: i32,
-        labels: Vec<String>,
+        labels: Option<Vec<String>>,
+        remove_labels: Option<Vec<String>>,
     ) -> Result<langfuse_client_base::models::Prompt> {
         use langfuse_client_base::apis::prompt_version_api;
         use langfuse_client_base::models::PromptVersionUpdateRequest;
 
-        let update_request = PromptVersionUpdateRequest { new_labels: labels };
+        let update_request = PromptVersionUpdateRequest {
+            new_labels: labels.map(Some),
+            remove_labels: remove_labels.map(Some),
+        };
 
-        prompt_version_api::prompt_version_update()
+        let prompt = prompt_version_api::prompt_version_update()
             .configuration(self.configuration())
             .name(name.as_str())
             .version(i64::from(version))
             .prompt_version_update_request(&update_request)
             .call()
             .await
-            .map_err(|e| crate::error::Error::Api(format!("Failed to update prompt version: {e}")))
+            .map_err(|e| {
+                crate::error::Error::Api(format!("Failed to update prompt version: {e}"))
+            })?;
+        self.prompt_cache.invalidate(&name);
+        Ok(prompt)
     }
 
     /// Get a prompt by name and version
@@ -246,6 +259,11 @@ impl PromptCache {
 
     fn get(&self, key: &CacheKey) -> Option<CacheEntry> {
         self.lock().get(key).cloned()
+    }
+
+    /// Drop every entry of the prompt `name`.
+    fn invalidate(&self, name: &str) {
+        self.lock().retain(|key, _| key.name != name);
     }
 
     fn put(&self, key: CacheKey, prompt: Prompt) {
