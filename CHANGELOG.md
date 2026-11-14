@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.1](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.15.0...v0.15.1) - 2026-11-14
+
+### Fixed
+
+- send agent, tool and the other new observation types as <type>-create events with API v3
+
+### Other
+
+- settings.yml lists the required checks that are actually enforced
+- audit markdown against the current code
+
 ## [0.15.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.14.0...v0.15.0) - 2026-11-14
 
 ### Added
