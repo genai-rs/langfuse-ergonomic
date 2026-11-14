@@ -1097,9 +1097,9 @@ dependencies = [
 
 [[package]]
 name = "langfuse-client-base"
-version = "0.23.0"
+version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8228a6e87b4b83a6b4444db0a08c6d79252b53dbb0aa93871da8de1355254bb"
+checksum = "3a57ca78d192fd67087ea06edd367d9d7601ea2179e3b3c507ecde1a5c2cd4f5"
 dependencies = [
  "bon",
  "chrono",
@@ -2294,9 +2294,9 @@ dependencies = [
 
 [[package]]
 name = "timvw-rust-runtime"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b21a1f76151fe556b483ffbe2a60d1127e41d0964ede0a98b2a95878c7554e4c"
+checksum = "a9296248b3337c4e1b47ce27b4f1e5358bf357903e2f8da4537973261410578c"
 dependencies = [
  "base64 0.22.1",
  "bytes",
