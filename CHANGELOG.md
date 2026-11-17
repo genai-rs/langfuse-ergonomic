@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.2](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.15.1...v0.15.2) - 2026-11-17
+
+### Other
+
+- *(deps)* Update cgr.dev/chainguard/minio:latest Docker digest to 68aab27
+- *(deps)* Update docker.io/redis Docker tag to v7.4.12
+
 ## [0.15.1](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.15.0...v0.15.1) - 2026-11-14
 
 ### Fixed
