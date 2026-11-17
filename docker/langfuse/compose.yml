@@ -97,7 +97,7 @@ services:
 
   minio:
     # Chainguard publishes only `latest` for free; the digest pins it.
-    image: cgr.dev/chainguard/minio:latest@sha256:fb893e36fc369d41e92f678b17ec27378fa5bf0576aeef7ac15460c13629ab5a
+    image: cgr.dev/chainguard/minio:latest@sha256:68aab277f9748c7c3eb85f178744adba1655c8e33a86987b22d2879ca507c332
     entrypoint: sh
     command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
     environment:
