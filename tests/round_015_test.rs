@@ -198,8 +198,8 @@ async fn v3_ingestion_rejections_are_reported() {
 #[tokio::test]
 async fn generations_send_usage_cost_completion_start_and_prompt() {
     let recorder = Recorder::start().await;
-    let start = chrono::Utc::now();
-    let first_token = start + chrono::Duration::milliseconds(150);
+    let start = jiff::Timestamp::now();
+    let first_token = start + jiff::SignedDuration::from_millis(150);
     for version in [ApiVersion::V3, ApiVersion::V4] {
         recorder
             .client(version)

@@ -174,7 +174,7 @@ async fn read(client: &LangfuseClient, trace_id: &str) -> Result<(), Box<dyn std
         let page = client
             .observations()
             .is_root_observation(true) // traces only
-            .from_start_time(chrono::Utc::now() - chrono::Duration::days(1))
+            .from_start_time(jiff::Timestamp::now() - jiff::SignedDuration::from_hours(24))
             .user_id("user-123")
             .level(ObservationLevel::Error)
             .fields(ALL_OBSERVATION_FIELDS) // default: core + basic

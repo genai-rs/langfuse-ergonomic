@@ -568,9 +568,7 @@ async fn update_resends_the_full_span_with_the_original_start() {
     let mut server = Server::new_async().await;
     let (otlp, recorded) = capture(&mut server, OTLP_PATH, 200, "{}", 3).await;
     let client = v4_client(&server);
-    let start = chrono::DateTime::parse_from_rfc3339("2026-11-10T12:00:00.000Z")
-        .unwrap()
-        .with_timezone(&chrono::Utc);
+    let start: jiff::Timestamp = "2026-11-10T12:00:00.000Z".parse().unwrap();
 
     client.trace().id("t1").name("chat").call().await.unwrap();
     let span_id = client
@@ -588,7 +586,7 @@ async fn update_resends_the_full_span_with_the_original_start() {
         .id("s1")
         .trace_id("t1")
         .output(json!({"done": true}))
-        .end_time(start + chrono::Duration::seconds(2))
+        .end_time(start + jiff::SignedDuration::from_secs(2))
         .call()
         .await
         .unwrap();

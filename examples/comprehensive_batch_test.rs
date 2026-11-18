@@ -1,7 +1,6 @@
 //! Comprehensive test demonstrating batching, metrics, and error handling
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use chrono::Utc;
 use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
 use langfuse_ergonomic::{BackpressurePolicy, Batcher, ClientBuilder};
 use std::time::Duration;
@@ -81,11 +80,11 @@ async fn main() -> anyhow::Result<()> {
 
         let trace_event = IngestionEvent::TraceEvent(IngestionEventTraceEvent {
             id: trace_id.clone(),
-            timestamp: Utc::now().to_rfc3339(),
+            timestamp: jiff::Timestamp::now().to_string(),
             r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
             body: TraceBody {
                 id: Some(Some(trace_id.clone())),
-                timestamp: Some(Some(Utc::now().fixed_offset())),
+                timestamp: Some(Some(jiff::Timestamp::now())),
                 name: Some(Some(format!("{trace_type}-trace-{i}"))),
                 user_id: Some(Some(user_id.to_string())),
                 session_id: Some(Some(session_id.clone())),
@@ -95,7 +94,7 @@ async fn main() -> anyhow::Result<()> {
                     "trace_type": trace_type,
                     "batch_test": true,
                     "features_tested": ["batching", "chunking", "retries", "metrics"],
-                    "timestamp": Utc::now().to_rfc3339(),
+                    "timestamp": jiff::Timestamp::now().to_string(),
                     "test_data": {
                         "importance": if i < 5 { "critical" } else if i < 15 { "normal" } else { "low" },
                         "processing_time_ms": 100 + i * 10,
@@ -220,11 +219,11 @@ async fn main() -> anyhow::Result<()> {
         let trace_id = Uuid::new_v4().to_string();
         let trace_event = IngestionEvent::TraceEvent(IngestionEventTraceEvent {
             id: trace_id.clone(),
-            timestamp: Utc::now().to_rfc3339(),
+            timestamp: jiff::Timestamp::now().to_string(),
             r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
             body: TraceBody {
                 id: Some(Some(trace_id.clone())),
-                timestamp: Some(Some(Utc::now().fixed_offset())),
+                timestamp: Some(Some(jiff::Timestamp::now())),
                 name: Some(Some(format!("additional-trace-{i}"))),
                 user_id: Some(Some(user_id.to_string())),
                 session_id: Some(Some(session_id.clone())),

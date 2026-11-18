@@ -42,7 +42,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-langfuse-client-base = { version = "0.25", default-features = false }
+langfuse-client-base = { version = "0.26", default-features = false }
 # The HTTP stack of langfuse-client-base: a tower service, reqwest by default.
 timvw-rust-runtime = { version = "^0.4.0", default-features = false, features = ["reqwest"] }
 bon = "^3.10.3"
@@ -50,7 +50,7 @@ serde = { version = "^1.0.229", features = ["derive"] }
 serde_json = "^1.0.154"
 reqwest = { version = "^0.13.5", features = ["json"], default-features = false }
 thiserror = "^2.0.21"
-chrono = { version = "^0.4.45", features = ["serde"] }
+jiff = { version = "^1.0.1", default-features = false, features = ["std", "serde"] }
 uuid = { version = ">=1.23.5, <1.27.0", features = ["v4", "v5", "serde"] }
 # `sync` and `macros` (`select!`) work on any target; the runtime and the timers only natively (below).
 tokio = { version = "^1.54.1", features = ["macros", "sync"] }

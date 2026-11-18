@@ -98,7 +98,7 @@ impl LangfuseClient {
                 };
                 vec![IngestionEvent::TraceEvent(IngestionEventTraceEvent::new(
                     uuid::Uuid::new_v4().to_string(),
-                    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                    crate::time::millis(crate::time::now_utc()),
                     body,
                     Type::TraceCreate,
                 ))]

@@ -1,7 +1,6 @@
 //! Example showing how to connect to a self-hosted Langfuse instance
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use chrono::Utc;
 use langfuse_ergonomic::{ApiVersion, ClientBuilder};
 use std::time::Duration;
 
@@ -54,7 +53,7 @@ async fn main() -> anyhow::Result<()> {
         .name("self-hosted-test")
         .metadata(serde_json::json!({
             "instance_type": "self-hosted",
-            "test_timestamp": Utc::now()
+            "test_timestamp": jiff::Timestamp::now()
         }))
         .tags(vec![
             "self-hosted".to_string(),
@@ -93,15 +92,15 @@ async fn main() -> anyhow::Result<()> {
 
     for i in 0..5 {
         let trace_id = Uuid::new_v4().to_string();
-        let timestamp = Utc::now();
+        let timestamp = jiff::Timestamp::now();
 
         let trace_event = IngestionEvent::TraceEvent(IngestionEventTraceEvent {
             id: trace_id.clone(),
-            timestamp: timestamp.to_rfc3339(),
+            timestamp: timestamp.to_string(),
             r#type: Type::TraceCreate,
             body: TraceBody {
                 id: Some(Some(trace_id.clone())),
-                timestamp: Some(Some(timestamp.fixed_offset())),
+                timestamp: Some(Some(timestamp)),
                 name: Some(Some(format!("self-hosted-trace-{i}"))),
                 metadata: Some(Some(serde_json::json!({
                     "index": i,

@@ -43,7 +43,7 @@ impl LangfuseClient {
         };
 
         let score_id = Uuid::new_v4().to_string();
-        let timestamp = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let timestamp = crate::time::millis(crate::time::now_utc());
 
         let score_value = if let Some(v) = value {
             CreateScoreValue::DoubleNumber(v)
@@ -269,7 +269,7 @@ pub(crate) fn score_event(
     IngestionEvent::ScoreEvent(IngestionEventScoreEvent {
         body,
         id: Uuid::new_v4().to_string(),
-        timestamp: crate::time::now_utc().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        timestamp: crate::time::millis(crate::time::now_utc()),
         metadata: None,
         r#type: Type::ScoreCreate,
     })

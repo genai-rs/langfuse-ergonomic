@@ -3,7 +3,6 @@
 // These tests exercise the Langfuse v3 read methods, which are deprecated.
 #![allow(deprecated)]
 
-use chrono::{DateTime, Utc};
 use langfuse_ergonomic::{ClientBuilder, Error, LangfuseClient, ObservationsViewSingle};
 use mockito::{Matcher, Server};
 use serde_json::json;
@@ -22,9 +21,9 @@ fn client(server: &Server) -> LangfuseClient {
 async fn ingestion_preserves_event_types_dates_and_usage() {
     let mut server = Server::new_async().await;
     let client = client(&server);
-    let start: DateTime<Utc> = "2026-10-03T12:34:56.123Z".parse().unwrap();
-    let end = start + chrono::Duration::seconds(2);
-    let completion = start + chrono::Duration::seconds(1);
+    let start: jiff::Timestamp = "2026-10-03T12:34:56.123Z".parse().unwrap();
+    let end = start + jiff::SignedDuration::from_secs(2);
+    let completion = start + jiff::SignedDuration::from_secs(1);
 
     for kind in [
         "trace-create",
@@ -36,22 +35,22 @@ async fn ingestion_preserves_event_types_dates_and_usage() {
     ] {
         let mut body = json!({"id": "observation-1"});
         if kind == "trace-create" {
-            body["timestamp"] = json!(start.fixed_offset());
+            body["timestamp"] = json!(start);
         } else {
             body["traceId"] = json!("trace-1");
-            body["startTime"] = json!(start.fixed_offset());
+            body["startTime"] = json!(start);
         }
         if matches!(
             kind,
             "span-create" | "generation-create" | "span-update" | "generation-update"
         ) {
-            body["endTime"] = json!(end.fixed_offset());
+            body["endTime"] = json!(end);
         }
         if kind == "generation-create" {
             body["usageDetails"] = json!({"input": 1200, "output": 340, "total": 1600});
         }
         if kind == "generation-update" {
-            body["completionStartTime"] = json!(completion.fixed_offset());
+            body["completionStartTime"] = json!(completion);
         }
         let mock = server
             .mock("POST", "/api/public/ingestion")
@@ -224,8 +223,10 @@ async fn single_observation_decodes_typed_dates_and_usage() {
     mock.assert_async().await;
     assert_eq!(observation.trace_id.as_deref(), Some("trace-1"));
     assert_eq!(
-        observation.start_time.with_timezone(&Utc),
-        "2026-10-03T12:34:56.123Z".parse::<DateTime<Utc>>().unwrap()
+        observation.start_time,
+        "2026-10-03T12:34:56.123Z"
+            .parse::<jiff::Timestamp>()
+            .unwrap()
     );
     assert_eq!(observation.usage_details["total"], 1540);
     assert_eq!(observation.usage.total, 1540);
@@ -237,9 +238,10 @@ async fn single_observation_decodes_typed_dates_and_usage() {
 }
 
 #[tokio::test]
-async fn trace_filters_preserve_rfc3339_offsets_and_reject_invalid_dates() {
+async fn trace_filters_are_sent_in_utc_and_reject_invalid_dates() {
     let mut server = Server::new_async().await;
     let client = client(&server);
+    // The client base's dates are jiff timestamps: an offset is read, and the instant is sent in UTC.
     let from = "2026-10-03T14:34:56+02:00";
     let to = "2026-10-03T14:35:56+02:00";
     let mock = server
@@ -247,8 +249,8 @@ async fn trace_filters_preserve_rfc3339_offsets_and_reject_invalid_dates() {
         .match_header("authorization", "Basic cGstbGYtdGVzdDpzay1sZi10ZXN0")
         .match_header("user-agent", Matcher::Regex("^langfuse-ergonomic/".into()))
         .match_query(Matcher::AllOf(vec![
-            Matcher::UrlEncoded("fromTimestamp".into(), from.into()),
-            Matcher::UrlEncoded("toTimestamp".into(), to.into()),
+            Matcher::UrlEncoded("fromTimestamp".into(), "2026-10-03T12:34:56Z".into()),
+            Matcher::UrlEncoded("toTimestamp".into(), "2026-10-03T12:35:56Z".into()),
             Matcher::UrlEncoded("page".into(), "2".into()),
             Matcher::UrlEncoded("limit".into(), "10".into()),
             Matcher::UrlEncoded("userId".into(), "user-1".into()),

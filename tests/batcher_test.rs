@@ -54,14 +54,14 @@ async fn test_metrics_accuracy_on_retries() {
     let trace_body = TraceBody {
         id: Some(Some("test-event".to_string())),
         name: Some(Some("test".to_string())),
-        timestamp: Some(Some(chrono::Utc::now().fixed_offset())),
+        timestamp: Some(Some(jiff::Timestamp::now())),
         ..Default::default()
     };
 
     let event_one_of = IngestionEventTraceEvent {
         body: trace_body,
         id: uuid::Uuid::new_v4().to_string(),
-        timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        timestamp: format!("{:.3}", jiff::Timestamp::now()),
         metadata: None,
         r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
     };
@@ -142,7 +142,7 @@ async fn test_batch_207_partial_success() {
         let event = IngestionEventTraceEvent {
             body: trace_body,
             id: format!("event-{i}"),
-            timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            timestamp: format!("{:.3}", jiff::Timestamp::now()),
             metadata: None,
             r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
         };
@@ -231,7 +231,7 @@ async fn test_batch_size_chunking() {
         let event = IngestionEventTraceEvent {
             body: trace_body,
             id: format!("event-{i}"),
-            timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            timestamp: format!("{:.3}", jiff::Timestamp::now()),
             metadata: None,
             r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
         };
@@ -292,7 +292,7 @@ async fn test_batch_retry_on_rate_limit() {
     let event = IngestionEventTraceEvent {
         body: trace_body,
         id: "event-1".to_string(),
-        timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        timestamp: format!("{:.3}", jiff::Timestamp::now()),
         metadata: None,
         r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
     };
@@ -343,7 +343,7 @@ async fn test_batch_auth_failure_no_retry() {
     let event = IngestionEventTraceEvent {
         body: trace_body,
         id: "event-1".to_string(),
-        timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        timestamp: format!("{:.3}", jiff::Timestamp::now()),
         metadata: None,
         r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
     };

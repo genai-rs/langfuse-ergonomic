@@ -9,7 +9,7 @@ pub use langfuse_client_base::models::{
 };
 
 use bon::bon;
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde_json::Value;
 
 use uuid::Uuid;
@@ -62,9 +62,9 @@ pub(crate) struct ObservationFields {
     pub trace_id: String,
     pub parent_observation_id: Option<String>,
     pub name: Option<String>,
-    pub start_time: DateTime<Utc>,
-    pub end_time: Option<DateTime<Utc>>,
-    pub completion_start_time: Option<DateTime<Utc>>,
+    pub start_time: Timestamp,
+    pub end_time: Option<Timestamp>,
+    pub completion_start_time: Option<Timestamp>,
     pub input: Option<Value>,
     pub output: Option<Value>,
     pub metadata: Option<Value>,
@@ -126,12 +126,10 @@ pub(crate) fn observation_event(
     };
 
     let envelope_id = Uuid::new_v4().to_string();
-    let timestamp = f
-        .start_time
-        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
-    let start = Some(Some(f.start_time.fixed_offset()));
-    let end = f.end_time.map(|t| Some(t.fixed_offset()));
-    let completion_start = f.completion_start_time.map(|t| Some(t.fixed_offset()));
+    let timestamp = crate::time::millis(f.start_time);
+    let start = Some(Some(f.start_time));
+    let end = f.end_time.map(Some);
+    let completion_start = f.completion_start_time.map(Some);
     let some = |v: Option<String>| v.map(Some);
     let model_parameters = f
         .model_parameters
@@ -357,14 +355,14 @@ impl LangfuseClient {
         metadata: Option<Value>,
         #[builder(into)] level: Option<String>,
         #[builder(into)] status_message: Option<String>,
-        start_time: Option<DateTime<Utc>>,
-        end_time: Option<DateTime<Utc>>,
+        start_time: Option<Timestamp>,
+        end_time: Option<Timestamp>,
         #[builder(into)] version: Option<String>,
         #[builder(into)] model: Option<String>,
         /// A JSON object of model parameters.
         model_parameters: Option<Value>,
         /// When the first token arrived (time to first token).
-        completion_start_time: Option<DateTime<Utc>>,
+        completion_start_time: Option<Timestamp>,
         /// Token counts by usage type (`input`, `output`, `total`, `cache_read_input_tokens`, ...).
         usage_details: Option<std::collections::HashMap<String, i64>>,
         /// Costs in USD by usage type (`input`, `output`, `total`, ...).
@@ -433,8 +431,8 @@ impl LangfuseClient {
         metadata: Option<Value>,
         #[builder(into)] level: Option<String>,
         #[builder(into)] status_message: Option<String>,
-        start_time: Option<DateTime<Utc>>,
-        end_time: Option<DateTime<Utc>>,
+        start_time: Option<Timestamp>,
+        end_time: Option<Timestamp>,
     ) -> Result<String> {
         use langfuse_client_base::models::{
             ingestion_event_create_span_event::Type as SpanEventType, CreateSpanBody,
@@ -443,14 +441,13 @@ impl LangfuseClient {
 
         let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
         let trace_id_for_context = trace_id;
-        let timestamp = start_time.unwrap_or_else(Utc::now);
+        let timestamp = start_time.unwrap_or_else(crate::time::now_utc);
         let level = level.map(|l| parse_observation_level(&l));
-        let end_time = end_time.map(|t| t.fixed_offset());
 
         let span_body = CreateSpanBody::builder()
             .id(Some(observation_id.clone()))
             .trace_id(Some(trace_id_for_context.clone()))
-            .start_time(Some(timestamp.fixed_offset()))
+            .start_time(Some(timestamp))
             .maybe_end_time(end_time.map(Some))
             .maybe_name(name.map(Some))
             .maybe_parent_observation_id(parent_observation_id.map(Some))
@@ -464,7 +461,7 @@ impl LangfuseClient {
         let event = IngestionEventCreateSpanEvent::builder()
             .body(span_body)
             .id(Uuid::new_v4().to_string())
-            .timestamp(timestamp.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
+            .timestamp(crate::time::millis(timestamp))
             .r#type(SpanEventType::SpanCreate)
             .build();
 
@@ -517,8 +514,8 @@ impl LangfuseClient {
         metadata: Option<Value>,
         #[builder(into)] level: Option<String>,
         #[builder(into)] status_message: Option<String>,
-        start_time: Option<DateTime<Utc>>,
-        end_time: Option<DateTime<Utc>>,
+        start_time: Option<Timestamp>,
+        end_time: Option<Timestamp>,
         #[builder(into)] model: Option<String>,
         _model_parameters: Option<Value>,
         prompt_tokens: Option<i32>,
@@ -531,7 +528,7 @@ impl LangfuseClient {
         /// Costs in USD by usage type (`input`, `output`, `total`, ...), sent as `costDetails`.
         cost_details: Option<std::collections::HashMap<String, f64>>,
         /// When the first token arrived (time to first token).
-        completion_start_time: Option<DateTime<Utc>>,
+        completion_start_time: Option<Timestamp>,
         /// The Langfuse prompt this generation used (see [`crate::prompts::FetchedPrompt`]).
         #[builder(into)]
         prompt_name: Option<String>,
@@ -547,10 +544,9 @@ impl LangfuseClient {
 
         let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
         let trace_id_for_context = trace_id;
-        let timestamp = start_time.unwrap_or_else(Utc::now);
+        let timestamp = start_time.unwrap_or_else(crate::time::now_utc);
 
         let level = level.map(|l| parse_observation_level(&l));
-        let end_time = end_time.map(|t| t.fixed_offset());
 
         let mut usage_details = usage_details.unwrap_or_default();
         usage_details.extend(
@@ -570,7 +566,7 @@ impl LangfuseClient {
         let generation_body = CreateGenerationBody::builder()
             .id(Some(observation_id.clone()))
             .trace_id(Some(trace_id_for_context.clone()))
-            .start_time(Some(timestamp.fixed_offset()))
+            .start_time(Some(timestamp))
             .maybe_name(name.map(Some))
             .maybe_end_time(end_time.map(Some))
             .maybe_model(model.map(Some))
@@ -582,7 +578,7 @@ impl LangfuseClient {
             .maybe_level(level)
             .maybe_status_message(status_message.map(Some))
             .maybe_parent_observation_id(parent_observation_id.map(Some))
-            .maybe_completion_start_time(completion_start_time.map(|t| Some(t.fixed_offset())))
+            .maybe_completion_start_time(completion_start_time.map(Some))
             .maybe_cost_details(cost_details.filter(|c| !c.is_empty()).map(Some))
             .maybe_prompt_name(prompt_name.map(Some))
             .maybe_prompt_version(prompt_version.map(Some))
@@ -592,7 +588,7 @@ impl LangfuseClient {
         let event = IngestionEventCreateGenerationEvent::builder()
             .body(generation_body)
             .id(Uuid::new_v4().to_string())
-            .timestamp(timestamp.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
+            .timestamp(crate::time::millis(timestamp))
             .r#type(GenerationEventType::GenerationCreate)
             .build();
 
@@ -633,7 +629,7 @@ impl LangfuseClient {
         metadata: Option<Value>,
         #[builder(into)] level: Option<String>,
         #[builder(into)] status_message: Option<String>,
-        start_time: Option<DateTime<Utc>>,
+        start_time: Option<Timestamp>,
     ) -> Result<String> {
         use langfuse_client_base::models::{
             ingestion_event_create_event_event::Type as EventEventType, CreateEventBody,
@@ -642,14 +638,14 @@ impl LangfuseClient {
 
         let observation_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
         let trace_id_for_context = trace_id;
-        let timestamp = start_time.unwrap_or_else(Utc::now);
+        let timestamp = start_time.unwrap_or_else(crate::time::now_utc);
 
         let level = level.map(|l| parse_observation_level(&l));
 
         let event_body = CreateEventBody::builder()
             .id(Some(observation_id.clone()))
             .trace_id(Some(trace_id_for_context.clone()))
-            .start_time(Some(timestamp.fixed_offset()))
+            .start_time(Some(timestamp))
             .maybe_name(name.map(Some))
             .maybe_input(input.map(Some))
             .maybe_output(output.map(Some))
@@ -662,7 +658,7 @@ impl LangfuseClient {
         let event = IngestionEventCreateEventEvent::builder()
             .body(event_body)
             .id(Uuid::new_v4().to_string())
-            .timestamp(timestamp.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
+            .timestamp(crate::time::millis(timestamp))
             .r#type(EventEventType::EventCreate)
             .build();
 
@@ -776,8 +772,8 @@ impl LangfuseClient {
         #[builder(into)] id: String,
         #[builder(into)] trace_id: String,
         #[builder(into)] name: Option<String>,
-        start_time: Option<DateTime<Utc>>,
-        end_time: Option<DateTime<Utc>>,
+        start_time: Option<Timestamp>,
+        end_time: Option<Timestamp>,
         metadata: Option<Value>,
         input: Option<Value>,
         output: Option<Value>,
@@ -786,7 +782,6 @@ impl LangfuseClient {
         version: Option<String>,
         #[builder(into)] parent_observation_id: Option<String>,
     ) -> Result<String> {
-        use chrono::Utc as ChronoUtc;
         use langfuse_client_base::models::{
             IngestionEvent, IngestionEventUpdateSpanEvent, UpdateSpanBody,
         };
@@ -796,8 +791,8 @@ impl LangfuseClient {
             id: id.clone(),
             trace_id: Some(Some(trace_id)),
             name: Some(name),
-            start_time: Some(start_time.map(|dt| dt.fixed_offset())),
-            end_time: Some(end_time.map(|dt| dt.fixed_offset())),
+            start_time: Some(start_time),
+            end_time: Some(end_time),
             metadata: Some(metadata),
             input: Some(input),
             output: Some(output),
@@ -811,7 +806,7 @@ impl LangfuseClient {
         let event = IngestionEventUpdateSpanEvent {
             body: event_body,
             id: Uuid::new_v4().to_string(),
-            timestamp: ChronoUtc::now().to_rfc3339(),
+            timestamp: crate::time::millis(crate::time::now_utc()),
             metadata: None,
             r#type:
                 langfuse_client_base::models::ingestion_event_update_span_event::Type::SpanUpdate,
@@ -847,9 +842,9 @@ impl LangfuseClient {
         #[builder(into)] id: String,
         #[builder(into)] trace_id: String,
         #[builder(into)] name: Option<String>,
-        start_time: Option<DateTime<Utc>>,
-        end_time: Option<DateTime<Utc>>,
-        completion_start_time: Option<DateTime<Utc>>,
+        start_time: Option<Timestamp>,
+        end_time: Option<Timestamp>,
+        completion_start_time: Option<Timestamp>,
         model: Option<String>,
         input: Option<Value>,
         output: Option<Value>,
@@ -870,7 +865,6 @@ impl LangfuseClient {
         /// The version of `prompt_name`.
         prompt_version: Option<i64>,
     ) -> Result<String> {
-        use chrono::Utc as ChronoUtc;
         use langfuse_client_base::models::{
             IngestionEvent, IngestionEventUpdateGenerationEvent, UpdateGenerationBody, UsageDetails,
         };
@@ -880,9 +874,9 @@ impl LangfuseClient {
             id: id.clone(),
             trace_id: Some(Some(trace_id)),
             name: Some(name),
-            start_time: Some(start_time.map(|dt| dt.fixed_offset())),
-            end_time: Some(end_time.map(|dt| dt.fixed_offset())),
-            completion_start_time: Some(completion_start_time.map(|dt| dt.fixed_offset())),
+            start_time: Some(start_time),
+            end_time: Some(end_time),
+            completion_start_time: Some(completion_start_time),
             model: Some(model),
             model_parameters: model_parameters
                 .as_ref()
@@ -908,7 +902,7 @@ impl LangfuseClient {
         let event = IngestionEventUpdateGenerationEvent {
             body: event_body,
             id: Uuid::new_v4().to_string(),
-            timestamp: ChronoUtc::now().to_rfc3339(),
+            timestamp: crate::time::millis(crate::time::now_utc()),
             metadata: None,
             r#type: langfuse_client_base::models::ingestion_event_update_generation_event::Type::GenerationUpdate,
         };
@@ -989,7 +983,7 @@ impl LangfuseClient {
     ///     let page = client
     ///         .observations()
     ///         .is_root_observation(true)
-    ///         .from_start_time(chrono::Utc::now() - chrono::Duration::days(1))
+    ///         .from_start_time(jiff::Timestamp::now() - jiff::SignedDuration::from_hours(24))
     ///         .limit(50)
     ///         .maybe_cursor(cursor)
     ///         .call()
@@ -1018,9 +1012,9 @@ impl LangfuseClient {
         /// Only root observations (`true`) or only children (`false`).
         is_root_observation: Option<bool>,
         /// Inclusive lower bound on the start time.
-        from_start_time: Option<DateTime<Utc>>,
+        from_start_time: Option<Timestamp>,
         /// Exclusive upper bound on the start time.
-        to_start_time: Option<DateTime<Utc>>,
+        to_start_time: Option<Timestamp>,
         #[builder(into)] user_id: Option<String>,
         #[builder(into)] session_id: Option<String>,
         /// Observation type, for example `GENERATION`.
@@ -1082,14 +1076,8 @@ impl LangfuseClient {
         for environment in environment.into_iter().flatten() {
             push("environment", Some(environment));
         }
-        push(
-            "fromStartTime",
-            from_start_time.map(|t| t.fixed_offset().to_rfc3339()),
-        );
-        push(
-            "toStartTime",
-            to_start_time.map(|t| t.fixed_offset().to_rfc3339()),
-        );
+        push("fromStartTime", from_start_time.map(|t| t.to_string()));
+        push("toStartTime", to_start_time.map(|t| t.to_string()));
         push("version", version);
         push("filter", filter);
 

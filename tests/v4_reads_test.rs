@@ -4,7 +4,6 @@
 
 use std::sync::{Arc, Mutex};
 
-use chrono::{TimeZone, Utc};
 use langfuse_ergonomic::{
     otel, ApiVersion, ClientBuilder, Error, LangfuseClient, ObservationLevel,
     ALL_OBSERVATION_FIELDS, MAX_OBSERVATIONS_PAGE_SIZE,
@@ -54,8 +53,8 @@ async fn observations_sends_filters_as_query_parameters() {
             Matcher::UrlEncoded("traceId".into(), trace_hex.clone()),
             Matcher::UrlEncoded("parentObservationId".into(), parent_hex),
             Matcher::UrlEncoded("isRootObservation".into(), "false".into()),
-            Matcher::UrlEncoded("fromStartTime".into(), "2026-11-01T00:00:00+00:00".into()),
-            Matcher::UrlEncoded("toStartTime".into(), "2026-11-02T00:00:00+00:00".into()),
+            Matcher::UrlEncoded("fromStartTime".into(), "2026-11-01T00:00:00Z".into()),
+            Matcher::UrlEncoded("toStartTime".into(), "2026-11-02T00:00:00Z".into()),
             Matcher::UrlEncoded("userId".into(), "user-1".into()),
             Matcher::UrlEncoded("sessionId".into(), "session-1".into()),
             Matcher::UrlEncoded("type".into(), "GENERATION".into()),
@@ -85,8 +84,8 @@ async fn observations_sends_filters_as_query_parameters() {
         .trace_id("my-trace")
         .parent_observation_id("parent")
         .is_root_observation(false)
-        .from_start_time(Utc.with_ymd_and_hms(2026, 11, 1, 0, 0, 0).unwrap())
-        .to_start_time(Utc.with_ymd_and_hms(2026, 11, 2, 0, 0, 0).unwrap())
+        .from_start_time("2026-11-01T00:00:00Z".parse::<jiff::Timestamp>().unwrap())
+        .to_start_time("2026-11-02T00:00:00Z".parse::<jiff::Timestamp>().unwrap())
         .user_id("user-1")
         .session_id("session-1")
         .observation_type("GENERATION")

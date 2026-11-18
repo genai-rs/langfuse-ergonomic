@@ -3,6 +3,27 @@
 Notes for upgrading between releases, newest first. The [CHANGELOG](../CHANGELOG.md) lists
 every change.
 
+## Migrating to 0.16: jiff instead of chrono
+
+chrono is unmaintained ([RUSTSEC-2026-0543](https://rustsec.org/advisories/RUSTSEC-2026-0543)). This
+release and `langfuse-client-base` 0.26 use [jiff](https://docs.rs/jiff) for dates; chrono is no
+longer a dependency.
+
+| Before (chrono) | After (jiff) |
+| --- | --- |
+| `chrono::DateTime<Utc>` in the builders (`start_time`, `end_time`, `completion_start_time`, `timestamp`, `from_start_time`, `to_start_time`) and in `Observation::start_time()`, `set_completion_start_time()` | `jiff::Timestamp` |
+| `chrono::DateTime<FixedOffset>` in the base models | `jiff::Timestamp` |
+| `chrono::NaiveDate` in the base models | `jiff::civil::Date` |
+| `Utc::now()` | `jiff::Timestamp::now()` |
+| `start + chrono::Duration::milliseconds(180)` | `start + jiff::SignedDuration::from_millis(180)` |
+| `DateTime::parse_from_rfc3339(s)?` | `s.parse::<jiff::Timestamp>()?` |
+| `t.to_rfc3339()` | `t.to_string()` |
+
+A `jiff::Timestamp` is an instant: dates are sent in UTC (`Z`), and an offset in a response is
+not kept. The trace list filters (`from_timestamp`, `to_timestamp`) still take RFC 3339 strings
+with any offset and send them in UTC. Code that still holds chrono values converts through RFC
+3339 text: `t.to_rfc3339().parse::<jiff::Timestamp>()?`.
+
 ## Migrating to 0.15
 
 0.15 adds automatic tracing and closes most gaps to the other Langfuse SDKs. Existing code

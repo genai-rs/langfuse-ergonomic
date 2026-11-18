@@ -333,13 +333,10 @@ impl<'c, F> ExperimentBuilder<'c, F> {
         let client = self.client;
         let dataset = client.get_dataset(self.dataset_name.as_str()).await?;
         let items = self.items().await?;
-        let run_name = self.run_name.clone().unwrap_or_else(|| {
-            format!(
-                "{}-{}",
-                self.dataset_name,
-                crate::time::now_utc().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
-            )
-        });
+        let run_name = self
+            .run_name
+            .clone()
+            .unwrap_or_else(|| format!("{}-{:.0}", self.dataset_name, crate::time::now_utc()));
 
         let batcher = Batcher::builder()
             .client(client.clone())
