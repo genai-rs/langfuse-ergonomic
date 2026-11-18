@@ -39,7 +39,7 @@ async fn test_simple_batch_200() {
     let event = IngestionEventTraceEvent {
         body: trace_body,
         id: "test-event-1".to_string(),
-        timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        timestamp: format!("{:.3}", jiff::Timestamp::now()),
         metadata: None,
         r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
     };

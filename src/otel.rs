@@ -83,7 +83,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use chrono::{DateTime, FixedOffset, Utc};
+use jiff::Timestamp;
 use langfuse_client_base::models::{
     CreateScoreRequest, IngestionEvent, IngestionUsage, MapValue, ObservationLevel,
     ObservationType, ScoreBody, UsageDetails,
@@ -216,11 +216,9 @@ impl Attributes {
         }
     }
 
-    fn time(&mut self, key: &str, value: Option<&DateTime<FixedOffset>>) {
+    fn time(&mut self, key: &str, value: Option<&Timestamp>) {
         if let Some(value) = value {
-            let formatted = value
-                .with_timezone(&Utc)
-                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+            let formatted = crate::time::millis(*value);
             self.push(key, json!({ "stringValue": formatted }));
         }
     }
@@ -299,12 +297,12 @@ fn observation_type_str(kind: ObservationType) -> &'static str {
     }
 }
 
-fn nanos(time: &DateTime<FixedOffset>) -> Option<String> {
-    time.timestamp_nanos_opt().map(|n| n.max(0).to_string())
+fn nanos(time: &Timestamp) -> Option<String> {
+    Some(time.as_nanosecond().max(0).to_string())
 }
 
-fn parse_envelope_time(timestamp: &str) -> Option<DateTime<FixedOffset>> {
-    DateTime::parse_from_rfc3339(timestamp).ok()
+fn parse_envelope_time(timestamp: &str) -> Option<Timestamp> {
+    timestamp.parse::<Timestamp>().ok()
 }
 
 /// The fields shared by all observation bodies, borrowed from the ingestion event.
@@ -316,9 +314,9 @@ struct Observation<'a> {
     trace_id: Option<&'a str>,
     parent_observation_id: Option<&'a str>,
     name: Option<&'a str>,
-    start_time: Option<DateTime<FixedOffset>>,
-    end_time: Option<DateTime<FixedOffset>>,
-    completion_start_time: Option<&'a DateTime<FixedOffset>>,
+    start_time: Option<Timestamp>,
+    end_time: Option<Timestamp>,
+    completion_start_time: Option<&'a Timestamp>,
     input: Option<&'a Value>,
     output: Option<&'a Value>,
     metadata: Option<&'a Value>,
@@ -429,8 +427,8 @@ fn span_json(
     span_hex: String,
     parent_hex: Option<String>,
     name: &str,
-    start: Option<&DateTime<FixedOffset>>,
-    end: Option<&DateTime<FixedOffset>>,
+    start: Option<&Timestamp>,
+    end: Option<&Timestamp>,
     attributes: Attributes,
     error_status: Option<&str>,
 ) -> Value {
@@ -457,10 +455,7 @@ fn span_json(
     Value::Object(span)
 }
 
-fn encode_observation(
-    obs: Observation<'_>,
-    envelope_time: Option<DateTime<FixedOffset>>,
-) -> Result<Value> {
+fn encode_observation(obs: Observation<'_>, envelope_time: Option<Timestamp>) -> Result<Value> {
     let trace_raw = obs.trace_id.ok_or_else(|| missing_trace_id(obs.kind))?;
     let id_raw = obs
         .id
@@ -525,7 +520,7 @@ fn encode_observation(
 
 fn encode_trace(
     body: &langfuse_client_base::models::TraceBody,
-    envelope_time: Option<DateTime<FixedOffset>>,
+    envelope_time: Option<Timestamp>,
 ) -> Result<Value> {
     let trace_raw = flat_str(&body.id).ok_or_else(|| missing_trace_id("trace"))?;
     let time = flat(&body.timestamp).copied().or(envelope_time);
@@ -561,10 +556,7 @@ fn encode_trace(
     ))
 }
 
-fn encode_score(
-    body: &ScoreBody,
-    envelope_time: Option<DateTime<FixedOffset>>,
-) -> CreateScoreRequest {
+fn encode_score(body: &ScoreBody, envelope_time: Option<Timestamp>) -> CreateScoreRequest {
     let metadata = flat(&body.metadata).and_then(|m| match m {
         Value::Null => None,
         Value::Object(map) => Some(map.clone().into_iter().collect::<HashMap<_, _>>()),
@@ -592,7 +584,7 @@ fn encode_score(
 fn encode_observation_body(
     b: &langfuse_client_base::models::ObservationBody,
     is_update: bool,
-    envelope_time: Option<DateTime<FixedOffset>>,
+    envelope_time: Option<Timestamp>,
 ) -> Result<Value> {
     let legacy_usage = b.usage.clone().map(IngestionUsage::Usage);
     let (usage, legacy_cost) = usage_details_json(None, legacy_usage.as_ref());
@@ -1279,7 +1271,7 @@ impl V4State {
     fn apply_trace(
         &mut self,
         body: &langfuse_client_base::models::TraceBody,
-        envelope_time: Option<DateTime<FixedOffset>>,
+        envelope_time: Option<Timestamp>,
     ) -> Result<Value> {
         let raw = encode_trace(body, envelope_time)?;
         let trace_hex = span_str(&raw, "traceId").unwrap_or_default().to_owned();
@@ -1506,8 +1498,8 @@ mod tests {
 
     const TS: &str = "2026-11-10T12:00:00.000Z";
 
-    fn time(s: &str) -> DateTime<FixedOffset> {
-        DateTime::parse_from_rfc3339(s).unwrap()
+    fn time(s: &str) -> Timestamp {
+        s.parse::<Timestamp>().unwrap()
     }
 
     fn span_of(event: IngestionEvent) -> Value {

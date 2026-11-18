@@ -96,7 +96,7 @@ pub mod __private;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use langfuse_client_base::models::{IngestionEvent, ObservationLevel};
 use serde::Serialize;
 use serde_json::Value;
@@ -238,7 +238,7 @@ struct ObservationData {
     model_parameters: Option<Value>,
     usage_details: Option<HashMap<String, i64>>,
     cost_details: Option<HashMap<String, f64>>,
-    completion_start_time: Option<DateTime<Utc>>,
+    completion_start_time: Option<Timestamp>,
     prompt_name: Option<String>,
     prompt_version: Option<i64>,
     panicked: bool,
@@ -254,7 +254,7 @@ struct Inner {
     kind: ObservationType,
     /// Whether this observation sends the trace (it started the trace in this process).
     trace_root: bool,
-    start_time: DateTime<Utc>,
+    start_time: Timestamp,
     data: Mutex<ObservationData>,
 }
 
@@ -343,7 +343,7 @@ impl Observation {
     }
 
     /// The start time, if recording.
-    pub fn start_time(&self) -> Option<DateTime<Utc>> {
+    pub fn start_time(&self) -> Option<Timestamp> {
         self.inner.as_ref().map(|inner| inner.start_time)
     }
 
@@ -491,7 +491,7 @@ impl Observation {
     }
 
     /// Set when the first token arrived (time to first token).
-    pub fn set_completion_start_time(&self, time: DateTime<Utc>) {
+    pub fn set_completion_start_time(&self, time: Timestamp) {
         self.with_data(|data| data.completion_start_time = Some(time));
     }
 
@@ -789,7 +789,7 @@ impl Inner {
     }
 
     /// The events of the ended observation: its create event, and for a trace root the trace.
-    fn events(&self, data: &mut ObservationData, end_time: DateTime<Utc>) -> Vec<IngestionEvent> {
+    fn events(&self, data: &mut ObservationData, end_time: Timestamp) -> Vec<IngestionEvent> {
         use crate::observations::{observation_event, ObservationFields};
 
         let mut fields = ObservationFields::new(self.kind, self.id.clone(), self.trace_id.clone());
@@ -819,7 +819,7 @@ impl Inner {
             let attributes = lock(&self.trace).clone();
             let body = TraceBody {
                 id: Some(Some(self.trace_id.clone())),
-                timestamp: Some(Some(self.start_time.fixed_offset())),
+                timestamp: Some(Some(self.start_time)),
                 name: Some(Some(attributes.name.unwrap_or_else(|| data.name.clone()))),
                 user_id: attributes.user_id.map(Some),
                 session_id: attributes.session_id.map(Some),
@@ -834,8 +834,7 @@ impl Inner {
             };
             IngestionEvent::TraceEvent(IngestionEventTraceEvent::new(
                 uuid::Uuid::new_v4().to_string(),
-                self.start_time
-                    .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                crate::time::millis(self.start_time),
                 body,
                 Type::TraceCreate,
             ))

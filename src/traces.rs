@@ -1,7 +1,7 @@
 //! Trace-related functionality with builder patterns
 
 use bon::bon;
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde_json::Value;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -178,7 +178,7 @@ impl LangfuseClient {
         #[builder(default = Vec::new())] tags: Vec<String>,
         #[builder(into)] user_id: Option<String>,
         #[builder(into)] session_id: Option<String>,
-        timestamp: Option<DateTime<Utc>>,
+        timestamp: Option<Timestamp>,
         #[builder(into)] release: Option<String>,
         #[builder(into)] version: Option<String>,
         public: Option<bool>,
@@ -189,13 +189,13 @@ impl LangfuseClient {
         };
 
         let trace_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
-        let timestamp = timestamp.unwrap_or_else(Utc::now);
+        let timestamp = timestamp.unwrap_or_else(crate::time::now_utc);
 
         let tags_option = if tags.is_empty() { None } else { Some(tags) };
 
         let trace_body = TraceBody::builder()
             .id(Some(trace_id.clone()))
-            .timestamp(Some(timestamp.fixed_offset()))
+            .timestamp(Some(timestamp))
             .maybe_name(name.map(Some))
             .maybe_user_id(user_id.map(Some))
             .maybe_input(input.map(Some))
@@ -211,7 +211,7 @@ impl LangfuseClient {
         let event = IngestionEventTraceEvent::builder()
             .body(trace_body)
             .id(Uuid::new_v4().to_string())
-            .timestamp(timestamp.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
+            .timestamp(crate::time::millis(timestamp))
             .r#type(TraceEventType::TraceCreate)
             .build();
 
@@ -287,7 +287,8 @@ impl LangfuseClient {
         )?;
 
         let parse_timestamp = |value: String| {
-            DateTime::parse_from_rfc3339(&value)
+            value
+                .parse::<Timestamp>()
                 .map_err(|e| Error::Validation(format!("Trace timestamp must be RFC3339: {e}")))
         };
         let from_timestamp = from_timestamp.map(parse_timestamp).transpose()?;

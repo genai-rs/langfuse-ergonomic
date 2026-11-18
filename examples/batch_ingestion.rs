@@ -1,7 +1,6 @@
 //! Example demonstrating batch ingestion with automatic chunking and retries
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use chrono::Utc;
 use langfuse_client_base::models::{IngestionEvent, IngestionEventTraceEvent, TraceBody};
 use langfuse_ergonomic::{Batcher, ClientBuilder};
 use uuid::Uuid;
@@ -26,16 +25,16 @@ async fn main() -> anyhow::Result<()> {
     // Create multiple traces
     for i in 0..20 {
         let trace_id = Uuid::new_v4().to_string();
-        let timestamp = Utc::now();
+        let timestamp = jiff::Timestamp::now();
 
         // Add trace event
         let trace_event = IngestionEvent::TraceEvent(IngestionEventTraceEvent {
             id: trace_id.clone(),
-            timestamp: timestamp.to_rfc3339(),
+            timestamp: timestamp.to_string(),
             r#type: langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
             body: TraceBody {
                 id: Some(Some(trace_id.clone())),
-                timestamp: Some(Some(timestamp.fixed_offset())),
+                timestamp: Some(Some(timestamp)),
                 name: Some(Some(format!("batch-trace-{i}"))),
                 user_id: Some(Some("test-user".to_string())),
                 metadata: Some(Some(serde_json::json!({

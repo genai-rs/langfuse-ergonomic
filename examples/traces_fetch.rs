@@ -68,7 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .is_root_observation(true)
         .user_id("example-user")
         .name("fetch-example-trace")
-        .from_start_time(chrono::Utc::now() - chrono::Duration::hours(1))
+        .from_start_time(jiff::Timestamp::now() - jiff::SignedDuration::from_hours(1))
         .limit(5)
         .call()
         .await?;
@@ -83,7 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let page = client
             .observations()
             .is_root_observation(true)
-            .from_start_time(chrono::Utc::now() - chrono::Duration::days(1))
+            .from_start_time(jiff::Timestamp::now() - jiff::SignedDuration::from_hours(24))
             .limit(3)
             .maybe_cursor(cursor)
             .call()

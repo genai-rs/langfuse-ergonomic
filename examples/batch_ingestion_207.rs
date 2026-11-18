@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             name: Some(Some(format!("Batch Test Trace {i}"))),
             input: Some(Some(json!({
                 "batch_index": i,
-                "timestamp": chrono::Utc::now().to_rfc3339()
+                "timestamp": jiff::Timestamp::now().to_string()
             }))),
             output: Some(Some(json!({
                 "processed": true,
@@ -86,7 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let event = IngestionEvent::TraceEvent(IngestionEventTraceEvent::new(
             format!("event-{i}"),
-            chrono::Utc::now().to_rfc3339(),
+            jiff::Timestamp::now().to_string(),
             trace,
             langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
         ));
@@ -149,7 +149,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let event = IngestionEvent::TraceEvent(IngestionEventTraceEvent::new(
             format!("event-{i}"),
-            chrono::Utc::now().to_rfc3339(),
+            jiff::Timestamp::now().to_string(),
             trace,
             langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
         ));
@@ -246,7 +246,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let event = IngestionEvent::TraceEvent(IngestionEventTraceEvent::new(
             format!("event-{i}"),
-            chrono::Utc::now().to_rfc3339(),
+            jiff::Timestamp::now().to_string(),
             trace,
             langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
         ));

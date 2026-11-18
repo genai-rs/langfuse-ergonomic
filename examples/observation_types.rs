@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use chrono::{Duration, Utc};
+use jiff::{SignedDuration, Timestamp};
 use langfuse_ergonomic::ClientBuilder;
 use serde_json::json;
 
@@ -59,7 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .call()
         .await?;
 
-    let start = Utc::now();
+    let start = Timestamp::now();
     client
         .generation()
         .trace_id(&trace.id)
@@ -67,8 +67,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .name("answer")
         .model("gpt-4o")
         .start_time(start)
-        .completion_start_time(start + Duration::milliseconds(200))
-        .end_time(start + Duration::milliseconds(800))
+        .completion_start_time(start + SignedDuration::from_millis(200))
+        .end_time(start + SignedDuration::from_millis(800))
         .usage_details(HashMap::from([
             ("input".to_owned(), 320),
             ("output".to_owned(), 48),

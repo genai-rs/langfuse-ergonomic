@@ -14,12 +14,17 @@ pub(crate) use std::time::Instant;
 #[cfg(target_family = "wasm")]
 pub(crate) use web_time::Instant;
 
-/// The wall clock as a UTC date-time (`Date.now()` on WebAssembly).
-pub(crate) fn now_utc() -> chrono::DateTime<chrono::Utc> {
+/// The wall clock as a timestamp (`Date.now()` on WebAssembly, where `jiff::Timestamp::now` panics).
+pub(crate) fn now_utc() -> jiff::Timestamp {
     let since = since_epoch();
-    #[allow(clippy::cast_possible_wrap)]
-    chrono::DateTime::from_timestamp(since.as_secs() as i64, since.subsec_nanos())
-        .unwrap_or_default()
+    #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+    jiff::Timestamp::new(since.as_secs() as i64, since.subsec_nanos() as i32).unwrap_or_default()
+}
+
+/// A timestamp as Langfuse's ingestion API takes it: RFC 3339 in UTC with milliseconds
+/// (`2026-01-02T03:04:05.123Z`).
+pub(crate) fn millis(timestamp: jiff::Timestamp) -> String {
+    format!("{timestamp:.3}")
 }
 
 /// The wall clock, as the time since the Unix epoch: `Date.now()` on WebAssembly.

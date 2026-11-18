@@ -64,7 +64,7 @@ fn trace_event(id: &str) -> IngestionEvent {
             ..TraceBody::default()
         },
         id: id.to_owned(),
-        timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        timestamp: "2026-01-01T00:00:00.000Z".to_owned(),
         metadata: None,
         r#type: Type::TraceCreate,
     })

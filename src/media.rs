@@ -257,7 +257,7 @@ impl LangfuseClient {
             Err(error) => (0, Some(error.to_string())),
         };
         let patch = PatchMediaBody {
-            uploaded_at: crate::time::now_utc().fixed_offset(),
+            uploaded_at: crate::time::now_utc(),
             upload_http_status: i64::from(status),
             upload_http_error: error.clone().map(Some),
             upload_time_ms: Some(Some(elapsed)),

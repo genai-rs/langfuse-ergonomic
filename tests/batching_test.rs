@@ -26,7 +26,7 @@ fn create_test_event(id: &str) -> IngestionEvent {
 
     IngestionEvent::TraceEvent(IngestionEventTraceEvent::new(
         id.to_string(),
-        chrono::Utc::now().to_rfc3339(),
+        jiff::Timestamp::now().to_string(),
         trace_body,
         langfuse_client_base::models::ingestion_event_trace_event::Type::TraceCreate,
     ))

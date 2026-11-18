@@ -41,12 +41,12 @@ prefers); `update_span()` and `update_generation()` exist for the cases that nee
 ([Updates in V4](api-versions.md#updates-in-v4)).
 
 ```rust,no_run
-use chrono::Utc;
+use jiff::Timestamp;
 use langfuse_ergonomic::LangfuseClient;
 use serde_json::json;
 
 async fn example(client: &LangfuseClient, trace_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let started = Utc::now();
+    let started = Timestamp::now();
     let span_id = client
         .span()
         .trace_id(trace_id)
@@ -54,7 +54,7 @@ async fn example(client: &LangfuseClient, trace_id: &str) -> Result<(), Box<dyn 
         .input(json!({"query": "order status"}))
         .output(json!({"documents": 3}))
         .start_time(started)
-        .end_time(Utc::now())
+        .end_time(Timestamp::now())
         .call()
         .await?;
 
@@ -140,12 +140,12 @@ its parameters, the completion start time and the `input`/`output`/`total` usage
 ```rust,no_run
 use std::collections::HashMap;
 
-use chrono::{Duration, Utc};
+use jiff::{SignedDuration, Timestamp};
 use langfuse_ergonomic::LangfuseClient;
 use serde_json::json;
 
 async fn example(client: &LangfuseClient, trace_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let start = Utc::now();
+    let start = Timestamp::now();
     client
         .generation()
         .trace_id(trace_id)
@@ -155,8 +155,8 @@ async fn example(client: &LangfuseClient, trace_id: &str) -> Result<(), Box<dyn 
         .input(json!([{"role": "user", "content": "Hi"}]))
         .output(json!({"role": "assistant", "content": "Hello!"}))
         .start_time(start)
-        .completion_start_time(start + Duration::milliseconds(180)) // time to first token
-        .end_time(start + Duration::milliseconds(900))
+        .completion_start_time(start + SignedDuration::from_millis(180)) // time to first token
+        .end_time(start + SignedDuration::from_millis(900))
         .usage_details(HashMap::from([
             ("input".to_owned(), 12),
             ("output".to_owned(), 30),

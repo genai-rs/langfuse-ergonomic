@@ -231,16 +231,14 @@ pub(crate) fn parse_retry_after(headers: &timvw_rust_runtime::HeaderMap) -> Opti
         .and_then(|s| {
             // Try parsing as seconds (integer)
             s.parse::<u64>().ok().or_else(|| {
-                // Try parsing as HTTP-date (RFC2616)
-                chrono::DateTime::parse_from_rfc2822(s).ok().and_then(|dt| {
-                    let now = chrono::Utc::now();
-                    let retry_time = dt.with_timezone(&chrono::Utc);
-                    if retry_time > now {
-                        Some((retry_time - now).num_seconds() as u64)
-                    } else {
-                        None
-                    }
-                })
+                // Try parsing as HTTP-date (RFC 9110, an RFC 2822 date in GMT)
+                jiff::fmt::rfc2822::DateTimeParser::new()
+                    .parse_timestamp(s)
+                    .ok()
+                    .and_then(|retry_time| {
+                        let left = retry_time.duration_since(crate::time::now_utc());
+                        u64::try_from(left.as_secs()).ok().filter(|secs| *secs > 0)
+                    })
             })
         })
         .map(Duration::from_secs)
@@ -445,7 +443,14 @@ mod tests {
     #[test]
     fn test_parse_retry_after_http_date() {
         let mut headers = timvw_rust_runtime::header::HeaderMap::new();
-        let future = (chrono::Utc::now() + chrono::Duration::seconds(120)).to_rfc2822();
+        let http_date = |offset: i64| {
+            jiff::fmt::rfc2822::DateTimePrinter::new()
+                .timestamp_to_rfc9110_string(
+                    &(crate::time::now_utc() + jiff::SignedDuration::from_secs(offset)),
+                )
+                .unwrap()
+        };
+        let future = http_date(120);
         headers.insert(
             timvw_rust_runtime::header::RETRY_AFTER,
             timvw_rust_runtime::header::HeaderValue::from_str(&future).unwrap(),
@@ -456,7 +461,7 @@ mod tests {
             "unexpected delay {delay:?}"
         );
 
-        let past = (chrono::Utc::now() - chrono::Duration::seconds(120)).to_rfc2822();
+        let past = http_date(-120);
         headers.insert(
             timvw_rust_runtime::header::RETRY_AFTER,
             timvw_rust_runtime::header::HeaderValue::from_str(&past).unwrap(),

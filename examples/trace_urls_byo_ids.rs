@@ -164,7 +164,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 6: Idempotent trace creation
     println!("6 Demonstrating idempotent trace creation:");
 
-    let idempotent_seed = format!("daily-report:{}", chrono::Utc::now().format("%Y-%m-%d"));
+    let idempotent_seed = format!(
+        "daily-report:{}",
+        jiff::Timestamp::now().strftime("%Y-%m-%d")
+    );
     let idempotent_id = IdGenerator::from_seed(&idempotent_seed);
 
     println!("   Creating trace with ID from seed: {idempotent_seed}");
@@ -175,7 +178,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .id(idempotent_id.clone())
         .name("Daily Report")
         .metadata(json!({
-            "created_at": chrono::Utc::now().to_rfc3339(),
+            "created_at": jiff::Timestamp::now().to_string(),
             "attempt": 1
         }))
         .call()
@@ -189,7 +192,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .id(idempotent_id.clone())
         .name("Daily Report (Updated)")
         .metadata(json!({
-            "updated_at": chrono::Utc::now().to_rfc3339(),
+            "updated_at": jiff::Timestamp::now().to_string(),
             "attempt": 2
         }))
         .call()
