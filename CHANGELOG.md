@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.1](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.16.0...v0.16.1) - 2026-11-18
+
+### Other
+
+- let the release workflow request an OIDC token
+
 ## [0.16.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.15.2...v0.16.0) - 2026-11-18
 
 ### Added
