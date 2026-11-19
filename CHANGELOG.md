@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.16.2...v0.17.0) - 2026-11-19
+
+### Other
+
+- *(deps)* [**breaking**] sha2 0.11, base64 0.23, gloo-timers 0.4, syn 3, uuid 1.29 (Rust 1.89)
+
 ## [0.16.2](https://github.com/genai-rs/langfuse-ergonomic/compare/v0.16.1...v0.16.2) - 2026-11-18
 
 ### Other
