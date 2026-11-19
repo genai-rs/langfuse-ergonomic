@@ -11,7 +11,7 @@ documentation = "https://docs.rs/langfuse-ergonomic"
 readme = "README.md"
 keywords = ["langfuse", "observability", "llm", "tracing", "monitoring"]
 categories = ["api-bindings", "web-programming::http-client", "development-tools::debugging"]
-rust-version = "1.88"
+rust-version = "1.89"
 
 [lints.rust]
 unsafe_code = "forbid"
@@ -51,7 +51,7 @@ serde_json = "^1.0.154"
 reqwest = { version = "^0.13.5", features = ["json"], default-features = false }
 thiserror = "^2.0.21"
 jiff = { version = "^1.0.1", default-features = false, features = ["std", "serde"] }
-uuid = { version = ">=1.23.5, <1.27.0", features = ["v4", "v5", "serde"] }
+uuid = { version = "^1.29.3", features = ["v4", "v5", "serde"] }
 # `sync` and `macros` (`select!`) work on any target; the runtime and the timers only natively (below).
 tokio = { version = "^1.54.1", features = ["macros", "sync"] }
 tracing = "^0.1.44"  # For library logging (replacing eprintln!)
@@ -64,8 +64,8 @@ futures-core = "0.3.31"
 # Experiments: bounded concurrency without a runtime (`buffer_unordered`).
 futures-util = { version = "0.3.31", default-features = false, features = ["std"] }
 # Media uploads: the SHA-256 Langfuse deduplicates and verifies uploads with.
-sha2 = "0.10.9"
-base64 = "0.22.1"
+sha2 = "0.11.1"
+base64 = "0.23.1"
 # Feature `otel-context`: nest OpenTelemetry spans (openai-ergonomic, opentelemetry-langfuse) under observations.
 opentelemetry = { version = "0.33.1", default-features = false, features = ["trace"], optional = true }
 
@@ -77,10 +77,10 @@ tokio = { version = "^1.54.1", features = ["rt-multi-thread", "time"] }
 # host's `setTimeout` and clocks `performance.now()`/`Date.now()` (std's panic there). See docs/webassembly.md.
 [target.'cfg(target_family = "wasm")'.dependencies]
 wasm-bindgen-futures = "0.4"
-gloo-timers = { version = "0.3", features = ["futures"] }
+gloo-timers = { version = "0.4", features = ["futures"] }
 web-time = "1"
 # Random v4 ids from `crypto.getRandomValues`.
-uuid = { version = ">=1.23.5, <1.27.0", features = ["js"] }
+uuid = { version = "^1.29.3", features = ["js"] }
 # The retry jitter (`rand`'s thread RNG) seeded from `crypto.getRandomValues`.
 getrandom = { version = "0.4", features = ["wasm_js"] }
 

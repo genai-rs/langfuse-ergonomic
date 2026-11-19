@@ -6,13 +6,6 @@
   enabledManagers: ['cargo', 'github-actions', 'docker-compose'],
   packageRules: [
     {
-      description: 'Keep UUID updates within the Rust 1.88 compatible range',
-      matchManagers: ['cargo'],
-      matchPackageNames: ['uuid'],
-      allowedVersions: '<1.27.0',
-      rangeStrategy: 'in-range-only',
-    },
-    {
       description: 'Core dependencies',
       matchPackageNames: ['serde', 'reqwest', 'tokio', 'bon', 'langfuse-client-base'],
       labels: ['dependencies', 'core'],
