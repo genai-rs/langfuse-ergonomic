@@ -3,6 +3,13 @@
 Notes for upgrading between releases, newest first. The [CHANGELOG](../CHANGELOG.md) lists
 every change.
 
+## Migrating to 0.17: Rust 1.89
+
+This release requires Rust 1.89 (was 1.88), so that `uuid` is no longer held below 1.27 (uuid
+1.27 requires Rust 1.89). The API does not change. Dependencies: `sha2` 0.11 and `base64` 0.23
+(media uploads), `gloo-timers` 0.4 (WebAssembly), and `syn` 3 in `langfuse-ergonomic-macros`;
+`#[observe]` expands to the same code.
+
 ## Migrating to 0.16: jiff instead of chrono
 
 chrono is unmaintained ([RUSTSEC-2026-0543](https://rustsec.org/advisories/RUSTSEC-2026-0543)). This

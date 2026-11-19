@@ -240,9 +240,11 @@ fn has_impl_trait(ty: &Type) -> bool {
 }
 
 fn expand(options: Options, function: ItemFn) -> syn::Result<TokenStream2> {
+    // `modifiers` (syn 3) only holds `default` (specialization), which a free function cannot have.
     let ItemFn {
         attrs,
         vis,
+        modifiers: _,
         sig,
         block,
     } = function;
