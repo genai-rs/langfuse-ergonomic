@@ -50,7 +50,7 @@ serde = { version = "^1.0.229", features = ["derive"] }
 serde_json = "^1.0.154"
 reqwest = { version = "^0.13.5", features = ["json"], default-features = false }
 thiserror = "^2.0.21"
-jiff = { version = "^1.0.1", default-features = false, features = ["std", "serde"] }
+jiff = { version = "^1.0.2", default-features = false, features = ["std", "serde"] }
 uuid = { version = "^1.29.3", features = ["v4", "v5", "serde"] }
 # `sync` and `macros` (`select!`) work on any target; the runtime and the timers only natively (below).
 tokio = { version = "^1.54.1", features = ["macros", "sync"] }
@@ -78,7 +78,7 @@ tokio = { version = "^1.54.1", features = ["rt-multi-thread", "time"] }
 [target.'cfg(target_family = "wasm")'.dependencies]
 wasm-bindgen-futures = "0.4.80"
 gloo-timers = { version = "0.4.1", features = ["futures"] }
-web-time = "1"
+web-time = "1.1.0"
 # Random v4 ids from `crypto.getRandomValues`.
 uuid = { version = "^1.29.3", features = ["js"] }
 # The retry jitter (`rand`'s thread RNG) seeded from `crypto.getRandomValues`.
@@ -88,16 +88,16 @@ getrandom = { version = "0.4.3", features = ["wasm_js"] }
 tracing-subscriber = { version = "^0.3.23", features = ["env-filter"] }
 dotenvy = "^0.15.7"
 mockito = "^1.7.2"
-anyhow = "^1.0.104"  # Used in examples
+anyhow = "^1.0.105"  # Used in examples
 tower = { version = "^0.5.3", features = ["retry", "timeout"] }  # Used in middleware examples
-trybuild = "1.0.105"
+trybuild = "1.0.125"
 opentelemetry_sdk = { version = "0.33.1", default-features = false, features = ["trace", "testing"] }
 futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
 
 # `tests/wasm.rs`, run in Node.js with wasm-bindgen-test-runner (see docs/webassembly.md).
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
 wasm-bindgen-test = "0.3.80"
-http = "1"
+http = "1.5.0"
 tower = { version = "^0.5.3", default-features = false, features = ["util"] }
 
 [[example]]
