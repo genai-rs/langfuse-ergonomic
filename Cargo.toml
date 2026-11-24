@@ -42,9 +42,9 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-langfuse-client-base = { version = "0.26", default-features = false }
+langfuse-client-base = { version = "0.26.1", default-features = false }
 # The HTTP stack of langfuse-client-base: a tower service, reqwest by default.
-timvw-rust-runtime = { version = "^0.4.0", default-features = false, features = ["reqwest"] }
+timvw-rust-runtime = { version = "^0.4.2", default-features = false, features = ["reqwest"] }
 bon = "^3.10.3"
 serde = { version = "^1.0.229", features = ["derive"] }
 serde_json = "^1.0.154"
@@ -55,14 +55,14 @@ uuid = { version = "^1.29.3", features = ["v4", "v5", "serde"] }
 # `sync` and `macros` (`select!`) work on any target; the runtime and the timers only natively (below).
 tokio = { version = "^1.54.1", features = ["macros", "sync"] }
 tracing = "^0.1.44"  # For library logging (replacing eprintln!)
-rand = "^0.10.3"
+rand = "^0.10.4"
 # `#[observe]` (feature `macros`): the expansion calls `langfuse_ergonomic::__private`, so the versions are pinned.
 langfuse-ergonomic-macros = { version = "=0.17.0", path = "langfuse-ergonomic-macros", optional = true }
 # The observation context: futures and streams that carry it.
-pin-project-lite = "0.2.16"
-futures-core = "0.3.31"
+pin-project-lite = "0.2.18"
+futures-core = "0.3.34"
 # Experiments: bounded concurrency without a runtime (`buffer_unordered`).
-futures-util = { version = "0.3.31", default-features = false, features = ["std"] }
+futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
 # Media uploads: the SHA-256 Langfuse deduplicates and verifies uploads with.
 sha2 = "0.11.1"
 base64 = "0.23.1"
@@ -76,29 +76,29 @@ tokio = { version = "^1.54.1", features = ["rt-multi-thread", "time"] }
 # WebAssembly in a JavaScript host (wasm32-unknown-unknown): the batcher's task runs with `spawn_local`, timers are the
 # host's `setTimeout` and clocks `performance.now()`/`Date.now()` (std's panic there). See docs/webassembly.md.
 [target.'cfg(target_family = "wasm")'.dependencies]
-wasm-bindgen-futures = "0.4"
-gloo-timers = { version = "0.4", features = ["futures"] }
+wasm-bindgen-futures = "0.4.80"
+gloo-timers = { version = "0.4.1", features = ["futures"] }
 web-time = "1"
 # Random v4 ids from `crypto.getRandomValues`.
 uuid = { version = "^1.29.3", features = ["js"] }
 # The retry jitter (`rand`'s thread RNG) seeded from `crypto.getRandomValues`.
-getrandom = { version = "0.4", features = ["wasm_js"] }
+getrandom = { version = "0.4.3", features = ["wasm_js"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 tracing-subscriber = { version = "^0.3.23", features = ["env-filter"] }
 dotenvy = "^0.15.7"
 mockito = "^1.7.2"
 anyhow = "^1.0.104"  # Used in examples
-tower = { version = "^0.5.2", features = ["retry", "timeout"] }  # Used in middleware examples
+tower = { version = "^0.5.3", features = ["retry", "timeout"] }  # Used in middleware examples
 trybuild = "1.0.105"
 opentelemetry_sdk = { version = "0.33.1", default-features = false, features = ["trace", "testing"] }
-futures-util = { version = "0.3.31", default-features = false, features = ["std"] }
+futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
 
 # `tests/wasm.rs`, run in Node.js with wasm-bindgen-test-runner (see docs/webassembly.md).
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
-wasm-bindgen-test = "0.3"
+wasm-bindgen-test = "0.3.80"
 http = "1"
-tower = { version = "^0.5.2", default-features = false, features = ["util"] }
+tower = { version = "^0.5.3", default-features = false, features = ["util"] }
 
 [[example]]
 name = "test_trace"
