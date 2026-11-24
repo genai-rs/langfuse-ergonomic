@@ -1153,7 +1153,7 @@ dependencies = [
 
 [[package]]
 name = "langfuse-ergonomic"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "anyhow",
  "base64",
@@ -1191,7 +1191,7 @@ dependencies = [
 
 [[package]]
 name = "langfuse-ergonomic-macros"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "proc-macro2",
  "quote",
