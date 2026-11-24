@@ -21,6 +21,6 @@ unsafe_code = "forbid"
 missing_docs = "warn"
 
 [dependencies]
-proc-macro2 = "1.0.95"
-quote = "1.0.40"
+proc-macro2 = "1.0.107"
+quote = "1.0.47"
 syn = { version = "3.0.10", features = ["full", "visit"] }
