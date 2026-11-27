@@ -59,13 +59,13 @@ x-langfuse-depends-on: &langfuse-depends-on
 
 services:
   langfuse-worker:
-    image: docker.io/langfuse/langfuse-worker:4.78.0@sha256:175a32200b9908b283104e67b84d080381e841daa8ee6692f5bb26538df1a59e
+    image: docker.io/langfuse/langfuse-worker:4.88.0@sha256:952869378c3fbb322be31d3aeec85034125ff02e3ab26fbb30b3c38d4b25a944
     depends_on: *langfuse-depends-on
     environment:
       <<: *langfuse-env
 
   langfuse-web:
-    image: docker.io/langfuse/langfuse:4.78.0@sha256:037188385ac6612d3494319fa060052da407b235502874c7ea79ade583c29002
+    image: docker.io/langfuse/langfuse:4.88.0@sha256:272161cfd9e46934c693fbcd9ef160b1b7499a38bc4f836fac78cfa77eb46ccc
     depends_on: *langfuse-depends-on
     ports:
       - 127.0.0.1:${LANGFUSE_PORT:-3000}:3000
