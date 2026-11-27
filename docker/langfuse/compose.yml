@@ -110,7 +110,7 @@ services:
       retries: 30
 
   redis:
-    image: docker.io/redis:7.4.12@sha256:2e3eb11462c4e3759e6972678dd051d150ff54b1e60714b3c33b701260172a90
+    image: docker.io/redis:8.12.0@sha256:56a1737794e36c3ebe8a4544a8ab421af3ab1a6488fb2238aec228c404933fed
     command: --requirepass myredissecret --maxmemory-policy noeviction
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "myredissecret", "ping"]
