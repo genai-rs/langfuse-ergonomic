@@ -83,7 +83,7 @@ services:
       LANGFUSE_INIT_USER_PASSWORD: live-test-password
 
   clickhouse:
-    image: docker.io/clickhouse/clickhouse-server:26.3.62.3@sha256:de3e47c64078aa196dae2349e048fc98ba81947f651f5c20e06e46baea8ae40a
+    image: docker.io/clickhouse/clickhouse-server:26.11.5.8@sha256:32c69c954eaaf66b5a37522f9883b918131f126209caa913af97b81f705d2da9
     user: "101:101"
     environment:
       CLICKHOUSE_DB: default
